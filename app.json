@@ -37,7 +37,8 @@
           "configureAndroidBackup": true
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "apiBaseUrl": "${EXPO_PUBLIC_API_BASE_URL}",

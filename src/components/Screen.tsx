@@ -11,6 +11,7 @@ const CONTENT_BOTTOM_PADDING = 96;
 
 export function Screen({ title, children, scroll = true, showNotifications = true, contentStyle }: Props) {
   const theme = useTheme();
+  const isDark = theme.dark;
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const navigationState = navigation.getState();
@@ -22,8 +23,19 @@ export function Screen({ title, children, scroll = true, showNotifications = tru
   );
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right']}>
-      <View style={[styles.glow, { backgroundColor: theme.colors.primaryContainer }]} />
-      <Appbar.Header mode="small" statusBarHeight={0} style={[styles.header, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.glow, { backgroundColor: isDark ? theme.colors.primary : theme.colors.primaryContainer, opacity: isDark ? 0.16 : 0.52 }]} />
+      <Appbar.Header
+        mode="small"
+        statusBarHeight={0}
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.colors.background,
+            borderBottomColor: isDark ? theme.colors.outlineVariant : 'transparent',
+            borderBottomWidth: isDark ? StyleSheet.hairlineWidth : 0
+          }
+        ]}
+      >
         {canGoBackInStack ? <Appbar.BackAction onPress={() => navigation.goBack()} /> : null}
         <View style={[canGoBackInStack ? styles.logoAfterBack : styles.logoAtStart]}>
           <BrandMark size={38} compact />

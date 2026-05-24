@@ -1,4 +1,4 @@
-import { Alert, Linking, View } from 'react-native';
+import { Linking, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -6,6 +6,7 @@ import { Button, Dialog, Portal, SegmentedButtons, Text, useTheme } from 'react-
 import { invoicesApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { AppCard } from '@/components/AppCard';
+import { useAppDialog } from '@/components/AppDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { FormTextInput } from '@/components/FormTextInput';
 import { Screen } from '@/components/Screen';
@@ -19,17 +20,18 @@ export function InvoiceDetailScreen({ route, navigation }: any) {
   const { id } = route.params;
   const queryClient = useQueryClient();
   const theme = useTheme();
+  const { showDialog } = useAppDialog();
   const [emailOpen, setEmailOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const emailForm = useForm<any>({ defaultValues: { email: '' }, resolver: zodResolver(emailSchema) });
   const query = useQuery({ queryKey: ['invoices', id], queryFn: () => invoicesApi.get(id) });
   const invoice = query.data;
   const invalidate = () => { queryClient.invalidateQueries({ queryKey: ['invoices'] }); queryClient.invalidateQueries({ queryKey: ['products'] }); queryClient.invalidateQueries({ queryKey: ['report'] }); };
-  const status = useMutation({ mutationFn: (next: InvoiceStatus) => invoicesApi.status(id, next), onSuccess: () => { invalidate(); query.refetch(); }, onError: (error) => Alert.alert('Could not update status', apiErrorMessage(error)) });
-  const duplicate = useMutation({ mutationFn: () => invoicesApi.duplicate(id), onSuccess: (clone) => { invalidate(); navigation.replace('InvoiceDetail', { id: clone._id }); }, onError: (error) => Alert.alert('Could not duplicate invoice', apiErrorMessage(error)) });
-  const remove = useMutation({ mutationFn: () => invoicesApi.remove(id), onSuccess: () => { invalidate(); navigation.navigate('InvoiceList'); }, onError: (error) => Alert.alert('Could not delete invoice', apiErrorMessage(error)) });
-  const sendEmail = useMutation({ mutationFn: (email: string) => invoicesApi.email(id, email), onSuccess: () => { setEmailOpen(false); query.refetch(); }, onError: (error) => Alert.alert('Could not send email', apiErrorMessage(error)) });
-  const shareWhatsApp = async () => { try { const result = await invoicesApi.whatsapp(id); await Linking.openURL(result.link); } catch (error) { Alert.alert('Could not prepare WhatsApp link', apiErrorMessage(error)); } };
+  const status = useMutation({ mutationFn: (next: InvoiceStatus) => invoicesApi.status(id, next), onSuccess: () => { invalidate(); query.refetch(); }, onError: (error) => showDialog({ title: 'Could not update status', message: apiErrorMessage(error), tone: 'error' }) });
+  const duplicate = useMutation({ mutationFn: () => invoicesApi.duplicate(id), onSuccess: (clone) => { invalidate(); navigation.replace('InvoiceDetail', { id: clone._id }); }, onError: (error) => showDialog({ title: 'Could not duplicate invoice', message: apiErrorMessage(error), tone: 'error' }) });
+  const remove = useMutation({ mutationFn: () => invoicesApi.remove(id), onSuccess: () => { invalidate(); navigation.navigate('InvoiceList'); }, onError: (error) => showDialog({ title: 'Could not delete invoice', message: apiErrorMessage(error), tone: 'error' }) });
+  const sendEmail = useMutation({ mutationFn: (email: string) => invoicesApi.email(id, email), onSuccess: () => { setEmailOpen(false); query.refetch(); }, onError: (error) => showDialog({ title: 'Could not send email', message: apiErrorMessage(error), tone: 'error' }) });
+  const shareWhatsApp = async () => { try { const result = await invoicesApi.whatsapp(id); await Linking.openURL(result.link); } catch (error) { showDialog({ title: 'Could not prepare WhatsApp link', message: apiErrorMessage(error), tone: 'error' }); } };
   if (!invoice) return <Screen title="Invoice"><Text>Loading invoice...</Text></Screen>;
   return (
     <Screen title={invoice.invoiceNumber}>

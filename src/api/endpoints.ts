@@ -43,7 +43,9 @@ export const invoicesApi = {
   email: (id: string, email: string) => api.post(`/invoices/${id}/email`, { email }).then((res) => res.data)
 };
 
-export const reportsApi = { summary: () => api.get<{ report: ReportSummary }>('/reports/summary').then((res) => res.data.report) };
+export const reportsApi = {
+  summary: (params?: Record<string, unknown>) => api.get<{ report: ReportSummary }>('/reports/summary', { params }).then((res) => res.data.report)
+};
 
 export const notificationsApi = {
   page: (params: Record<string, unknown>) => api.get<NotificationPage>('/notifications', { params }).then((res) => res.data),

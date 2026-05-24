@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, View } from 'react-native';
+import { FlatList, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -7,6 +7,7 @@ import { Button, Dialog, Portal, Text, TextInput, useTheme } from 'react-native-
 import { customersApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { AppCard } from '@/components/AppCard';
+import { useAppDialog } from '@/components/AppDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { FormTextInput } from '@/components/FormTextInput';
@@ -20,14 +21,15 @@ const blankCustomer = { name: '', phone: '', email: '', address: '' };
 export function CustomersScreen() {
   const queryClient = useQueryClient();
   const theme = useTheme();
+  const { showDialog } = useAppDialog();
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Customer | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<Customer | null>(null);
   const form = useForm<any>({ defaultValues: blankCustomer, resolver: zodResolver(customerSchema) });
   const query = useInfiniteQuery({ queryKey: ['customers', search], initialPageParam: 1, queryFn: ({ pageParam }) => customersApi.page({ search, page: pageParam, limit: PAGE_SIZE }), getNextPageParam: (lastPage) => lastPage.pagination.nextPage });
   const customers = useMemo(() => query.data?.pages.flatMap((page) => page.customers) ?? [], [query.data]);
-  const save = useMutation({ mutationFn: (values: any) => editing?._id ? customersApi.update(editing._id, values) : customersApi.create(values), onSuccess: () => { setEditing(undefined); queryClient.invalidateQueries({ queryKey: ['customers'] }); }, onError: (error) => Alert.alert('Could not save customer', apiErrorMessage(error)) });
-  const remove = useMutation({ mutationFn: (id: string) => customersApi.remove(id), onSuccess: () => { setDeleting(null); queryClient.invalidateQueries({ queryKey: ['customers'] }); }, onError: (error) => Alert.alert('Could not delete customer', apiErrorMessage(error)) });
+  const save = useMutation({ mutationFn: (values: any) => editing?._id ? customersApi.update(editing._id, values) : customersApi.create(values), onSuccess: () => { setEditing(undefined); queryClient.invalidateQueries({ queryKey: ['customers'] }); }, onError: (error) => showDialog({ title: 'Could not save customer', message: apiErrorMessage(error), tone: 'error' }) });
+  const remove = useMutation({ mutationFn: (id: string) => customersApi.remove(id), onSuccess: () => { setDeleting(null); queryClient.invalidateQueries({ queryKey: ['customers'] }); }, onError: (error) => showDialog({ title: 'Could not delete customer', message: apiErrorMessage(error), tone: 'error' }) });
   useEffect(() => { if (editing !== undefined) form.reset(editing || blankCustomer); }, [editing, form]);
 
   return (

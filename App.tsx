@@ -6,6 +6,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider, Text } from 'react-native-paper';
 import { AppNavigator } from '@/navigation/AppNavigator';
+import { AppDialogProvider } from '@/components/AppDialog';
 import { BrandMark } from '@/components/BrandMark';
 import { queryClient } from '@/query/queryClient';
 import { useAuthStore } from '@/store/authStore';
@@ -23,16 +24,18 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <PaperProvider theme={theme}>
-          <SafeAreaProvider>
-            <StatusBar style={user?.businessProfile?.theme === 'dark' ? 'light' : 'dark'} />
-            {hydrated ? <AppNavigator /> : (
-              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background }}>
-                <BrandMark size={64} />
-                <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 18 }} />
-                <Text style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }}>Opening Billji...</Text>
-              </View>
-            )}
-          </SafeAreaProvider>
+          <AppDialogProvider>
+            <SafeAreaProvider>
+              <StatusBar style={user?.businessProfile?.theme === 'dark' ? 'light' : 'dark'} />
+              {hydrated ? <AppNavigator /> : (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background }}>
+                  <BrandMark size={64} />
+                  <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 18 }} />
+                  <Text style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }}>Opening Billji...</Text>
+                </View>
+              )}
+            </SafeAreaProvider>
+          </AppDialogProvider>
         </PaperProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>

@@ -1,9 +1,11 @@
-import { Alert, RefreshControl, StyleSheet, View } from 'react-native';
+import { useEffect } from 'react';
+import { RefreshControl, StyleSheet, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Text, useTheme } from 'react-native-paper';
 import { reportsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { AppCard } from '@/components/AppCard';
+import { useAppDialog } from '@/components/AppDialog';
 import { ChartCard } from '@/components/ChartCard';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
@@ -12,23 +14,34 @@ import { formatCurrency, formatDate } from '@/utils/format';
 
 export function DashboardScreen({ navigation }: any) {
   const theme = useTheme();
+  const { showDialog } = useAppDialog();
+  const isDark = theme.dark;
   const query = useQuery({ queryKey: ['report'], queryFn: reportsApi.summary });
-  if (query.error) Alert.alert('Could not load dashboard', apiErrorMessage(query.error));
+  useEffect(() => {
+    if (query.error) showDialog({ title: 'Could not load dashboard', message: apiErrorMessage(query.error), tone: 'error' });
+  }, [query.error, showDialog]);
   const report = query.data;
+  const heroBackground = isDark ? theme.colors.elevation.level3 : theme.colors.primary;
+  const heroBorder = isDark ? theme.colors.primaryContainer : theme.colors.primary;
+  const heroLabelColor = isDark ? theme.colors.secondary : theme.colors.primaryContainer;
+  const heroTitleColor = isDark ? theme.colors.onSurface : theme.colors.onPrimary;
+  const heroTextColor = isDark ? theme.colors.onSurfaceVariant : theme.colors.primaryContainer;
+  const heroButtonColor = isDark ? theme.colors.primary : theme.colors.onPrimary;
+  const heroButtonTextColor = isDark ? theme.colors.onPrimary : theme.colors.primary;
   return (
     <Screen title="Dashboard">
       <RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} />
-      <AppCard style={{ backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }}>
-        <Text variant="labelLarge" style={{ color: theme.colors.primaryContainer, fontWeight: '800' }}>Billji command center</Text>
-        <Text variant="headlineMedium" style={{ color: theme.colors.onPrimary, fontWeight: '900', letterSpacing: -1, marginTop: 8 }}>Today billing pulse</Text>
-        <Text style={{ color: theme.colors.primaryContainer, marginTop: 8 }}>Track invoices, stock, and cash flow without digging through desktop screens.</Text>
-        <Button mode="contained" buttonColor={theme.colors.onPrimary} textColor={theme.colors.primary} onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceCreate' })} style={styles.heroButton}>Create invoice</Button>
+      <AppCard style={{ backgroundColor: heroBackground, borderColor: heroBorder }}>
+        <Text variant="labelLarge" style={{ color: heroLabelColor, fontWeight: '800' }}>Billji command center</Text>
+        <Text variant="headlineMedium" style={{ color: heroTitleColor, fontWeight: '900', letterSpacing: -1, marginTop: 8 }}>Today billing pulse</Text>
+        <Text style={{ color: heroTextColor, marginTop: 8 }}>Track invoices, stock, and cash flow without digging through desktop screens.</Text>
+        <Button mode="contained" buttonColor={heroButtonColor} textColor={heroButtonTextColor} onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceCreate' })} style={styles.heroButton}>Create invoice</Button>
       </AppCard>
       <View style={styles.statRow}><StatCard label="Today" value={formatCurrency(report?.todaySales)} hint="Paid sales" /><StatCard label="This month" value={formatCurrency(report?.monthlySales)} hint="Paid sales" /></View>
       <View style={styles.statRow}><StatCard label="Invoices" value={report?.totalInvoices || 0} hint="All time" /><StatCard label="Pending" value={report?.pendingInvoices || 0} hint="Need follow-up" /></View>
       <ChartCard title="Sales trend" data={report?.salesTrend || []} />
       <AppCard>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}><Text variant="titleMedium" style={{ fontWeight: '900' }}>Recent activity</Text><Button onPress={() => navigation.navigate('InvoicesTab')}>View all</Button></View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}><Text variant="titleMedium" style={{ fontWeight: '900' }}>Recent activity</Text><Button onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceList' })}>View all</Button></View>
         {report?.recentInvoices?.length ? report.recentInvoices.map((invoice) => (
           <AppCard key={invoice._id} onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceDetail', params: { id: invoice._id } })}>
             <Text style={{ fontWeight: '900' }}>{invoice.customerSnapshot.name}</Text>

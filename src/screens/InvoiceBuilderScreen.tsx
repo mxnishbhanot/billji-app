@@ -1,6 +1,6 @@
 
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, View } from 'react-native';
+import { FlatList, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -8,6 +8,7 @@ import { Button, Dialog, List, Portal, SegmentedButtons, Text, TextInput, useThe
 import { customersApi, invoicesApi, productsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { AppCard } from '@/components/AppCard';
+import { useAppDialog } from '@/components/AppDialog';
 import { FormTextInput } from '@/components/FormTextInput';
 import { Screen } from '@/components/Screen';
 import { Customer, DiscountType, InvoiceItem, Product } from '@/types';
@@ -20,6 +21,7 @@ const customDefaults = { name: '', price: '', quantity: '1' };
 export function InvoiceBuilderScreen({ navigation }: any) {
   const queryClient = useQueryClient();
   const theme = useTheme();
+  const { showDialog } = useAppDialog();
   const customers = useQuery({ queryKey: ['customers', 'all'], queryFn: () => customersApi.list() });
   const products = useQuery({ queryKey: ['products', 'all'], queryFn: () => productsApi.list() });
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
@@ -49,17 +51,17 @@ export function InvoiceBuilderScreen({ navigation }: any) {
   });
   const updateQuantity = (index: number, delta: number) => setItems((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item));
   const removeItem = (index: number) => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
-  const addCustomer = useMutation({ mutationFn: customersApi.create, onSuccess: (customer) => { queryClient.invalidateQueries({ queryKey: ['customers'] }); setSelectedCustomerId(customer._id); setCustomerModal(false); customerForm.reset(customerDefaults); }, onError: (error) => Alert.alert('Could not add customer', apiErrorMessage(error)) });
+  const addCustomer = useMutation({ mutationFn: customersApi.create, onSuccess: (customer) => { queryClient.invalidateQueries({ queryKey: ['customers'] }); setSelectedCustomerId(customer._id); setCustomerModal(false); customerForm.reset(customerDefaults); }, onError: (error) => showDialog({ title: 'Could not add customer', message: apiErrorMessage(error), tone: 'error' }) });
   const buildPayload = (allowOversell = false) => ({ customerId: selectedCustomerId, items, taxRate: Number(taxRate || 0), discountType, discountValue: Number(discountValue || 0), notes, allowOversell });
-  const createInvoiceMutation = useMutation({ mutationFn: (payload: Record<string, unknown>) => invoicesApi.create(payload), onSuccess: (invoice) => { queryClient.invalidateQueries({ queryKey: ['invoices'] }); queryClient.invalidateQueries({ queryKey: ['products'] }); queryClient.invalidateQueries({ queryKey: ['report'] }); navigation.replace('InvoiceDetail', { id: invoice._id }); }, onError: (error: any) => { const details = error?.response?.data?.details; if (details?.code === 'INSUFFICIENT_STOCK' && Array.isArray(details.items)) setOversell({ items: details.items, payload: buildPayload(true) }); else Alert.alert('Could not create invoice', apiErrorMessage(error)); }});
+  const createInvoiceMutation = useMutation({ mutationFn: (payload: Record<string, unknown>) => invoicesApi.create(payload), onSuccess: (invoice) => { queryClient.invalidateQueries({ queryKey: ['invoices'] }); queryClient.invalidateQueries({ queryKey: ['products'] }); queryClient.invalidateQueries({ queryKey: ['report'] }); navigation.replace('InvoiceDetail', { id: invoice._id }); }, onError: (error: any) => { const details = error?.response?.data?.details; if (details?.code === 'INSUFFICIENT_STOCK' && Array.isArray(details.items)) setOversell({ items: details.items, payload: buildPayload(true) }); else showDialog({ title: 'Could not create invoice', message: apiErrorMessage(error), tone: 'error' }); }});
   const findOversellItems = () => {
     const requested = new Map<string, number>();
     items.forEach((item) => { if (item.productId) requested.set(item.productId, (requested.get(item.productId) || 0) + Number(item.quantity || 0)); });
     return Array.from(requested.entries()).map(([productId, quantity]) => { const product = productById.get(productId); return product && quantity > product.stockQuantity ? { productId, name: product.name, requested: quantity, available: product.stockQuantity, shortage: quantity - product.stockQuantity } : null; }).filter(Boolean) as any[];
   };
   const createInvoice = () => {
-    if (!selectedCustomerId) return Alert.alert('Select or add a customer');
-    if (!items.length) return Alert.alert('Add at least one item');
+    if (!selectedCustomerId) return showDialog({ title: 'Select or add a customer', message: 'Choose a saved customer or quick add a new one before generating the invoice.', tone: 'warning' });
+    if (!items.length) return showDialog({ title: 'Add at least one item', message: 'Pick a product or add a custom item before generating the invoice.', tone: 'warning' });
     const shortages = findOversellItems();
     if (shortages.length) return setOversell({ items: shortages, payload: buildPayload(true) });
     createInvoiceMutation.mutate(buildPayload(false));

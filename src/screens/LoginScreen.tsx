@@ -1,4 +1,4 @@
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -6,6 +6,7 @@ import { Button, Text, useTheme } from 'react-native-paper';
 import { authApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { AppCard } from '@/components/AppCard';
+import { useAppDialog } from '@/components/AppDialog';
 import { BrandMark } from '@/components/BrandMark';
 import { FormTextInput } from '@/components/FormTextInput';
 import { Screen } from '@/components/Screen';
@@ -14,9 +15,10 @@ import { loginSchema } from '@/validation/schemas';
 
 export function LoginScreen({ navigation }: any) {
   const theme = useTheme();
+  const { showDialog } = useAppDialog();
   const setSession = useAuthStore((state) => state.setSession);
   const form = useForm<any>({ defaultValues: { email: '', password: '' }, resolver: zodResolver(loginSchema) });
-  const mutation = useMutation({ mutationFn: authApi.login, onSuccess: setSession, onError: (error) => Alert.alert('Login failed', apiErrorMessage(error, 'Login failed')) });
+  const mutation = useMutation({ mutationFn: authApi.login, onSuccess: setSession, onError: (error) => showDialog({ title: 'Login failed', message: apiErrorMessage(error, 'Login failed'), tone: 'error' }) });
   return (
     <Screen title="Billji" showNotifications={false}>
       <View style={{ gap: 16, marginTop: 24 }}>

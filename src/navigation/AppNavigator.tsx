@@ -57,6 +57,7 @@ function CatalogNavigator() {
 
 function AppTabs() {
   const theme = useTheme();
+  const isDark = theme.dark;
   const insets = useSafeAreaInsets();
   return (
     <View style={{ flex: 1 }}>
@@ -74,13 +75,15 @@ function AppTabs() {
             marginHorizontal: 16,
             marginBottom: 12,
             position: 'absolute',
-            backgroundColor: theme.colors.elevation.level1,
+            backgroundColor: isDark ? theme.colors.elevation.level2 : theme.colors.elevation.level1,
+            borderColor: isDark ? theme.colors.outlineVariant : 'transparent',
             borderTopWidth: 0,
+            borderWidth: isDark ? 1 : 0,
             borderRadius: 28,
-            elevation: 12,
-            shadowColor: '#000000',
+            elevation: isDark ? 6 : 12,
+            shadowColor: isDark ? theme.colors.primary : '#000000',
             shadowOffset: { width: 0, height: 14 },
-            shadowOpacity: 0.14,
+            shadowOpacity: isDark ? 0.08 : 0.14,
             shadowRadius: 24
           },
           tabBarItemStyle: styles.tabItem,
@@ -97,7 +100,17 @@ function AppTabs() {
         })}
       >
         <Tabs.Screen name="DashboardTab" component={DashboardScreen} options={{ title: 'Home' }} />
-        <Tabs.Screen name="InvoicesTab" component={InvoiceNavigator} options={{ title: 'Invoices' }} />
+        <Tabs.Screen
+          name="InvoicesTab"
+          component={InvoiceNavigator}
+          options={{ title: 'Invoices' }}
+          listeners={({ navigation }) => ({
+            tabPress: (event) => {
+              event.preventDefault();
+              navigation.navigate('InvoicesTab', { screen: 'InvoiceList' });
+            }
+          })}
+        />
         <Tabs.Screen name="CatalogTab" component={CatalogNavigator} options={{ title: 'Products' }} />
         <Tabs.Screen name="ReportsTab" component={ReportsScreen} options={{ title: 'Reports' }} />
         <Tabs.Screen name="SettingsTab" component={SettingsScreen} options={{ title: 'Settings' }} />
@@ -105,7 +118,17 @@ function AppTabs() {
       <FAB
         icon="plus"
         color={theme.colors.onPrimary}
-        style={[styles.fab, { backgroundColor: theme.colors.primary, bottom: FAB_BOTTOM_OFFSET + insets.bottom }]}
+        style={[
+          styles.fab,
+          {
+            backgroundColor: theme.colors.primary,
+            borderColor: isDark ? theme.colors.primaryContainer : 'transparent',
+            borderWidth: isDark ? 1 : 0,
+            bottom: FAB_BOTTOM_OFFSET + insets.bottom,
+            shadowColor: isDark ? theme.colors.primary : '#000000',
+            shadowOpacity: isDark ? 0.18 : 0.16
+          }
+        ]}
         onPress={() => navigationRef.navigate('InvoicesTab', { screen: 'InvoiceCreate' })}
         testID="quick-create-fab"
       />

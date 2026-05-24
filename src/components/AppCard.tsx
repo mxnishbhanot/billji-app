@@ -5,10 +5,21 @@ import { Card, useTheme } from 'react-native-paper';
 type Props = { children: ReactNode; style?: ViewStyle; onPress?: () => void };
 export function AppCard({ children, style, onPress }: Props) {
   const theme = useTheme();
+  const isDark = theme.dark;
   return (
     <Card
       mode="elevated"
-      style={[styles.card, { backgroundColor: theme.colors.elevation.level1, borderColor: theme.colors.outlineVariant }, style]}
+      style={[
+        styles.card,
+        {
+          backgroundColor: theme.colors.elevation.level1,
+          borderColor: theme.colors.outlineVariant,
+          elevation: isDark ? 1 : 2,
+          shadowColor: isDark ? theme.colors.primary : '#000000',
+          shadowOpacity: isDark ? 0.05 : 0.08
+        },
+        style
+      ]}
       contentStyle={styles.content}
       onPress={onPress}
     >

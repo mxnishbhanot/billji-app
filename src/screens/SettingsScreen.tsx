@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Alert, Image, View } from 'react-native';
+import { Image, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { Button, SegmentedButtons, Text, useTheme } from 'react-native-paper';
 import { authApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { AppCard } from '@/components/AppCard';
+import { useAppDialog } from '@/components/AppDialog';
 import { BrandMark } from '@/components/BrandMark';
 import { FormTextInput } from '@/components/FormTextInput';
 import { Screen } from '@/components/Screen';
@@ -20,14 +21,15 @@ export function SettingsScreen() {
   const logout = useAuthStore((state) => state.logout);
   const queryClient = useQueryClient();
   const paperTheme = useTheme();
+  const { showDialog } = useAppDialog();
   const form = useForm<any>({ defaultValues: { theme: 'light', ...(user?.businessProfile || {}) }, resolver: zodResolver(settingsSchema) });
   const selectedTheme = useWatch({ control: form.control, name: 'theme' }) || 'light';
   const logoPreview = useWatch({ control: form.control, name: 'logoUrl' }) || '';
   useEffect(() => { form.reset({ theme: 'light', ...(user?.businessProfile || {}) }); }, [user, form]);
-  const save = useMutation({ mutationFn: authApi.updateSettings, onSuccess: async (response) => { await setUser(response.user); queryClient.invalidateQueries({ queryKey: ['report'] }); Alert.alert('Settings saved'); }, onError: (error) => Alert.alert('Could not save settings', apiErrorMessage(error)) });
+  const save = useMutation({ mutationFn: authApi.updateSettings, onSuccess: async (response) => { await setUser(response.user); queryClient.invalidateQueries({ queryKey: ['report'] }); showDialog({ title: 'Settings saved', message: 'Your business profile has been updated.', tone: 'success' }); }, onError: (error) => showDialog({ title: 'Could not save settings', message: apiErrorMessage(error), tone: 'error' }) });
   const pickLogo = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return Alert.alert('Permission required', 'Photo library access is required to choose a business logo.');
+    if (!permission.granted) return showDialog({ title: 'Permission required', message: 'Photo library access is required to choose a business logo.', tone: 'warning' });
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.45, base64: true });
     if (!result.canceled) {
       const asset = result.assets[0];

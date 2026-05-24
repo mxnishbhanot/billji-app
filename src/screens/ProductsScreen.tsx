@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, View } from 'react-native';
+import { FlatList, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -7,6 +7,7 @@ import { Button, Dialog, List, Portal, Text, TextInput, useTheme } from 'react-n
 import { productsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { AppCard } from '@/components/AppCard';
+import { useAppDialog } from '@/components/AppDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { FormTextInput } from '@/components/FormTextInput';
@@ -21,6 +22,7 @@ const blankProduct = { name: '', price: '', stockQuantity: '', sku: '', category
 export function ProductsScreen({ navigation, route }: any) {
   const queryClient = useQueryClient();
   const theme = useTheme();
+  const { showDialog } = useAppDialog();
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<Product | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<Product | null>(null);
@@ -32,8 +34,8 @@ export function ProductsScreen({ navigation, route }: any) {
   const save = useMutation({ mutationFn: (values: any) => {
     const payload = { ...values, price: Number(values.price), stockQuantity: Number(values.stockQuantity), lowStockThreshold: values.lowStockThreshold === '' ? 5 : Number(values.lowStockThreshold) };
     return editing?._id ? productsApi.update(editing._id, payload) : productsApi.create(payload);
-  }, onSuccess: () => { setEditing(undefined); queryClient.invalidateQueries({ queryKey: ['products'] }); }, onError: (error) => Alert.alert('Could not save product', apiErrorMessage(error)) });
-  const remove = useMutation({ mutationFn: (id: string) => productsApi.remove(id), onSuccess: () => { setDeleting(null); queryClient.invalidateQueries({ queryKey: ['products'] }); }, onError: (error) => Alert.alert('Could not delete product', apiErrorMessage(error)) });
+  }, onSuccess: () => { setEditing(undefined); queryClient.invalidateQueries({ queryKey: ['products'] }); }, onError: (error) => showDialog({ title: 'Could not save product', message: apiErrorMessage(error), tone: 'error' }) });
+  const remove = useMutation({ mutationFn: (id: string) => productsApi.remove(id), onSuccess: () => { setDeleting(null); queryClient.invalidateQueries({ queryKey: ['products'] }); }, onError: (error) => showDialog({ title: 'Could not delete product', message: apiErrorMessage(error), tone: 'error' }) });
   const history = useQuery({ queryKey: ['products', historyProduct?._id, 'stock-movements'], enabled: Boolean(historyProduct), queryFn: () => productsApi.stockMovementsPage(historyProduct!._id, { page: 1, limit: 30 }) });
 
   useEffect(() => {
