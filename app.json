@@ -1,25 +1,50 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Billji",
+    "slug": "billji-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "scheme": "billji",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.billji.mobile"
     },
     "android": {
+      "package": "com.billji.mobile",
+      "versionCode": 1,
+      "permissions": [],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f172a"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": true
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "plugins": [
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true
+        }
+      ],
+      "expo-sharing"
+    ],
+    "extra": {
+      "apiBaseUrl": "${EXPO_PUBLIC_API_BASE_URL}",
+      "eas": {
+        "projectId": "84b61666-5d34-4f35-b150-b54c640d368a"
+      }
+    },
+    "owner": "manish.kumar.8467"
   }
 }

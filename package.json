@@ -1,22 +1,52 @@
 {
-  "name": "mobile",
+  "name": "billji-mobile",
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
+    "@hookform/resolvers": "^5.4.0",
+    "@react-navigation/bottom-tabs": "^7.16.1",
+    "@react-navigation/native": "^7.2.4",
+    "@react-navigation/native-stack": "^7.15.1",
+    "@tanstack/react-query": "^5.100.14",
+    "axios": "^1.16.1",
+    "babel-preset-expo": "~56.0.0",
     "expo": "~56.0.4",
+    "expo-dev-client": "~56.0.15",
+    "expo-file-system": "~56.0.7",
+    "expo-image-picker": "~56.0.13",
+    "expo-secure-store": "~56.0.4",
+    "expo-sharing": "~56.0.13",
     "expo-status-bar": "~56.0.4",
     "react": "19.2.3",
-    "react-native": "0.85.3"
+    "react-hook-form": "^7.76.1",
+    "react-native": "0.85.3",
+    "react-native-chart-kit": "^6.12.2",
+    "react-native-gesture-handler": "~2.31.1",
+    "react-native-paper": "^5.15.2",
+    "react-native-reanimated": "4.3.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "4.25.2",
+    "react-native-svg": "15.15.4",
+    "socket.io-client": "^4.8.3",
+    "zod": "^4.4.3",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "babel-plugin-module-resolver": "^5.0.3",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~56.0.4",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "lint": "expo lint",
+    "build:android": "eas build --platform android"
   },
   "private": true
 }
