@@ -6,17 +6,26 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend-production.up.railway.app/api"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend-production.up.railway.app/api"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend-production.up.railway.app/api"
+      },
       "android": {
         "buildType": "app-bundle"
       }
