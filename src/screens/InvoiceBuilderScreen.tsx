@@ -10,12 +10,13 @@ import { apiErrorMessage } from '@/api/client';
 import { AppCard } from '@/components/AppCard';
 import { useAppDialog } from '@/components/AppDialog';
 import { FormTextInput } from '@/components/FormTextInput';
+import { PhoneInput } from '@/components/PhoneInput';
 import { Screen } from '@/components/Screen';
 import { Customer, DiscountType, InvoiceItem, Product } from '@/types';
 import { calculateClientTotals, formatCurrency } from '@/utils/format';
 import { customItemSchema, customerSchema } from '@/validation/schemas';
 
-const customerDefaults = { name: '', phone: '', email: '', address: '' };
+const customerDefaults = { name: '', phone: '', countryCode: '+91', email: '', address: '' };
 const customDefaults = { name: '', price: '', quantity: '1' };
 
 export function InvoiceBuilderScreen({ navigation }: any) {
@@ -70,7 +71,7 @@ export function InvoiceBuilderScreen({ navigation }: any) {
   return (
     <Screen title="New Invoice">
       <AppCard>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><View><Text variant="titleMedium" style={{ fontWeight: '900' }}>Customer</Text><Text style={{ color: theme.colors.onSurfaceVariant }}>{selectedCustomer ? `${selectedCustomer.name} · ${selectedCustomer.phone}` : 'Select a customer'}</Text></View><Button onPress={() => setCustomerPicker(true)}>Choose</Button></View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><View><Text variant="titleMedium" style={{ fontWeight: '900' }}>Customer</Text><Text style={{ color: theme.colors.onSurfaceVariant }}>{selectedCustomer ? `${selectedCustomer.name} · ${selectedCustomer.countryCode || '+91'} ${selectedCustomer.phone}` : 'Select a customer'}</Text></View><Button onPress={() => setCustomerPicker(true)}>Choose</Button></View>
         <Button mode="outlined" onPress={() => setCustomerModal(true)} style={{ marginTop: 8 }}>Quick add customer</Button>
       </AppCard>
       <AppCard>
@@ -86,8 +87,8 @@ export function InvoiceBuilderScreen({ navigation }: any) {
       </AppCard>
       <Button mode="contained" loading={createInvoiceMutation.isPending} onPress={createInvoice}>Generate invoice</Button>
       <Portal>
-        <Dialog visible={customerPicker} onDismiss={() => setCustomerPicker(false)}><Dialog.Title>Select customer</Dialog.Title><Dialog.ScrollArea><FlatList data={customers.data || []} keyExtractor={(item) => item._id} renderItem={({ item }: { item: Customer }) => <List.Item title={item.name} description={item.phone} onPress={() => { setSelectedCustomerId(item._id); setCustomerPicker(false); }} />} /></Dialog.ScrollArea><Dialog.Actions><Button onPress={() => setCustomerPicker(false)}>Close</Button></Dialog.Actions></Dialog>
-        <Dialog visible={customerModal} onDismiss={() => setCustomerModal(false)}><Dialog.Title>Quick add customer</Dialog.Title><Dialog.Content><FormTextInput control={customerForm.control} name="name" label="Name" /><FormTextInput control={customerForm.control} name="phone" label="Phone" /><FormTextInput control={customerForm.control} name="email" label="Email" /><FormTextInput control={customerForm.control} name="address" label="Address" /></Dialog.Content><Dialog.Actions><Button onPress={() => setCustomerModal(false)}>Cancel</Button><Button loading={addCustomer.isPending} onPress={customerForm.handleSubmit((values) => addCustomer.mutate(values))}>Save</Button></Dialog.Actions></Dialog>
+        <Dialog visible={customerPicker} onDismiss={() => setCustomerPicker(false)}><Dialog.Title>Select customer</Dialog.Title><Dialog.ScrollArea><FlatList data={customers.data || []} keyExtractor={(item) => item._id} renderItem={({ item }: { item: Customer }) => <List.Item title={item.name} description={`${item.countryCode || '+91'} ${item.phone}`} onPress={() => { setSelectedCustomerId(item._id); setCustomerPicker(false); }} />} /></Dialog.ScrollArea><Dialog.Actions><Button onPress={() => setCustomerPicker(false)}>Close</Button></Dialog.Actions></Dialog>
+        <Dialog visible={customerModal} onDismiss={() => setCustomerModal(false)}><Dialog.Title>Quick add customer</Dialog.Title><Dialog.Content><FormTextInput control={customerForm.control} name="name" label="Name" /><PhoneInput control={customerForm.control} name="phone" /><FormTextInput control={customerForm.control} name="email" label="Email" /><FormTextInput control={customerForm.control} name="address" label="Address" /></Dialog.Content><Dialog.Actions><Button onPress={() => setCustomerModal(false)}>Cancel</Button><Button loading={addCustomer.isPending} onPress={customerForm.handleSubmit((values) => addCustomer.mutate(values))}>Save</Button></Dialog.Actions></Dialog>
         <Dialog visible={customModal} onDismiss={() => setCustomModal(false)}><Dialog.Title>Custom item</Dialog.Title><Dialog.Content><FormTextInput control={customForm.control} name="name" label="Name" /><FormTextInput control={customForm.control} name="price" label="Price" keyboardType="decimal-pad" /><FormTextInput control={customForm.control} name="quantity" label="Quantity" keyboardType="number-pad" /></Dialog.Content><Dialog.Actions><Button onPress={() => setCustomModal(false)}>Cancel</Button><Button onPress={customForm.handleSubmit((values) => { setItems((current) => [...current, { name: values.name, price: Number(values.price), quantity: Number(values.quantity || 1), isCustom: true }]); setCustomModal(false); customForm.reset(customDefaults); })}>Add</Button></Dialog.Actions></Dialog>
         <Dialog visible={Boolean(oversell)} onDismiss={() => setOversell(null)}><Dialog.Title>Stock warning</Dialog.Title><Dialog.Content>{oversell?.items.map((item) => <Text key={item.productId}>{item.name}: app stock {item.available}, invoice quantity {item.requested}, shortage {item.shortage}</Text>)}<Text style={{ marginTop: 8 }}>Continue only if the item is physically available.</Text></Dialog.Content><Dialog.Actions><Button onPress={() => setOversell(null)}>Cancel</Button><Button onPress={() => oversell && createInvoiceMutation.mutate(oversell.payload)}>Continue</Button></Dialog.Actions></Dialog>
       </Portal>
