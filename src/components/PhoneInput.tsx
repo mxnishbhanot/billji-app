@@ -21,18 +21,19 @@ export const COUNTRY_CODES = [
   { code: '+254', country: 'KE', label: 'Kenya' },
 ];
 
-type Props = { control: any; phoneName?: string; codeName?: string; label?: string };
+type Props = { control: any; name?: string; phoneName?: string; codeName?: string; label?: string };
 
-export function PhoneInput({ control, phoneName = 'phone', codeName = 'countryCode', label = 'Phone' }: Props) {
+export function PhoneInput({ control, name, phoneName, codeName = 'countryCode', label = 'Phone' }: Props) {
   const theme = useTheme();
   const [pickerOpen, setPickerOpen] = useState(false);
   const codeController = useController({ control, name: codeName });
   const currentCode = codeController.field.value || '+91';
+  const resolvedPhoneName = phoneName ?? name ?? 'phone';
 
   return (
     <Controller
       control={control}
-      name={phoneName}
+      name={resolvedPhoneName}
       render={({ field: { onChange, onBlur, value }, fieldState: { error } }) => {
         const handleDigitsChange = (text: string) => {
           onChange(text.replace(/[^0-9]/g, ''));

@@ -2,7 +2,6 @@ import { Dimensions, View } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { Text, useTheme } from 'react-native-paper';
 import { AppCard } from './AppCard';
-import { formatCurrency } from '@/utils/format';
 
 type Props = { title: string; data: { date: string; sales: number }[] };
 const withOpacity = (hex: string, opacity: number) => {
@@ -40,7 +39,7 @@ export function ChartCard({ title, data }: Props) {
           propsForBackgroundLines: { strokeDasharray: '4 6', stroke: theme.colors.outlineVariant }
         }}
         style={{ borderRadius: 22, marginLeft: -16 }}
-        formatYLabel={(value) => formatCurrency(Number(value)).replace('.00', '')}
+        formatYLabel={(value) => Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
       />
     </AppCard>
   );

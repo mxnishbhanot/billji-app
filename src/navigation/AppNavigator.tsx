@@ -3,8 +3,8 @@ import { NavigationContainer, createNavigationContainerRef } from '@react-naviga
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { FAB, useTheme } from 'react-native-paper';
-import { BackHandler, Platform, StyleSheet, View } from 'react-native';
-import { useEffect } from 'react';
+import { BackHandler, PanResponder, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DashboardScreen } from '@/screens/DashboardScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
@@ -26,6 +26,24 @@ const navigationRef = createNavigationContainerRef<any>();
 const TAB_BAR_HEIGHT = 72;
 const TAB_BAR_BOTTOM_PADDING = 12;
 const FAB_BOTTOM_OFFSET = 104;
+const FAB_EDGE_GAP = 16;
+const FAB_SIZE = 56;
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+const getDefaultFabPosition = (width: number, height: number, bottomInset: number) => ({
+  x: width - FAB_SIZE - 22,
+  y: height - FAB_SIZE - FAB_BOTTOM_OFFSET - bottomInset
+});
+const clampFabPosition = (position: { x: number; y: number }, width: number, height: number, topInset: number, bottomInset: number) => {
+  const minX = FAB_EDGE_GAP;
+  const maxX = Math.max(minX, width - FAB_SIZE - FAB_EDGE_GAP);
+  const minY = topInset + FAB_EDGE_GAP;
+  const maxY = Math.max(minY, height - FAB_SIZE - TAB_BAR_HEIGHT - bottomInset - 24);
+
+  return {
+    x: clamp(position.x, minX, maxX),
+    y: clamp(position.y, minY, maxY)
+  };
+};
 
 function AuthNavigator() {
   return (
@@ -59,6 +77,33 @@ function AppTabs() {
   const theme = useTheme();
   const isDark = theme.dark;
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const [fabPosition, setFabPosition] = useState(() => clampFabPosition(getDefaultFabPosition(width, height, insets.bottom), width, height, insets.top, insets.bottom));
+  const fabPositionRef = useRef(fabPosition);
+  const dragStartRef = useRef(fabPosition);
+
+  useEffect(() => {
+    fabPositionRef.current = fabPosition;
+  }, [fabPosition]);
+
+  useEffect(() => {
+    setFabPosition((position) => clampFabPosition(position, width, height, insets.top, insets.bottom));
+  }, [height, insets.bottom, insets.top, width]);
+
+  const fabPanResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4,
+    onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4,
+    onPanResponderGrant: () => {
+      dragStartRef.current = fabPositionRef.current;
+    },
+    onPanResponderMove: (_, gestureState) => {
+      setFabPosition(clampFabPosition({
+        x: dragStartRef.current.x + gestureState.dx,
+        y: dragStartRef.current.y + gestureState.dy
+      }, width, height, insets.top, insets.bottom));
+    }
+  }), [height, insets.bottom, insets.top, width]);
+
   return (
     <View style={{ flex: 1 }}>
       <Tabs.Navigator
@@ -115,23 +160,29 @@ function AppTabs() {
         <Tabs.Screen name="ReportsTab" component={ReportsScreen} options={{ title: 'Reports' }} />
         <Tabs.Screen name="SettingsTab" component={SettingsScreen} options={{ title: 'Settings' }} />
       </Tabs.Navigator>
-      <FAB
-        icon="plus"
-        color={theme.colors.onPrimary}
-        style={[
-          styles.fab,
-          {
-            backgroundColor: theme.colors.primary,
-            borderColor: isDark ? theme.colors.primaryContainer : 'transparent',
-            borderWidth: isDark ? 1 : 0,
-            bottom: FAB_BOTTOM_OFFSET + insets.bottom,
-            shadowColor: isDark ? theme.colors.primary : '#000000',
-            shadowOpacity: isDark ? 0.18 : 0.16
-          }
-        ]}
-        onPress={() => navigationRef.navigate('InvoicesTab', { screen: 'InvoiceCreate' })}
-        testID="quick-create-fab"
-      />
+      <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+        <View
+          {...fabPanResponder.panHandlers}
+          style={[styles.fabContainer, { left: fabPosition.x, top: fabPosition.y }]}
+        >
+          <FAB
+            icon="plus"
+            color={theme.colors.onPrimary}
+            style={[
+              styles.fab,
+              {
+                backgroundColor: theme.colors.primary,
+                borderColor: isDark ? theme.colors.primaryContainer : 'transparent',
+                borderWidth: isDark ? 1 : 0,
+                shadowColor: isDark ? theme.colors.primary : '#000000',
+                shadowOpacity: isDark ? 0.18 : 0.16
+              }
+            ]}
+            onPress={() => navigationRef.navigate('InvoicesTab', { screen: 'InvoiceCreate' })}
+            testID="quick-create-fab"
+          />
+        </View>
+      </View>
     </View>
   );
 }
@@ -158,9 +209,10 @@ export function AppNavigator() {
 const styles = StyleSheet.create({
   fab: {
     borderRadius: 22,
-    elevation: 8,
-    position: 'absolute',
-    right: 22
+    elevation: 8
+  },
+  fabContainer: {
+    position: 'absolute'
   },
   tabItem: { borderRadius: 22 },
   tabLabel: { fontSize: 11, fontWeight: '800' }

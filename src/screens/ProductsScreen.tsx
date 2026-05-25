@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, View } from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -18,19 +19,26 @@ import { productSchema } from '@/validation/schemas';
 
 const PAGE_SIZE = 10;
 const blankProduct = { name: '', price: '', stockQuantity: '', sku: '', category: '', lowStockThreshold: '5' };
+type ProductFilters = { search: string; category: string };
+const emptyProductFilters: ProductFilters = { search: '', category: '' };
 
 export function ProductsScreen({ navigation, route }: any) {
   const queryClient = useQueryClient();
   const theme = useTheme();
   const { showDialog } = useAppDialog();
-  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState<ProductFilters>(emptyProductFilters);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draftCategory, setDraftCategory] = useState('');
   const [editing, setEditing] = useState<Product | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<Product | null>(null);
   const [historyProduct, setHistoryProduct] = useState<Product | null>(null);
   const form = useForm<any>({ defaultValues: blankProduct, resolver: zodResolver(productSchema) });
   const highlighted = route?.params?.highlight;
-  const query = useInfiniteQuery({ queryKey: ['products', search], initialPageParam: 1, queryFn: ({ pageParam }) => productsApi.page({ search, page: pageParam, limit: PAGE_SIZE }), getNextPageParam: (lastPage) => lastPage.pagination.nextPage });
+  const query = useInfiniteQuery({ queryKey: ['products', filters], initialPageParam: 1, queryFn: ({ pageParam }) => productsApi.page({ ...filters, page: pageParam, limit: PAGE_SIZE }), getNextPageParam: (lastPage) => lastPage.pagination.nextPage });
   const products = useMemo(() => query.data?.pages.flatMap((page) => page.products) ?? [], [query.data]);
+  const isInitialLoading = query.isLoading && !products.length;
+  const isRefreshing = query.isRefetching && !query.isFetchingNextPage;
+  const activeFilterCount = filters.category ? 1 : 0;
   const save = useMutation({ mutationFn: (values: any) => {
     const payload = { ...values, price: Number(values.price), stockQuantity: Number(values.stockQuantity), lowStockThreshold: values.lowStockThreshold === '' ? 5 : Number(values.lowStockThreshold) };
     return editing?._id ? productsApi.update(editing._id, payload) : productsApi.create(payload);
@@ -43,28 +51,116 @@ export function ProductsScreen({ navigation, route }: any) {
     form.reset(editing ? { name: editing.name, price: String(editing.price), stockQuantity: String(editing.stockQuantity), sku: editing.sku || '', category: editing.category || '', lowStockThreshold: String(editing.lowStockThreshold ?? 5) } : blankProduct);
   }, [editing, form]);
 
+  const loadMoreProducts = () => {
+    if (!query.hasNextPage || query.isFetching || isInitialLoading) return;
+    void query.fetchNextPage();
+  };
+
+  const openFilters = () => {
+    setDraftCategory(filters.category);
+    setFiltersOpen(true);
+  };
+
+  const applyFilters = () => {
+    setFilters((current) => ({ ...current, category: draftCategory.trim() }));
+    setFiltersOpen(false);
+  };
+
+  const clearFilters = () => {
+    setDraftCategory('');
+    setFilters((current) => ({ ...current, category: '' }));
+    setFiltersOpen(false);
+  };
+
+  const renderProductsHeader = () => (
+    <View style={styles.listHeader}>
+      <TextInput mode="outlined" placeholder="Search products" value={filters.search} onChangeText={(search) => setFilters((current) => ({ ...current, search }))} left={<TextInput.Icon icon="magnify" />} />
+      <View style={styles.actionsRow}><Button mode="outlined" icon="filter-variant" onPress={openFilters} style={styles.filterButton}>{activeFilterCount ? `Filters (${activeFilterCount})` : 'Filters'}</Button><Button mode="contained" onPress={() => setEditing(null)} style={styles.growButton}>Add product</Button></View>
+      <Button mode="outlined" onPress={() => navigation.navigate('Customers')} style={styles.customersButton}>Customers</Button>
+      {highlighted ? <Text style={{ color: theme.colors.onSurfaceVariant }}>Showing alert for product {highlighted}</Text> : null}
+    </View>
+  );
+
+  const renderProductsFooter = () => {
+    if (query.isFetchingNextPage) return <ActivityIndicator color={theme.colors.primary} style={styles.footerLoader} />;
+    if (!query.hasNextPage && products.length) return <Text style={[styles.endText, { color: theme.colors.onSurfaceVariant }]}>All products loaded</Text>;
+    return null;
+  };
+
+  const renderProductCard = ({ item }: { item: Product }) => {
+    const isLowStock = Boolean(item.isLowStock || item.stockQuantity <= item.lowStockThreshold);
+    const stockColor = isLowStock ? theme.colors.error : theme.colors.tertiary;
+    const cardStyle = item._id === highlighted ? { borderWidth: 1, borderColor: theme.colors.primary } : undefined;
+
+    return (
+      <AppCard style={cardStyle}>
+        <View style={styles.cardHeader}>
+          <View style={[styles.avatar, { backgroundColor: isLowStock ? theme.colors.errorContainer : theme.colors.secondaryContainer }]}>
+            <MaterialCommunityIcons name="package-variant-closed" size={24} color={isLowStock ? theme.colors.error : theme.colors.secondary} />
+          </View>
+          <View style={styles.cardTitleBlock}>
+            <Text variant="titleMedium" numberOfLines={1} style={styles.cardTitle}>{item.name}</Text>
+            <View style={styles.chipRow}>
+              <View style={[styles.softChip, { backgroundColor: theme.colors.surfaceVariant }]}>
+                <Text numberOfLines={1} variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.sku || 'No SKU'}</Text>
+              </View>
+              {item.category ? (
+                <View style={[styles.softChip, { backgroundColor: theme.colors.primaryContainer }]}>
+                  <Text numberOfLines={1} variant="labelSmall" style={{ color: theme.colors.primary }}>{item.category}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </View>
+        <View style={styles.metricGrid}>
+          <View style={[styles.metricBox, { backgroundColor: theme.colors.surfaceVariant }]}>
+            <MaterialCommunityIcons name="currency-inr" size={18} color={theme.colors.primary} />
+            <View>
+              <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Price</Text>
+              <Text style={styles.metricValue}>{formatCurrency(item.price)}</Text>
+            </View>
+          </View>
+          <View style={[styles.metricBox, { backgroundColor: theme.colors.surfaceVariant }]}>
+            <MaterialCommunityIcons name={isLowStock ? 'alert-circle-outline' : 'cube-outline'} size={18} color={stockColor} />
+            <View>
+              <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Stock</Text>
+              <Text style={[styles.metricValue, { color: stockColor }]}>{item.stockQuantity}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.cardActions}>
+          <Button mode="text" icon="pencil-outline" compact onPress={() => setEditing(item)}>Edit</Button>
+          <Button mode="text" icon="history" compact onPress={() => setHistoryProduct(item)}>History</Button>
+          <Button mode="text" icon="trash-can-outline" compact textColor={theme.colors.error} onPress={() => setDeleting(item)}>Delete</Button>
+        </View>
+      </AppCard>
+    );
+  };
+
   return (
-    <Screen title="Products" scroll={false}>
-      <View style={{ gap: 10, marginBottom: 12 }}>
-        <TextInput mode="outlined" placeholder="Search products" value={search} onChangeText={setSearch} left={<TextInput.Icon icon="magnify" />} />
-        <View style={{ flexDirection: 'row', gap: 8 }}><Button mode="contained" onPress={() => setEditing(null)} style={{ flex: 1 }}>Add product</Button><Button mode="outlined" onPress={() => navigation.navigate('Customers')}>Customers</Button></View>
-        {highlighted ? <Text style={{ color: theme.colors.onSurfaceVariant }}>Showing alert for product {highlighted}</Text> : null}
-      </View>
+    <Screen title="Products" scroll={false} contentStyle={styles.screenContent}>
       <FlatList
         data={products}
         keyExtractor={(item) => item._id}
-        refreshing={query.isRefetching}
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        refreshing={isRefreshing}
         onRefresh={() => query.refetch()}
-        onEndReached={() => query.hasNextPage && query.fetchNextPage()}
-        ListEmptyComponent={!query.isLoading ? <EmptyState title="No products" message="Add your first product to speed up invoice creation." actionLabel="Add product" onAction={() => setEditing(null)} /> : null}
-        renderItem={({ item }) => <AppCard style={item._id === highlighted ? { borderWidth: 1, borderColor: theme.colors.primary } : undefined}>
-          <Text variant="titleMedium" style={{ fontWeight: '900' }}>{item.name}</Text>
-          <Text style={{ color: theme.colors.onSurfaceVariant }}>{[item.sku, item.category].filter(Boolean).join(' · ') || 'No SKU/category'}</Text>
-          <Text style={{ marginTop: 4 }}>{formatCurrency(item.price)} · Stock {item.stockQuantity}</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}><Button mode="outlined" onPress={() => setEditing(item)}>Edit</Button><Button mode="outlined" onPress={() => setHistoryProduct(item)}>History</Button><Button mode="outlined" textColor={theme.colors.error} onPress={() => setDeleting(item)}>Delete</Button></View>
-        </AppCard>}
+        onEndReached={loadMoreProducts}
+        onEndReachedThreshold={0.35}
+        ListHeaderComponent={renderProductsHeader}
+        ListEmptyComponent={isInitialLoading ? <ActivityIndicator color={theme.colors.primary} style={styles.emptyLoader} /> : <EmptyState title="No products" message="Add your first product to speed up invoice creation." actionLabel="Add product" onAction={() => setEditing(null)} />}
+        ListFooterComponent={renderProductsFooter}
+        renderItem={renderProductCard}
       />
       <Portal>
+        <Dialog visible={filtersOpen} onDismiss={() => setFiltersOpen(false)}><Dialog.Title>Filter products</Dialog.Title><Dialog.Content>
+          <Text variant="labelLarge" style={styles.dialogLabel}>Category</Text>
+          <TextInput mode="outlined" label="Category" placeholder="e.g. Services, Parts" value={draftCategory} onChangeText={setDraftCategory} />
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>Matches saved product category exactly.</Text>
+        </Dialog.Content><Dialog.Actions><Button onPress={clearFilters}>Clear</Button><Button onPress={() => setFiltersOpen(false)}>Cancel</Button><Button mode="contained" onPress={applyFilters}>Apply</Button></Dialog.Actions></Dialog>
         <Dialog visible={editing !== undefined} onDismiss={() => setEditing(undefined)}><Dialog.Title>{editing?._id ? 'Edit product' : 'Add product'}</Dialog.Title><Dialog.Content>
           <FormTextInput control={form.control} name="name" label="Name" /><FormTextInput control={form.control} name="price" label="Price" keyboardType="decimal-pad" /><FormTextInput control={form.control} name="stockQuantity" label="Stock" keyboardType="number-pad" /><FormTextInput control={form.control} name="sku" label="SKU" /><FormTextInput control={form.control} name="category" label="Category" /><FormTextInput control={form.control} name="lowStockThreshold" label="Low stock alert" keyboardType="number-pad" />
         </Dialog.Content><Dialog.Actions><Button onPress={() => setEditing(undefined)}>Cancel</Button><Button loading={save.isPending} onPress={form.handleSubmit((values) => save.mutate(values))}>Save</Button></Dialog.Actions></Dialog>
@@ -74,3 +170,28 @@ export function ProductsScreen({ navigation, route }: any) {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  actionsRow: { flexDirection: 'row', gap: 8 },
+  avatar: { alignItems: 'center', borderRadius: 18, height: 44, justifyContent: 'center', width: 44 },
+  cardActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end', marginTop: 12 },
+  cardHeader: { alignItems: 'center', flexDirection: 'row', gap: 12 },
+  cardTitle: { fontWeight: '900', letterSpacing: -0.2 },
+  cardTitleBlock: { flex: 1, minWidth: 0 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  customersButton: { borderRadius: 16 },
+  dialogLabel: { fontWeight: '900', marginBottom: 8 },
+  emptyLoader: { marginTop: 40 },
+  endText: { marginVertical: 16, textAlign: 'center' },
+  filterButton: { borderRadius: 16, flex: 1 },
+  footerLoader: { marginVertical: 16 },
+  growButton: { flex: 1 },
+  list: { flex: 1 },
+  listContent: { paddingBottom: 24 },
+  listHeader: { gap: 10, marginBottom: 12 },
+  metricBox: { alignItems: 'center', borderRadius: 18, flex: 1, flexDirection: 'row', gap: 10, padding: 12 },
+  metricGrid: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  metricValue: { fontWeight: '900', marginTop: 2 },
+  softChip: { borderRadius: 999, maxWidth: 140, paddingHorizontal: 9, paddingVertical: 4 },
+  screenContent: { flex: 1 }
+});

@@ -29,12 +29,12 @@ export function InvoiceDetailScreen({ route, navigation }: any) {
   const invoice = query.data;
   const invalidate = () => { queryClient.invalidateQueries({ queryKey: ['invoices'] }); queryClient.invalidateQueries({ queryKey: ['products'] }); queryClient.invalidateQueries({ queryKey: ['report'] }); };
   const status = useMutation({ mutationFn: (next: InvoiceStatus) => invoicesApi.status(id, next), onSuccess: () => { setLocalStatus(null); invalidate(); query.refetch(); }, onError: (error) => showDialog({ title: 'Could not update status', message: apiErrorMessage(error), tone: 'error' }) });
-  const currentStatus = localStatus ?? invoice?.status;
-  const hasStatusChange = localStatus !== null && localStatus !== invoice?.status;
   const remove = useMutation({ mutationFn: () => invoicesApi.remove(id), onSuccess: () => { setDeleting(false); invalidate(); navigation.navigate('InvoiceList'); }, onError: (error) => showDialog({ title: 'Could not delete invoice', message: apiErrorMessage(error), tone: 'error' }) });
   const sendEmail = useMutation({ mutationFn: (email: string) => invoicesApi.email(id, email), onSuccess: () => { setEmailOpen(false); query.refetch(); }, onError: (error) => showDialog({ title: 'Could not send email', message: apiErrorMessage(error), tone: 'error' }) });
   const shareWhatsApp = async () => { try { const result = await invoicesApi.whatsapp(id); await Linking.openURL(result.link); } catch (error) { showDialog({ title: 'Could not prepare WhatsApp link', message: apiErrorMessage(error), tone: 'error' }); } };
   if (!invoice) return <Screen title="Invoice"><Text>Loading invoice...</Text></Screen>;
+  const currentStatus = localStatus ?? invoice.status;
+  const hasStatusChange = localStatus !== null && localStatus !== invoice.status;
   return (
     <Screen title={invoice.invoiceNumber}>
       <AppCard><Text style={{ color: theme.colors.onSurfaceVariant }}>{formatDate(invoice.date)}</Text><Text variant="headlineMedium" style={{ fontWeight: '900' }}>{invoice.customerSnapshot.name}</Text><Text variant="displaySmall" style={{ fontWeight: '900', marginTop: 12 }}>{formatCurrency(invoice.total)}</Text><Text>{invoice.status}</Text></AppCard>

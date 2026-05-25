@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, View } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Appbar, Badge, Button, Dialog, List, Portal, Text } from 'react-native-paper';
+import { Appbar, Badge, Button, Dialog, List, Portal, Text, useTheme } from 'react-native-paper';
 import { notificationsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { connectSocket } from '@/services/socket';
@@ -13,6 +13,7 @@ const PAGE_SIZE = 10;
 export function NotificationButton() {
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
+  const theme = useTheme();
   const token = useAuthStore((state) => state.token);
   const [open, setOpen] = useState(false);
   const query = useInfiniteQuery({ queryKey: ['notifications'], enabled: Boolean(token), initialPageParam: 1, queryFn: ({ pageParam }) => notificationsApi.page({ page: pageParam, limit: PAGE_SIZE }), getNextPageParam: (lastPage) => lastPage.pagination.nextPage });
@@ -44,7 +45,10 @@ export function NotificationButton() {
   };
   return (
     <>
-      <View><Appbar.Action icon="bell-outline" onPress={openPanel} />{unreadCount > 0 ? <Badge style={{ position: 'absolute', right: 4, top: 2 }}>{unreadCount > 9 ? '9+' : unreadCount}</Badge> : null}</View>
+      <View style={[styles.actionWrap, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outlineVariant }]}>
+        <Appbar.Action icon="bell-outline" onPress={openPanel} color={theme.colors.onSurfaceVariant} style={styles.action} />
+        {unreadCount > 0 ? <Badge style={styles.badge}>{unreadCount > 9 ? '9+' : unreadCount}</Badge> : null}
+      </View>
       <Portal>
         <Dialog visible={open} onDismiss={() => setOpen(false)} style={{ maxHeight: '82%' }}>
           <Dialog.Title>Notifications</Dialog.Title>
@@ -61,3 +65,16 @@ export function NotificationButton() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  action: { margin: 0 },
+  actionWrap: {
+    borderRadius: 18,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: 'center',
+    marginLeft: 8,
+    width: 42
+  },
+  badge: { position: 'absolute', right: -2, top: -4 }
+});

@@ -1,6 +1,6 @@
 
 import { useMemo, useState } from 'react';
-import { FlatList, View } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -75,9 +75,18 @@ export function InvoiceBuilderScreen({ navigation }: any) {
         <Button mode="outlined" onPress={() => setCustomerModal(true)} style={{ marginTop: 8 }}>Quick add customer</Button>
       </AppCard>
       <AppCard>
-        <Text variant="titleMedium" style={{ fontWeight: '900', marginBottom: 8 }}>Products</Text><TextInput mode="outlined" placeholder="Search products" value={productSearch} onChangeText={setProductSearch} />
-        <FlatList data={filteredProducts.slice(0, 20)} keyExtractor={(item) => item._id} scrollEnabled={false} renderItem={({ item }) => <List.Item title={item.name} description={`${formatCurrency(item.price)} · Stock ${item.stockQuantity}`} onPress={() => addProduct(item)} right={(props) => <Button {...props} onPress={() => addProduct(item)}>Add</Button>} />} />
-        <Button mode="outlined" onPress={() => setCustomModal(true)}>Add custom item</Button>
+        <Text variant="titleMedium" style={styles.sectionTitle}>Products</Text>
+        <View style={styles.productPicker}>
+          <TextInput mode="outlined" placeholder="Search products" value={productSearch} onChangeText={setProductSearch} />
+          <FlatList
+            data={filteredProducts.slice(0, 20)}
+            keyExtractor={(item) => item._id}
+            scrollEnabled={false}
+            ListEmptyComponent={<Text style={[styles.emptyProductsText, { color: theme.colors.onSurfaceVariant }]}>No saved products found. Add a custom item below.</Text>}
+            renderItem={({ item }) => <List.Item title={item.name} description={`${formatCurrency(item.price)} · Stock ${item.stockQuantity}`} onPress={() => addProduct(item)} right={(props) => <Button {...props} onPress={() => addProduct(item)}>Add</Button>} />}
+          />
+          <Button mode="outlined" onPress={() => setCustomModal(true)} style={styles.customItemButton}>Add custom item</Button>
+        </View>
       </AppCard>
       <AppCard>
         <Text variant="titleMedium" style={{ fontWeight: '900', marginBottom: 8 }}>Invoice items</Text>{items.length ? items.map((item, index) => <View key={`${item.name}-${index}`} style={{ marginBottom: 12 }}><Text style={{ fontWeight: '900' }}>{item.name}</Text><Text>{item.quantity} x {formatCurrency(item.price)} = {formatCurrency(item.quantity * item.price)}</Text><View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}><Button mode="outlined" onPress={() => updateQuantity(index, -1)}>-</Button><Button mode="outlined" onPress={() => updateQuantity(index, 1)}>+</Button><Button mode="outlined" textColor={theme.colors.error} onPress={() => removeItem(index)}>Remove</Button></View></View>) : <Text style={{ color: theme.colors.onSurfaceVariant }}>No items yet.</Text>}
@@ -95,3 +104,10 @@ export function InvoiceBuilderScreen({ navigation }: any) {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  sectionTitle: { fontWeight: '900', marginBottom: 8 },
+  productPicker: { gap: 10 },
+  emptyProductsText: { paddingVertical: 8 },
+  customItemButton: { alignSelf: 'stretch' }
+});
