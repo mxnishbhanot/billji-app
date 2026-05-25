@@ -11,12 +11,13 @@ import { useAppDialog } from '@/components/AppDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { FormTextInput } from '@/components/FormTextInput';
+import { PhoneInput } from '@/components/PhoneInput';
 import { Screen } from '@/components/Screen';
 import { Customer } from '@/types';
 import { customerSchema } from '@/validation/schemas';
 
 const PAGE_SIZE = 10;
-const blankCustomer = { name: '', phone: '', email: '', address: '' };
+const blankCustomer = { name: '', phone: '', countryCode: '+91', email: '', address: '' };
 
 export function CustomersScreen() {
   const queryClient = useQueryClient();
@@ -35,8 +36,8 @@ export function CustomersScreen() {
   return (
     <Screen title="Customers" scroll={false}>
       <View style={{ gap: 10, marginBottom: 12 }}><TextInput mode="outlined" placeholder="Search customers" value={search} onChangeText={setSearch} left={<TextInput.Icon icon="magnify" />} /><Button mode="contained" onPress={() => setEditing(null)}>Add customer</Button></View>
-      <FlatList data={customers} keyExtractor={(item) => item._id} refreshing={query.isRefetching} onRefresh={() => query.refetch()} onEndReached={() => query.hasNextPage && query.fetchNextPage()} ListEmptyComponent={!query.isLoading ? <EmptyState title="No customers" message="Add customers once and reuse them in every invoice." actionLabel="Add customer" onAction={() => setEditing(null)} /> : null} renderItem={({ item }) => <AppCard><Text variant="titleMedium" style={{ fontWeight: '900' }}>{item.name}</Text><Text>{item.phone}</Text>{item.email ? <Text style={{ color: theme.colors.onSurfaceVariant }}>{item.email}</Text> : null}<View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}><Button mode="outlined" onPress={() => setEditing(item)}>Edit</Button><Button mode="outlined" textColor={theme.colors.error} onPress={() => setDeleting(item)}>Delete</Button></View></AppCard>} />
-      <Portal><Dialog visible={editing !== undefined} onDismiss={() => setEditing(undefined)}><Dialog.Title>{editing?._id ? 'Edit customer' : 'Add customer'}</Dialog.Title><Dialog.Content><FormTextInput control={form.control} name="name" label="Name" /><FormTextInput control={form.control} name="phone" label="Phone" keyboardType="phone-pad" /><FormTextInput control={form.control} name="email" label="Email" keyboardType="email-address" /><FormTextInput control={form.control} name="address" label="Address" multiline /></Dialog.Content><Dialog.Actions><Button onPress={() => setEditing(undefined)}>Cancel</Button><Button loading={save.isPending} onPress={form.handleSubmit((values) => save.mutate(values))}>Save</Button></Dialog.Actions></Dialog></Portal>
+      <FlatList data={customers} keyExtractor={(item) => item._id} refreshing={query.isRefetching} onRefresh={() => query.refetch()} onEndReached={() => query.hasNextPage && query.fetchNextPage()} ListEmptyComponent={!query.isLoading ? <EmptyState title="No customers" message="Add customers once and reuse them in every invoice." actionLabel="Add customer" onAction={() => setEditing(null)} /> : null} renderItem={({ item }) => <AppCard><Text variant="titleMedium" style={{ fontWeight: '900' }}>{item.name}</Text><Text>{item.countryCode || '+91'} {item.phone}</Text>{item.email ? <Text style={{ color: theme.colors.onSurfaceVariant }}>{item.email}</Text> : null}<View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}><Button mode="outlined" onPress={() => setEditing(item)}>Edit</Button><Button mode="outlined" textColor={theme.colors.error} onPress={() => setDeleting(item)}>Delete</Button></View></AppCard>} />
+      <Portal><Dialog visible={editing !== undefined} onDismiss={() => setEditing(undefined)}><Dialog.Title>{editing?._id ? 'Edit customer' : 'Add customer'}</Dialog.Title><Dialog.Content><FormTextInput control={form.control} name="name" label="Name" /><PhoneInput control={form.control} name="phone" /><FormTextInput control={form.control} name="email" label="Email" keyboardType="email-address" /><FormTextInput control={form.control} name="address" label="Address" multiline /></Dialog.Content><Dialog.Actions><Button onPress={() => setEditing(undefined)}>Cancel</Button><Button loading={save.isPending} onPress={form.handleSubmit((values) => save.mutate(values))}>Save</Button></Dialog.Actions></Dialog></Portal>
       <ConfirmDialog visible={Boolean(deleting)} title="Delete customer?" message="This removes the customer from your saved list. Existing invoices remain unchanged." onCancel={() => setDeleting(null)} onConfirm={() => deleting && remove.mutate(deleting._id)} />
     </Screen>
   );

@@ -38,4 +38,9 @@ yarn-error.*
 
 # generated native folders
 /ios
+
+# backend is a separate repo
+backend/
 /android
+# Added by code-review-graph
+.code-review-graph/

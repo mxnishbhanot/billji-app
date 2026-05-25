@@ -6,6 +6,7 @@ export type BusinessProfile = {
   logoUrl?: string;
   gstNumber?: string;
   phone?: string;
+  countryCode?: string;
   email?: string;
   address?: string;
   invoicePrefix?: string;
@@ -29,7 +30,7 @@ export type Product = {
 };
 
 export type StockMovement = { _id: string; type: string; quantityChange: number; stockBefore: number; stockAfter: number; note?: string; invoiceNumber?: string; createdAt?: string };
-export type Customer = { _id: string; name: string; phone: string; email?: string; address?: string; createdAt?: string; updatedAt?: string };
+export type Customer = { _id: string; name: string; phone: string; countryCode?: string; email?: string; address?: string; createdAt?: string; updatedAt?: string };
 export type InvoiceItem = { _id?: string; product?: string | null; productId?: string; name: string; sku?: string; quantity: number; price: number; total?: number; isCustom?: boolean };
 
 export type Invoice = {

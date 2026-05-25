@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Button, SegmentedButtons, Text, TextInput, useTheme } from 'react-native-paper';
 import { invoicesApi } from '@/api/endpoints';
@@ -32,7 +32,7 @@ export function InvoicesScreen({ navigation }: any) {
         />
         <Button mode="contained" onPress={() => navigation.navigate('InvoiceCreate')} style={styles.primaryButton}>Create invoice</Button>
       </View>
-      <FlatList data={invoices} keyExtractor={(item) => item._id} refreshing={query.isRefetching} onRefresh={() => query.refetch()} onEndReached={() => query.hasNextPage && query.fetchNextPage()} showsVerticalScrollIndicator={false} ListEmptyComponent={!query.isLoading ? <EmptyState title="No invoices found" message="Try a different search or create a new invoice." /> : null} renderItem={({ item }) => <AppCard onPress={() => navigation.navigate('InvoiceDetail', { id: item._id })}><View style={styles.invoiceRow}><View style={{ flex: 1 }}><Text variant="titleMedium" style={styles.invoiceTitle}>{item.customerSnapshot.name}</Text><Text style={{ color: theme.colors.onSurfaceVariant }}>{item.invoiceNumber} - {formatDate(item.date)}</Text><View style={[styles.statusPill, { backgroundColor: statusColor(item.status) }]}><Text variant="labelSmall" style={{ color: '#ffffff', fontWeight: '900', textTransform: 'uppercase' }}>{item.status}</Text></View></View><Text variant="titleMedium" style={styles.invoiceAmount}>{formatCurrency(item.total)}</Text></View></AppCard>} />
+      <FlatList data={invoices} keyExtractor={(item) => item._id} refreshing={query.isRefetching} onRefresh={() => query.refetch()} onEndReached={() => query.hasNextPage && query.fetchNextPage()} onEndReachedThreshold={0.5} showsVerticalScrollIndicator={false} ListEmptyComponent={!query.isLoading ? <EmptyState title="No invoices found" message="Try a different search or create a new invoice." /> : null} ListFooterComponent={query.isFetchingNextPage ? <ActivityIndicator color={theme.colors.primary} style={{ marginVertical: 16 }} /> : null} renderItem={({ item }) => <AppCard onPress={() => navigation.navigate('InvoiceDetail', { id: item._id })}><View style={styles.invoiceRow}><View style={{ flex: 1 }}><Text variant="titleMedium" style={styles.invoiceTitle}>{item.customerSnapshot.name}</Text><Text style={{ color: theme.colors.onSurfaceVariant }}>{item.invoiceNumber} - {formatDate(item.date)}</Text><View style={[styles.statusPill, { backgroundColor: statusColor(item.status) }]}><Text variant="labelSmall" style={{ color: '#ffffff', fontWeight: '900', textTransform: 'uppercase' }}>{item.status}</Text></View></View><Text variant="titleMedium" style={styles.invoiceAmount}>{formatCurrency(item.total)}</Text></View></AppCard>} />
     </Screen>
   );
 }
