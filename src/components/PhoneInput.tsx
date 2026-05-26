@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { Controller, useController } from 'react-hook-form';
 import { Dialog, HelperText, Portal, Text, TextInput, useTheme } from 'react-native-paper';
+import { fontStyles, radii, spacing, typeScale } from '@/theme/theme';
 
 export const COUNTRY_CODES = [
   { code: '+91', country: 'IN', label: 'India' },
@@ -51,8 +52,8 @@ export function PhoneInput({ control, name, phoneName, codeName = 'countryCode',
                 onPress={() => setPickerOpen(true)}
                 style={[styles.codeButton, { backgroundColor: theme.colors.elevation.level1, borderColor: error ? theme.colors.error : theme.colors.outlineVariant }]}
               >
-                <Text style={{ fontWeight: '700', color: theme.colors.onSurface }}>{currentCode}</Text>
-                <Text style={{ fontSize: 10, color: theme.colors.onSurfaceVariant }}>▼</Text>
+                <Text style={{ ...fontStyles.medium, color: theme.colors.onSurface }}>{currentCode}</Text>
+                <Text style={{ ...typeScale.badgeLabel, color: theme.colors.onSurfaceVariant }}>▼</Text>
               </Pressable>
               <TextInput
                 mode="outlined"
@@ -82,7 +83,7 @@ export function PhoneInput({ control, name, phoneName, codeName = 'countryCode',
                         onPress={() => handleCodeSelect(item)}
                         style={[styles.countryRow, item.code === currentCode && { backgroundColor: theme.colors.primaryContainer }]}
                       >
-                        <Text style={{ fontWeight: '700', width: 50 }}>{item.code}</Text>
+                        <Text style={{ ...fontStyles.medium, width: 50 }}>{item.code}</Text>
                         <Text>{item.label}</Text>
                       </Pressable>
                     )}
@@ -98,10 +99,10 @@ export function PhoneInput({ control, name, phoneName, codeName = 'countryCode',
 }
 
 const styles = StyleSheet.create({
-  codeButton: { borderRadius: 7, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 4, justifyContent: 'center', height: 56, paddingHorizontal: 12, marginBottom: 12 },
-  countryRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16 },
+  codeButton: { borderRadius: radii.input, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 4, justifyContent: 'center', height: 56, paddingHorizontal: spacing.gridGap, marginBottom: spacing.gridGap },
+  countryRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.gridGap, paddingVertical: spacing.cardPaddingCompact, paddingHorizontal: spacing.cardPadding },
   helper: { marginTop: -8 },
-  outline: { borderRadius: 7 },
-  phoneInput: { flex: 1, marginBottom: 12 },
+  outline: { borderRadius: radii.input },
+  phoneInput: { flex: 1, marginBottom: spacing.gridGap },
   row: { flexDirection: 'row', gap: 8 },
 });

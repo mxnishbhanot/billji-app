@@ -1,6 +1,7 @@
 import { ReactNode, createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { Button, Dialog, Portal, Text, useTheme } from 'react-native-paper';
+import { radii, typeScale } from '@/theme/theme';
 
 type DialogTone = 'default' | 'success' | 'error' | 'warning';
 type AppDialogOptions = {
@@ -54,6 +55,6 @@ export function useAppDialog() {
 }
 
 const styles = StyleSheet.create({
-  dialog: { borderRadius: 28 },
-  title: { fontWeight: '900' }
+  dialog: { borderRadius: radii.card },
+  title: typeScale.screenTitle
 });

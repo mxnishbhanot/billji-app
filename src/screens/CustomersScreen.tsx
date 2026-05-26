@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { FormTextInput } from '@/components/FormTextInput';
 import { PhoneInput } from '@/components/PhoneInput';
 import { Screen } from '@/components/Screen';
+import { appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { Customer } from '@/types';
 import { customerSchema } from '@/validation/schemas';
 
@@ -32,6 +33,7 @@ const CONTACT_FILTERS: { label: string; value: CustomerFilters['contactInfo'] }[
 export function CustomersScreen() {
   const queryClient = useQueryClient();
   const theme = useTheme();
+  const colors = appColors(theme.dark);
   const { showDialog } = useAppDialog();
   const [filters, setFilters] = useState<CustomerFilters>(emptyCustomerFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -71,8 +73,8 @@ export function CustomersScreen() {
 
   const renderCustomersHeader = () => (
     <View style={styles.listHeader}>
-      <TextInput mode="outlined" placeholder="Search customers" value={filters.search} onChangeText={(search) => setFilters((current) => ({ ...current, search }))} left={<TextInput.Icon icon="magnify" />} />
-      <View style={styles.actionsRow}><Button mode="outlined" icon="filter-variant" onPress={openFilters} style={styles.filterButton}>{activeFilterCount ? `Filters (${activeFilterCount})` : 'Filters'}</Button><Button mode="contained" onPress={() => setEditing(null)} style={styles.growButton}>Add customer</Button></View>
+      <TextInput mode="outlined" placeholder="Search customers" value={filters.search} onChangeText={(search) => setFilters((current) => ({ ...current, search }))} left={<TextInput.Icon icon={({ size, color }) => <Feather name="search" size={size} color={color} />} />} outlineColor={theme.colors.outlineVariant} activeOutlineColor={theme.colors.primary} outlineStyle={styles.inputOutline} style={{ backgroundColor: theme.dark ? colors.surface : colors.card }} />
+      <View style={styles.actionsRow}><Button mode="outlined" icon={({ size, color }) => <Feather name="filter" size={size} color={color} />} onPress={openFilters} style={styles.filterButton}>{activeFilterCount ? `Filters (${activeFilterCount})` : 'Filters'}</Button><Button mode="contained" onPress={() => setEditing(null)} style={styles.growButton}>Add customer</Button></View>
     </View>
   );
 
@@ -85,8 +87,8 @@ export function CustomersScreen() {
   const renderCustomerCard = ({ item }: { item: Customer }) => (
     <AppCard>
       <View style={styles.cardHeader}>
-        <View style={[styles.avatar, { backgroundColor: theme.colors.primaryContainer }]}>
-          <MaterialCommunityIcons name="account-outline" size={24} color={theme.colors.primary} />
+        <View style={[styles.avatar, { backgroundColor: colors.primarySoft }]}>
+          <Feather name="user" size={23} color={theme.colors.primary} />
         </View>
         <View style={styles.cardTitleBlock}>
           <Text variant="titleMedium" numberOfLines={1} style={styles.cardTitle}>{item.name}</Text>
@@ -95,25 +97,25 @@ export function CustomersScreen() {
       </View>
       <View style={styles.metaBlock}>
         <View style={styles.metaRow}>
-          <MaterialCommunityIcons name="phone-outline" size={17} color={theme.colors.onSurfaceVariant} />
+          <Feather name="phone" size={17} color={theme.colors.onSurfaceVariant} />
           <Text style={styles.metaText}>{item.countryCode || '+91'} {item.phone}</Text>
         </View>
         {item.email ? (
           <View style={styles.metaRow}>
-            <MaterialCommunityIcons name="email-outline" size={17} color={theme.colors.onSurfaceVariant} />
+            <Feather name="mail" size={17} color={theme.colors.onSurfaceVariant} />
             <Text numberOfLines={1} style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>{item.email}</Text>
           </View>
         ) : null}
         {item.address ? (
           <View style={styles.metaRow}>
-            <MaterialCommunityIcons name="map-marker-outline" size={17} color={theme.colors.onSurfaceVariant} />
+            <Feather name="map-pin" size={17} color={theme.colors.onSurfaceVariant} />
             <Text numberOfLines={1} style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>{item.address}</Text>
           </View>
         ) : null}
       </View>
       <View style={styles.cardActions}>
-        <Button mode="text" icon="pencil-outline" compact onPress={() => setEditing(item)}>Edit</Button>
-        <Button mode="text" icon="trash-can-outline" compact textColor={theme.colors.error} onPress={() => setDeleting(item)}>Delete</Button>
+        <Button mode="text" icon={({ size, color }) => <Feather name="edit-2" size={size} color={color} />} compact onPress={() => setEditing(item)}>Edit</Button>
+        <Button mode="text" icon={({ size, color }) => <Feather name="trash-2" size={size} color={color} />} compact textColor={theme.colors.error} onPress={() => setDeleting(item)}>Delete</Button>
       </View>
     </AppCard>
   );
@@ -134,18 +136,19 @@ export function CustomersScreen() {
 
 const styles = StyleSheet.create({
   actionsRow: { flexDirection: 'row', gap: 8 },
-  avatar: { alignItems: 'center', borderRadius: 18, height: 44, justifyContent: 'center', width: 44 },
+  avatar: { alignItems: 'center', borderRadius: radii.card, height: 44, justifyContent: 'center', width: 44 },
   cardActions: { flexDirection: 'row', gap: 4, justifyContent: 'flex-end', marginTop: 12 },
   cardHeader: { alignItems: 'center', flexDirection: 'row', gap: 12 },
-  cardSubtitle: { fontSize: 12, fontWeight: '700', marginTop: 1 },
-  cardTitle: { fontWeight: '900', letterSpacing: -0.2 },
+  cardSubtitle: { ...typeScale.caption, marginTop: 1 },
+  cardTitle: { ...typeScale.sectionTitle, letterSpacing: -0.2 },
   cardTitleBlock: { flex: 1, minWidth: 0 },
-  dialogLabel: { fontWeight: '900', marginBottom: 4 },
+  dialogLabel: { ...fontStyles.medium, marginBottom: 4 },
   emptyLoader: { marginTop: 40 },
   endText: { marginVertical: 16, textAlign: 'center' },
-  filterButton: { borderRadius: 16, flex: 1 },
+  filterButton: { borderRadius: radii.input, flex: 1 },
   footerLoader: { marginVertical: 16 },
-  growButton: { flex: 1 },
+  growButton: { borderRadius: radii.input, flex: 1 },
+  inputOutline: { borderRadius: radii.input },
   list: { flex: 1 },
   listContent: { paddingBottom: 24 },
   listHeader: { gap: 10, marginBottom: 12 },

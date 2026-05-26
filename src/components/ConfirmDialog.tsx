@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native';
 import { Button, Dialog, Portal, Text, useTheme } from 'react-native-paper';
+import { radii, typeScale } from '@/theme/theme';
 
 type Props = { visible: boolean; title: string; message: string; confirmLabel?: string; onCancel: () => void; onConfirm: () => void };
 export function ConfirmDialog({ visible, title, message, confirmLabel = 'Confirm', onCancel, onConfirm }: Props) {
@@ -16,6 +17,6 @@ export function ConfirmDialog({ visible, title, message, confirmLabel = 'Confirm
 }
 
 const styles = StyleSheet.create({
-  dialog: { borderRadius: 28 },
-  title: { fontWeight: '900' }
+  dialog: { borderRadius: radii.card },
+  title: typeScale.screenTitle
 });

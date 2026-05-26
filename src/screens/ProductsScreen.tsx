@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -13,6 +13,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { FormTextInput } from '@/components/FormTextInput';
 import { Screen } from '@/components/Screen';
+import { appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
 import { Product } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/format';
 import { productSchema } from '@/validation/schemas';
@@ -25,6 +26,7 @@ const emptyProductFilters: ProductFilters = { search: '', category: '' };
 export function ProductsScreen({ navigation, route }: any) {
   const queryClient = useQueryClient();
   const theme = useTheme();
+  const colors = appColors(theme.dark);
   const { showDialog } = useAppDialog();
   const [filters, setFilters] = useState<ProductFilters>(emptyProductFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -74,8 +76,8 @@ export function ProductsScreen({ navigation, route }: any) {
 
   const renderProductsHeader = () => (
     <View style={styles.listHeader}>
-      <TextInput mode="outlined" placeholder="Search products" value={filters.search} onChangeText={(search) => setFilters((current) => ({ ...current, search }))} left={<TextInput.Icon icon="magnify" />} />
-      <View style={styles.actionsRow}><Button mode="outlined" icon="filter-variant" onPress={openFilters} style={styles.filterButton}>{activeFilterCount ? `Filters (${activeFilterCount})` : 'Filters'}</Button><Button mode="contained" onPress={() => setEditing(null)} style={styles.growButton}>Add product</Button></View>
+      <TextInput mode="outlined" placeholder="Search products" value={filters.search} onChangeText={(search) => setFilters((current) => ({ ...current, search }))} left={<TextInput.Icon icon={({ size, color }) => <Feather name="search" size={size} color={color} />} />} outlineColor={theme.colors.outlineVariant} activeOutlineColor={theme.colors.primary} outlineStyle={styles.inputOutline} style={{ backgroundColor: theme.dark ? colors.surface : colors.card }} />
+      <View style={styles.actionsRow}><Button mode="outlined" icon={({ size, color }) => <Feather name="filter" size={size} color={color} />} onPress={openFilters} style={styles.filterButton}>{activeFilterCount ? `Filters (${activeFilterCount})` : 'Filters'}</Button><Button mode="contained" onPress={() => setEditing(null)} style={styles.growButton}>Add product</Button></View>
       <Button mode="outlined" onPress={() => navigation.navigate('Customers')} style={styles.customersButton}>Customers</Button>
       {highlighted ? <Text style={{ color: theme.colors.onSurfaceVariant }}>Showing alert for product {highlighted}</Text> : null}
     </View>
@@ -89,23 +91,23 @@ export function ProductsScreen({ navigation, route }: any) {
 
   const renderProductCard = ({ item }: { item: Product }) => {
     const isLowStock = Boolean(item.isLowStock || item.stockQuantity <= item.lowStockThreshold);
-    const stockColor = isLowStock ? theme.colors.error : theme.colors.tertiary;
+    const stockColor = isLowStock ? colors.destructive : colors.accent;
     const cardStyle = item._id === highlighted ? { borderWidth: 1, borderColor: theme.colors.primary } : undefined;
 
     return (
       <AppCard style={cardStyle}>
         <View style={styles.cardHeader}>
-          <View style={[styles.avatar, { backgroundColor: isLowStock ? theme.colors.errorContainer : theme.colors.secondaryContainer }]}>
-            <MaterialCommunityIcons name="package-variant-closed" size={24} color={isLowStock ? theme.colors.error : theme.colors.secondary} />
+          <View style={[styles.avatar, { backgroundColor: isLowStock ? colors.destructiveSoft : colors.primarySoft }]}>
+            <Feather name="package" size={23} color={isLowStock ? colors.destructive : colors.primary} />
           </View>
           <View style={styles.cardTitleBlock}>
             <Text variant="titleMedium" numberOfLines={1} style={styles.cardTitle}>{item.name}</Text>
             <View style={styles.chipRow}>
-              <View style={[styles.softChip, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <View style={[styles.softChip, { backgroundColor: theme.dark ? colors.surface : theme.colors.surfaceVariant }]}>
                 <Text numberOfLines={1} variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.sku || 'No SKU'}</Text>
               </View>
               {item.category ? (
-                <View style={[styles.softChip, { backgroundColor: theme.colors.primaryContainer }]}>
+                <View style={[styles.softChip, { backgroundColor: colors.primarySoft }]}>
                   <Text numberOfLines={1} variant="labelSmall" style={{ color: theme.colors.primary }}>{item.category}</Text>
                 </View>
               ) : null}
@@ -113,15 +115,15 @@ export function ProductsScreen({ navigation, route }: any) {
           </View>
         </View>
         <View style={styles.metricGrid}>
-          <View style={[styles.metricBox, { backgroundColor: theme.colors.surfaceVariant }]}>
-            <MaterialCommunityIcons name="currency-inr" size={18} color={theme.colors.primary} />
+          <View style={[styles.metricBox, { backgroundColor: theme.dark ? colors.surface : theme.colors.surfaceVariant, borderColor: theme.colors.outlineVariant }]}>
+            <Feather name="tag" size={18} color={theme.colors.primary} />
             <View>
               <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Price</Text>
               <Text style={styles.metricValue}>{formatCurrency(item.price)}</Text>
             </View>
           </View>
-          <View style={[styles.metricBox, { backgroundColor: theme.colors.surfaceVariant }]}>
-            <MaterialCommunityIcons name={isLowStock ? 'alert-circle-outline' : 'cube-outline'} size={18} color={stockColor} />
+          <View style={[styles.metricBox, { backgroundColor: theme.dark ? colors.surface : theme.colors.surfaceVariant, borderColor: theme.colors.outlineVariant }]}>
+            <Feather name={isLowStock ? 'alert-circle' : 'box'} size={18} color={stockColor} />
             <View>
               <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Stock</Text>
               <Text style={[styles.metricValue, { color: stockColor }]}>{item.stockQuantity}</Text>
@@ -129,9 +131,9 @@ export function ProductsScreen({ navigation, route }: any) {
           </View>
         </View>
         <View style={styles.cardActions}>
-          <Button mode="text" icon="pencil-outline" compact onPress={() => setEditing(item)}>Edit</Button>
-          <Button mode="text" icon="history" compact onPress={() => setHistoryProduct(item)}>History</Button>
-          <Button mode="text" icon="trash-can-outline" compact textColor={theme.colors.error} onPress={() => setDeleting(item)}>Delete</Button>
+          <Button mode="text" icon={({ size, color }) => <Feather name="edit-2" size={size} color={color} />} compact onPress={() => setEditing(item)}>Edit</Button>
+          <Button mode="text" icon={({ size, color }) => <Feather name="clock" size={size} color={color} />} compact onPress={() => setHistoryProduct(item)}>History</Button>
+          <Button mode="text" icon={({ size, color }) => <Feather name="trash-2" size={size} color={color} />} compact textColor={theme.colors.error} onPress={() => setDeleting(item)}>Delete</Button>
         </View>
       </AppCard>
     );
@@ -158,7 +160,7 @@ export function ProductsScreen({ navigation, route }: any) {
       <Portal>
         <Dialog visible={filtersOpen} onDismiss={() => setFiltersOpen(false)}><Dialog.Title>Filter products</Dialog.Title><Dialog.Content>
           <Text variant="labelLarge" style={styles.dialogLabel}>Category</Text>
-          <TextInput mode="outlined" label="Category" placeholder="e.g. Services, Parts" value={draftCategory} onChangeText={setDraftCategory} />
+          <TextInput mode="outlined" label="Category" placeholder="e.g. Services, Parts" value={draftCategory} onChangeText={setDraftCategory} outlineStyle={styles.inputOutline} />
           <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>Matches saved product category exactly.</Text>
         </Dialog.Content><Dialog.Actions><Button onPress={clearFilters}>Clear</Button><Button onPress={() => setFiltersOpen(false)}>Cancel</Button><Button mode="contained" onPress={applyFilters}>Apply</Button></Dialog.Actions></Dialog>
         <Dialog visible={editing !== undefined} onDismiss={() => setEditing(undefined)}><Dialog.Title>{editing?._id ? 'Edit product' : 'Add product'}</Dialog.Title><Dialog.Content>
@@ -173,25 +175,26 @@ export function ProductsScreen({ navigation, route }: any) {
 
 const styles = StyleSheet.create({
   actionsRow: { flexDirection: 'row', gap: 8 },
-  avatar: { alignItems: 'center', borderRadius: 18, height: 44, justifyContent: 'center', width: 44 },
+  avatar: { alignItems: 'center', borderRadius: radii.card, height: 44, justifyContent: 'center', width: 44 },
   cardActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end', marginTop: 12 },
   cardHeader: { alignItems: 'center', flexDirection: 'row', gap: 12 },
-  cardTitle: { fontWeight: '900', letterSpacing: -0.2 },
+  cardTitle: { ...typeScale.sectionTitle, letterSpacing: -0.2 },
   cardTitleBlock: { flex: 1, minWidth: 0 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
-  customersButton: { borderRadius: 16 },
-  dialogLabel: { fontWeight: '900', marginBottom: 8 },
+  customersButton: { borderRadius: radii.input },
+  dialogLabel: { ...fontStyles.medium, marginBottom: 8 },
   emptyLoader: { marginTop: 40 },
   endText: { marginVertical: 16, textAlign: 'center' },
-  filterButton: { borderRadius: 16, flex: 1 },
+  filterButton: { borderRadius: radii.input, flex: 1 },
   footerLoader: { marginVertical: 16 },
-  growButton: { flex: 1 },
+  growButton: { borderRadius: radii.input, flex: 1 },
+  inputOutline: { borderRadius: radii.input },
   list: { flex: 1 },
   listContent: { paddingBottom: 24 },
   listHeader: { gap: 10, marginBottom: 12 },
-  metricBox: { alignItems: 'center', borderRadius: 18, flex: 1, flexDirection: 'row', gap: 10, padding: 12 },
-  metricGrid: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  metricValue: { fontWeight: '900', marginTop: 2 },
+  metricBox: { alignItems: 'center', borderRadius: radii.card, borderWidth: 1, flex: 1, flexDirection: 'row', gap: 10, padding: spacing.cardPaddingCompact },
+  metricGrid: { flexDirection: 'row', gap: spacing.gridGap, marginTop: 14 },
+  metricValue: { ...typeScale.cardValue, marginTop: 2 },
   softChip: { borderRadius: 999, maxWidth: 140, paddingHorizontal: 9, paddingVertical: 4 },
   screenContent: { flex: 1 }
 });

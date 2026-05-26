@@ -2,9 +2,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { FAB, useTheme } from 'react-native-paper';
-import { BackHandler, PanResponder, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTheme } from 'react-native-paper';
+import { BackHandler, Platform, StyleSheet, View } from 'react-native';
+import { useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DashboardScreen } from '@/screens/DashboardScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
@@ -17,32 +17,22 @@ import { InvoiceDetailScreen } from '@/screens/InvoiceDetailScreen';
 import { ReportsScreen } from '@/screens/ReportsScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { useAuthStore } from '@/store/authStore';
+import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 
 const AuthStack = createNativeStackNavigator<any>();
+const RootStack = createNativeStackNavigator<any>();
 const InvoiceStack = createNativeStackNavigator<any>();
 const CatalogStack = createNativeStackNavigator<any>();
 const Tabs = createBottomTabNavigator<any>();
 const navigationRef = createNavigationContainerRef<any>();
 const TAB_BAR_HEIGHT = 72;
-const TAB_BAR_BOTTOM_PADDING = 12;
-const FAB_BOTTOM_OFFSET = 104;
-const FAB_EDGE_GAP = 16;
-const FAB_SIZE = 56;
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-const getDefaultFabPosition = (width: number, height: number, bottomInset: number) => ({
-  x: width - FAB_SIZE - 22,
-  y: height - FAB_SIZE - FAB_BOTTOM_OFFSET - bottomInset
-});
-const clampFabPosition = (position: { x: number; y: number }, width: number, height: number, topInset: number, bottomInset: number) => {
-  const minX = FAB_EDGE_GAP;
-  const maxX = Math.max(minX, width - FAB_SIZE - FAB_EDGE_GAP);
-  const minY = topInset + FAB_EDGE_GAP;
-  const maxY = Math.max(minY, height - FAB_SIZE - TAB_BAR_HEIGHT - bottomInset - 24);
-
-  return {
-    x: clamp(position.x, minX, maxX),
-    y: clamp(position.y, minY, maxY)
-  };
+const TAB_BAR_BOTTOM_PADDING = 10;
+const tabIcons: Record<string, { active: keyof typeof MaterialCommunityIcons.glyphMap; inactive: keyof typeof MaterialCommunityIcons.glyphMap }> = {
+  DashboardTab: { active: 'home', inactive: 'home' },
+  InvoicesTab: { active: 'file-document', inactive: 'file-document' },
+  CatalogTab: { active: 'package-variant-closed', inactive: 'cube' },
+  CustomersTab: { active: 'account-group', inactive: 'account-group' },
+  SettingsTab: { active: 'cog', inactive: 'cog' }
 };
 
 function AuthNavigator() {
@@ -76,33 +66,8 @@ function CatalogNavigator() {
 function AppTabs() {
   const theme = useTheme();
   const isDark = theme.dark;
+  const colors = appColors(isDark);
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
-  const [fabPosition, setFabPosition] = useState(() => clampFabPosition(getDefaultFabPosition(width, height, insets.bottom), width, height, insets.top, insets.bottom));
-  const fabPositionRef = useRef(fabPosition);
-  const dragStartRef = useRef(fabPosition);
-
-  useEffect(() => {
-    fabPositionRef.current = fabPosition;
-  }, [fabPosition]);
-
-  useEffect(() => {
-    setFabPosition((position) => clampFabPosition(position, width, height, insets.top, insets.bottom));
-  }, [height, insets.bottom, insets.top, width]);
-
-  const fabPanResponder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4,
-    onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4,
-    onPanResponderGrant: () => {
-      dragStartRef.current = fabPositionRef.current;
-    },
-    onPanResponderMove: (_, gestureState) => {
-      setFabPosition(clampFabPosition({
-        x: dragStartRef.current.x + gestureState.dx,
-        y: dragStartRef.current.y + gestureState.dy
-      }, width, height, insets.top, insets.bottom));
-    }
-  }), [height, insets.bottom, insets.top, width]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -112,35 +77,38 @@ function AppTabs() {
           tabBarActiveTintColor: theme.colors.primary,
           tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
           tabBarHideOnKeyboard: true,
+          tabBarLabelPosition: 'below-icon',
           tabBarLabelStyle: styles.tabLabel,
           tabBarStyle: {
             height: TAB_BAR_HEIGHT + insets.bottom,
             paddingBottom: TAB_BAR_BOTTOM_PADDING + insets.bottom,
             paddingTop: 10,
-            marginHorizontal: 16,
-            marginBottom: 12,
             position: 'absolute',
-            backgroundColor: isDark ? theme.colors.elevation.level2 : theme.colors.elevation.level1,
-            borderColor: isDark ? theme.colors.outlineVariant : 'transparent',
-            borderTopWidth: 0,
-            borderWidth: isDark ? 1 : 0,
-            borderRadius: 28,
-            elevation: isDark ? 6 : 12,
-            shadowColor: isDark ? theme.colors.primary : '#000000',
-            shadowOffset: { width: 0, height: 14 },
-            shadowOpacity: isDark ? 0.08 : 0.14,
-            shadowRadius: 24
+            bottom: 0,
+            left: 0,
+            right: 0,
+            width: '100%',
+            backgroundColor: theme.colors.surface,
+            borderRadius: 0,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: isDark ? theme.colors.outlineVariant : alpha(colors.primaryStrong, 0.1),
+            borderLeftWidth: 0,
+            borderRightWidth: 0,
+            borderBottomWidth: 0,
+            elevation: 14,
+            shadowColor: isDark ? '#000000' : colors.primaryStrong,
+            shadowOffset: { width: 0, height: -6 },
+            shadowOpacity: isDark ? 0.45 : 0.06,
+            shadowRadius: 14
           },
           tabBarItemStyle: styles.tabItem,
-          tabBarIcon: ({ color, size }) => {
-            const icons: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
-              DashboardTab: 'view-dashboard-outline',
-              InvoicesTab: 'file-document-outline',
-              CatalogTab: 'package-variant-closed',
-              ReportsTab: 'chart-line',
-              SettingsTab: 'cog-outline'
-            };
-            return <MaterialCommunityIcons name={icons[route.name]} size={size} color={color} />;
+          tabBarIcon: ({ color, focused }) => {
+            const icon = tabIcons[route.name];
+            return (
+              <View style={[styles.iconPill, focused && { backgroundColor: alpha(theme.colors.primary, isDark ? 0.2 : 0.14) }]}>
+                <MaterialCommunityIcons name={focused ? icon.active : icon.inactive} size={focused ? 22 : 21} color={color} />
+              </View>
+            );
           }
         })}
       >
@@ -156,34 +124,20 @@ function AppTabs() {
             }
           })}
         />
-        <Tabs.Screen name="CatalogTab" component={CatalogNavigator} options={{ title: 'Products' }} />
-        <Tabs.Screen name="ReportsTab" component={ReportsScreen} options={{ title: 'Reports' }} />
+        <Tabs.Screen name="CatalogTab" component={CatalogNavigator} options={{ title: 'Inventory' }} />
+        <Tabs.Screen name="CustomersTab" component={CustomersScreen} options={{ title: 'Customers' }} />
         <Tabs.Screen name="SettingsTab" component={SettingsScreen} options={{ title: 'Settings' }} />
       </Tabs.Navigator>
-      <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-        <View
-          {...fabPanResponder.panHandlers}
-          style={[styles.fabContainer, { left: fabPosition.x, top: fabPosition.y }]}
-        >
-          <FAB
-            icon="plus"
-            color={theme.colors.onPrimary}
-            style={[
-              styles.fab,
-              {
-                backgroundColor: theme.colors.primary,
-                borderColor: isDark ? theme.colors.primaryContainer : 'transparent',
-                borderWidth: isDark ? 1 : 0,
-                shadowColor: isDark ? theme.colors.primary : '#000000',
-                shadowOpacity: isDark ? 0.18 : 0.16
-              }
-            ]}
-            onPress={() => navigationRef.navigate('InvoicesTab', { screen: 'InvoiceCreate' })}
-            testID="quick-create-fab"
-          />
-        </View>
-      </View>
     </View>
+  );
+}
+
+function AppShell() {
+  return (
+    <RootStack.Navigator screenOptions={{ headerShown: false }}>
+      <RootStack.Screen name="MainTabs" component={AppTabs} />
+      <RootStack.Screen name="Reports" component={ReportsScreen} />
+    </RootStack.Navigator>
   );
 }
 
@@ -203,17 +157,18 @@ export function AppNavigator() {
     return () => subscription.remove();
   }, [token]);
 
-  return <NavigationContainer ref={navigationRef}>{token ? <AppTabs /> : <AuthNavigator />}</NavigationContainer>;
+  return <NavigationContainer ref={navigationRef}>{token ? <AppShell /> : <AuthNavigator />}</NavigationContainer>;
 }
 
 const styles = StyleSheet.create({
-  fab: {
-    borderRadius: 22,
-    elevation: 8
+  iconPill: {
+    alignItems: 'center',
+    borderRadius: radii.pill,
+    height: 30,
+    justifyContent: 'center',
+    marginBottom: 2,
+    width: 56
   },
-  fabContainer: {
-    position: 'absolute'
-  },
-  tabItem: { borderRadius: 22 },
-  tabLabel: { fontSize: 11, fontWeight: '800' }
+  tabItem: { flex: 1, paddingTop: 0 },
+  tabLabel: { ...typeScale.smallCaption, ...fontStyles.medium, fontSize: 11, lineHeight: 14, marginTop: 2 }
 });

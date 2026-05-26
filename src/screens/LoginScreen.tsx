@@ -11,6 +11,7 @@ import { BrandMark } from '@/components/BrandMark';
 import { FormTextInput } from '@/components/FormTextInput';
 import { Screen } from '@/components/Screen';
 import { useAuthStore } from '@/store/authStore';
+import { fontStyles, radii } from '@/theme/theme';
 import { loginSchema } from '@/validation/schemas';
 
 export function LoginScreen({ navigation }: any) {
@@ -24,15 +25,15 @@ export function LoginScreen({ navigation }: any) {
       <View style={{ gap: 16, marginTop: 24 }}>
         <View style={{ alignItems: 'center', paddingVertical: 26 }}>
           <BrandMark size={76} />
-          <Text variant="displaySmall" style={{ color: theme.colors.onBackground, fontWeight: '900', letterSpacing: -1.5, marginTop: 18 }}>Billji</Text>
+          <Text variant="displaySmall" style={{ ...fontStyles.bold, color: theme.colors.onBackground, letterSpacing: -1.5, marginTop: 18 }}>Billji</Text>
           <Text style={{ color: theme.colors.onSurfaceVariant, marginTop: 8, maxWidth: 280, textAlign: 'center' }}>Fast invoices, stock alerts, and sales clarity in one clean mobile desk.</Text>
         </View>
         <AppCard>
-          <Text variant="headlineSmall" style={{ fontWeight: '900', marginBottom: 4 }}>Welcome back</Text>
+          <Text variant="headlineSmall" style={{ ...fontStyles.bold, marginBottom: 4 }}>Welcome back</Text>
           <Text style={{ color: theme.colors.onSurfaceVariant, marginBottom: 20 }}>Sign in to run today billing.</Text>
           <FormTextInput control={form.control} name="email" label="Email" keyboardType="email-address" autoCapitalize="none" />
           <FormTextInput control={form.control} name="password" label="Password" secureTextEntry />
-          <Button mode="contained" loading={mutation.isPending} onPress={form.handleSubmit((values) => mutation.mutate(values))} style={{ borderRadius: 16 }}>Login</Button>
+          <Button mode="contained" loading={mutation.isPending} onPress={form.handleSubmit((values) => mutation.mutate(values))} style={{ borderRadius: radii.input }}>Login</Button>
         </AppCard>
         <Button onPress={() => navigation.navigate('Register')}>Create account</Button>
       </View>

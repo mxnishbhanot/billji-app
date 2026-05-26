@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Appbar, Badge, Button, Dialog, List, Portal, Text, useTheme } from 'react-native-paper';
@@ -7,6 +8,7 @@ import { notificationsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { connectSocket } from '@/services/socket';
 import { useAuthStore } from '@/store/authStore';
+import { alpha, appColors, radii } from '@/theme/theme';
 import { NotificationItem } from '@/types';
 
 const PAGE_SIZE = 10;
@@ -14,6 +16,7 @@ export function NotificationButton() {
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
   const theme = useTheme();
+  const colors = appColors(theme.dark);
   const token = useAuthStore((state) => state.token);
   const [open, setOpen] = useState(false);
   const query = useInfiniteQuery({ queryKey: ['notifications'], enabled: Boolean(token), initialPageParam: 1, queryFn: ({ pageParam }) => notificationsApi.page({ page: pageParam, limit: PAGE_SIZE }), getNextPageParam: (lastPage) => lastPage.pagination.nextPage });
@@ -45,9 +48,9 @@ export function NotificationButton() {
   };
   return (
     <>
-      <View style={[styles.actionWrap, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.outlineVariant }]}>
-        <Appbar.Action icon="bell-outline" onPress={openPanel} color={theme.colors.onSurfaceVariant} style={styles.action} />
-        {unreadCount > 0 ? <Badge style={styles.badge}>{unreadCount > 9 ? '9+' : unreadCount}</Badge> : null}
+      <View style={[styles.actionWrap, { backgroundColor: theme.dark ? alpha(colors.primary, 0.14) : 'transparent', borderColor: theme.dark ? alpha(colors.primary, 0.24) : 'transparent' }]}>
+        <Appbar.Action icon={({ size, color }) => <Feather name="bell" size={size} color={color} />} onPress={openPanel} color={theme.colors.primary} style={styles.action} />
+        {unreadCount > 0 ? <Badge style={[styles.badge, { backgroundColor: colors.destructive }]}>{unreadCount > 9 ? '9+' : unreadCount}</Badge> : null}
       </View>
       <Portal>
         <Dialog visible={open} onDismiss={() => setOpen(false)} style={{ maxHeight: '82%' }}>
@@ -69,12 +72,12 @@ export function NotificationButton() {
 const styles = StyleSheet.create({
   action: { margin: 0 },
   actionWrap: {
-    borderRadius: 18,
+    borderRadius: radii.pill,
     borderWidth: 1,
-    height: 42,
+    height: 44,
     justifyContent: 'center',
     marginLeft: 8,
-    width: 42
+    width: 44
   },
   badge: { position: 'absolute', right: -2, top: -4 }
 });

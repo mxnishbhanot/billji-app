@@ -1,5 +1,6 @@
 import { Image, StyleSheet, View } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
+import { fontStyles } from '@/theme/theme';
 
 type Props = { size?: number; compact?: boolean; imageUri?: string; label?: string };
 
@@ -21,7 +22,7 @@ export function BrandMark({ size = 44, compact = false, imageUri, label }: Props
         {
           width: size,
           height: size,
-          borderRadius: size * 0.36,
+          borderRadius: size / 2,
           backgroundColor: imageUri ? theme.colors.elevation.level1 : theme.colors.primary,
           borderColor: imageUri ? theme.colors.outlineVariant : 'transparent'
         }
@@ -62,7 +63,7 @@ const styles = StyleSheet.create({
     width: '86%'
   },
   letter: {
-    fontWeight: '900',
+    ...fontStyles.bold,
     includeFontPadding: false,
     letterSpacing: -1
   }

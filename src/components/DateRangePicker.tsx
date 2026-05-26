@@ -1,7 +1,9 @@
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Platform, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { Button, Dialog, Portal, Text, TextInput, useTheme } from 'react-native-paper';
 import { useState } from 'react';
+import { radii, spacing, typeScale } from '@/theme/theme';
 import { formatDate } from '@/utils/format';
 
 export type DateRange = { from: string; to: string };
@@ -58,7 +60,7 @@ export function DateRangePicker({ label = 'Date range', value, onChange, helperT
         placeholder="Pick date"
         editable={false}
         showSoftInputOnFocus={false}
-        right={<TextInput.Icon icon="calendar" onPress={() => setActiveField(name)} />}
+        right={<TextInput.Icon icon={({ size, color }) => <Feather name="calendar" size={size} color={color} />} onPress={() => setActiveField(name)} />}
         outlineStyle={styles.inputOutline}
         style={{ backgroundColor: theme.colors.elevation.level1 }}
         pointerEvents="none"
@@ -99,8 +101,8 @@ export function DateRangePicker({ label = 'Date range', value, onChange, helperT
 const styles = StyleSheet.create({
   field: { flex: 1 },
   header: { alignItems: 'center', flexDirection: 'row', gap: 8, marginBottom: 8 },
-  inputOutline: { borderRadius: 18 },
-  label: { fontWeight: '900' },
+  inputOutline: { borderRadius: radii.input },
+  label: typeScale.bodyPrimaryMedium,
   root: { gap: 2 },
-  row: { flexDirection: 'row', gap: 8 }
+  row: { flexDirection: 'row', gap: spacing.gridGap }
 });

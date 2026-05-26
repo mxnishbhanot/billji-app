@@ -1,42 +1,43 @@
 import { ReactNode } from 'react';
-import { StyleSheet, ViewStyle } from 'react-native';
+import { StyleProp, StyleSheet, ViewStyle } from 'react-native';
 import { Card, useTheme } from 'react-native-paper';
+import { alpha, appColors, radii, spacing } from '@/theme/theme';
 
-type Props = { children: ReactNode; style?: ViewStyle; onPress?: () => void };
+type Props = { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void };
 export function AppCard({ children, style, onPress }: Props) {
   const theme = useTheme();
   const isDark = theme.dark;
+  const colors = appColors(isDark);
   return (
     <Card
-      mode="elevated"
+      mode="outlined"
       style={[
         styles.card,
         {
-          backgroundColor: theme.colors.elevation.level1,
-          borderColor: theme.colors.outlineVariant,
-          elevation: isDark ? 1 : 2,
-          shadowColor: isDark ? theme.colors.primary : '#000000',
-          shadowOpacity: isDark ? 0.05 : 0.08
+          backgroundColor: colors.card,
+          borderColor: isDark ? theme.colors.outlineVariant : alpha(colors.primaryStrong, 0.06),
+          elevation: isDark ? 0 : 2,
+          shadowColor: isDark ? theme.colors.primary : colors.primaryStrong,
+          shadowOpacity: isDark ? 0.08 : 0.05
         },
         style
       ]}
-      contentStyle={styles.content}
       onPress={onPress}
     >
-      <Card.Content>{children}</Card.Content>
+      <Card.Content style={styles.content}>{children}</Card.Content>
     </Card>
   );
 }
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 28,
+    borderRadius: radii.card,
     borderWidth: 1,
     elevation: 2,
-    marginBottom: 14,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.08,
-    shadowRadius: 24
+    marginBottom: spacing.gridGap,
+    shadowColor: '#4338CA',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 20
   },
-  content: { paddingVertical: 4 }
+  content: { padding: spacing.cardPadding }
 });
