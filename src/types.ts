@@ -8,8 +8,13 @@ export type BusinessProfile = {
   phone?: string;
   countryCode?: string;
   email?: string;
+  website?: string;
   address?: string;
+  city?: string;
+  pinCode?: string;
+  state?: string;
   invoicePrefix?: string;
+  panNumber?: string;
   theme?: 'light' | 'dark';
 };
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput as RNTextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput as RNTextInput, View, type TextStyle } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Text, useTheme } from 'react-native-paper';
@@ -52,6 +52,7 @@ const initials = (name: string) => {
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map((part) => part.charAt(0).toUpperCase()).join('') || '?';
 };
+const webSearchInputStyle = { outlineStyle: 'none', outlineWidth: 0 } as unknown as TextStyle;
 
 export function InvoicesScreen({ navigation }: any) {
   const theme = useTheme();
@@ -128,7 +129,7 @@ export function InvoicesScreen({ navigation }: any) {
           placeholderTextColor={theme.colors.onSurfaceVariant}
           value={search}
           onChangeText={setSearch}
-          style={[styles.searchInput, { color: theme.colors.onSurface }]}
+          style={[styles.searchInput, webSearchInputStyle, { color: theme.colors.onSurface }]}
         />
         <Pressable onPress={openFilters} style={[styles.filterIconBtn, { backgroundColor: alpha(colors.primary, isDark ? 0.18 : 0.1) }]}>
           <Feather name="sliders" size={16} color={theme.colors.primary} />
@@ -231,7 +232,7 @@ export function InvoicesScreen({ navigation }: any) {
         }
       ]}
     >
-      <Feather name="plus" size={20} color="#FFFFFF" strokeWidth={3} />
+      <MaterialCommunityIcons name="file-document-plus-outline" size={23} color="#FFFFFF" />
     </Pressable>
   );
 

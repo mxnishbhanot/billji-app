@@ -20,7 +20,9 @@ export function Screen({ title, children, scroll = true, showNotifications = tru
   const businessName = businessProfile?.businessName?.trim();
   const insets = useSafeAreaInsets();
   const navigationState = navigation.getState();
-  const canGoBackInStack = navigationState.type === 'stack' && navigationState.index > 0;
+  const currentRoute = navigationState.routes[navigationState.index];
+  const rootRoute = navigationState.routes[0];
+  const canGoBackInStack = navigationState.type === 'stack' && navigationState.index > 0 && currentRoute?.name !== rootRoute?.name;
   const content = (
     <View style={[styles.content, { paddingBottom: CONTENT_BOTTOM_PADDING + insets.bottom }, contentStyle]}>
       {children}

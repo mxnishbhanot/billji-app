@@ -1,43 +1,58 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput as RNTextInput, View, type TextStyle } from 'react-native';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Button, Dialog, Portal, RadioButton, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, Dialog, Portal, Text, useTheme } from 'react-native-paper';
 import { customersApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
-import { AppCard } from '@/components/AppCard';
 import { useAppDialog } from '@/components/AppDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import {
+  CustomerBillingStatus,
+  CustomerFilterSheet,
+  CustomerFilterValues,
+  CustomerSortOption,
+  defaultCustomerFilterValues
+} from '@/components/CustomerFilterSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { FormTextInput } from '@/components/FormTextInput';
 import { PhoneInput } from '@/components/PhoneInput';
 import { Screen } from '@/components/Screen';
-import { appColors, fontStyles, radii, typeScale } from '@/theme/theme';
+import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { Customer } from '@/types';
 import { customerSchema } from '@/validation/schemas';
 
 const PAGE_SIZE = 10;
 const blankCustomer = { name: '', phone: '', countryCode: '+91', email: '', address: '' };
-type CustomerFilters = { search: string; contactInfo: '' | 'withEmail' | 'withoutEmail' | 'withAddress' | 'withoutAddress' };
-const emptyCustomerFilters: CustomerFilters = { search: '', contactInfo: '' };
-const CONTACT_FILTERS: { label: string; value: CustomerFilters['contactInfo'] }[] = [
-  { label: 'All customers', value: '' },
-  { label: 'With email', value: 'withEmail' },
-  { label: 'Missing email', value: 'withoutEmail' },
-  { label: 'With address', value: 'withAddress' },
-  { label: 'Missing address', value: 'withoutAddress' }
-];
+type CustomerFilters = CustomerFilterValues & { search: string };
+const emptyCustomerFilters: CustomerFilters = { search: '', ...defaultCustomerFilterValues };
+const BILLING_LABELS: Record<CustomerBillingStatus, string> = {
+  all: 'All customers',
+  invoiced: 'Has invoices',
+  notInvoiced: 'Never invoiced',
+  pending: 'Pending payment',
+  paid: 'Paid invoice'
+};
+const SORT_LABELS: Record<CustomerSortOption, string> = {
+  updated: 'Recently updated',
+  newest: 'Newest customers',
+  oldest: 'Oldest customers',
+  'name-asc': 'Name A-Z'
+};
+const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || '?';
+const webSearchInputStyle = { outlineStyle: 'none', outlineWidth: 0 } as unknown as TextStyle;
 
 export function CustomersScreen() {
   const queryClient = useQueryClient();
   const theme = useTheme();
-  const colors = appColors(theme.dark);
+  const isDark = theme.dark;
+  const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
   const [filters, setFilters] = useState<CustomerFilters>(emptyCustomerFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [draftContactInfo, setDraftContactInfo] = useState<CustomerFilters['contactInfo']>('');
+  const [draftFilterValues, setDraftFilterValues] = useState<CustomerFilterValues>(defaultCustomerFilterValues);
   const [editing, setEditing] = useState<Customer | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<Customer | null>(null);
   const form = useForm<any>({ defaultValues: blankCustomer, resolver: zodResolver(customerSchema) });
@@ -45,7 +60,9 @@ export function CustomersScreen() {
   const customers = useMemo(() => query.data?.pages.flatMap((page) => page.customers) ?? [], [query.data]);
   const isInitialLoading = query.isLoading && !customers.length;
   const isRefreshing = query.isRefetching && !query.isFetchingNextPage;
-  const activeFilterCount = filters.contactInfo ? 1 : 0;
+  const activeFilterCount = (filters.billingStatus !== 'all' ? 1 : 0) + (filters.sort !== 'updated' ? 1 : 0);
+  const totalCount = query.data?.pages[0]?.pagination.total ?? 0;
+  const visibleCount = customers.length;
   const save = useMutation({ mutationFn: (values: any) => editing?._id ? customersApi.update(editing._id, values) : customersApi.create(values), onSuccess: () => { setEditing(undefined); queryClient.invalidateQueries({ queryKey: ['customers'] }); }, onError: (error) => showDialog({ title: 'Could not save customer', message: apiErrorMessage(error), tone: 'error' }) });
   const remove = useMutation({ mutationFn: (id: string) => customersApi.remove(id), onSuccess: () => { setDeleting(null); queryClient.invalidateQueries({ queryKey: ['customers'] }); }, onError: (error) => showDialog({ title: 'Could not delete customer', message: apiErrorMessage(error), tone: 'error' }) });
   useEffect(() => { if (editing !== undefined) form.reset(editing || blankCustomer); }, [editing, form]);
@@ -56,25 +73,65 @@ export function CustomersScreen() {
   };
 
   const openFilters = () => {
-    setDraftContactInfo(filters.contactInfo);
+    setDraftFilterValues({ billingStatus: filters.billingStatus, sort: filters.sort });
     setFiltersOpen(true);
   };
 
-  const applyFilters = () => {
-    setFilters((current) => ({ ...current, contactInfo: draftContactInfo }));
+  const applyDraft = () => {
+    setFilters((current) => ({ ...current, ...draftFilterValues }));
     setFiltersOpen(false);
   };
 
-  const clearFilters = () => {
-    setDraftContactInfo('');
-    setFilters((current) => ({ ...current, contactInfo: '' }));
-    setFiltersOpen(false);
-  };
+  const activeFilterTags: { key: string; label: string; onClear: () => void }[] = [
+    filters.billingStatus !== 'all' ? { key: 'billing', label: BILLING_LABELS[filters.billingStatus], onClear: () => setFilters((current) => ({ ...current, billingStatus: 'all' })) } : null,
+    filters.sort !== 'updated' ? { key: 'sort', label: SORT_LABELS[filters.sort], onClear: () => setFilters((current) => ({ ...current, sort: 'updated' })) } : null
+  ].filter(Boolean) as { key: string; label: string; onClear: () => void }[];
 
-  const renderCustomersHeader = () => (
-    <View style={styles.listHeader}>
-      <TextInput mode="outlined" placeholder="Search customers" value={filters.search} onChangeText={(search) => setFilters((current) => ({ ...current, search }))} left={<TextInput.Icon icon={({ size, color }) => <Feather name="search" size={size} color={color} />} />} outlineColor={theme.colors.outlineVariant} activeOutlineColor={theme.colors.primary} outlineStyle={styles.inputOutline} style={{ backgroundColor: theme.dark ? colors.surface : colors.card }} />
-      <View style={styles.actionsRow}><Button mode="outlined" icon={({ size, color }) => <Feather name="filter" size={size} color={color} />} onPress={openFilters} style={styles.filterButton}>{activeFilterCount ? `Filters (${activeFilterCount})` : 'Filters'}</Button><Button mode="contained" onPress={() => setEditing(null)} style={styles.growButton}>Add customer</Button></View>
+  const stickyHeader = (
+    <View style={[styles.stickyHeader, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.searchWrap, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.1) }]}>
+        <Feather name="search" size={18} color={theme.colors.onSurfaceVariant} />
+        <RNTextInput
+          placeholder="Search customer, phone, or email"
+          placeholderTextColor={theme.colors.onSurfaceVariant}
+          value={filters.search}
+          onChangeText={(search) => setFilters((current) => ({ ...current, search }))}
+          style={[styles.searchInput, webSearchInputStyle, { color: theme.colors.onSurface }]}
+        />
+        <Pressable onPress={openFilters} style={[styles.filterIconBtn, { backgroundColor: alpha(colors.primary, isDark ? 0.18 : 0.1) }]}>
+          <Feather name="sliders" size={16} color={theme.colors.primary} />
+          {activeFilterCount ? (
+            <View style={[styles.filterBadge, { backgroundColor: colors.accent }]}>
+              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+            </View>
+          ) : null}
+        </Pressable>
+      </View>
+
+      <View style={styles.headerMetaRow}>
+        <View style={styles.countStrip}>
+          <Text style={[styles.countText, { color: theme.colors.onSurfaceVariant }]}>
+            Showing <Text style={[styles.countBold, { color: theme.colors.onSurface }]}>{visibleCount}</Text>
+            {totalCount ? <> of <Text style={[styles.countBold, { color: theme.colors.onSurface }]}>{totalCount}</Text></> : null}
+            {' '}customer{totalCount === 1 ? '' : 's'}
+          </Text>
+        </View>
+      </View>
+
+      {activeFilterTags.length ? (
+        <View style={styles.filterTagsRow}>
+          {activeFilterTags.map((tag) => (
+            <Pressable
+              key={tag.key}
+              onPress={tag.onClear}
+              style={[styles.activeFilterPill, { backgroundColor: alpha(theme.colors.primary, isDark ? 0.22 : 0.12), borderColor: alpha(theme.colors.primary, isDark ? 0.36 : 0.22) }]}
+            >
+              <Text style={[styles.activeFilterLabel, { color: theme.colors.primary }]}>{tag.label}</Text>
+              <Feather name="x" size={12} color={theme.colors.primary} />
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 
@@ -85,75 +142,175 @@ export function CustomersScreen() {
   };
 
   const renderCustomerCard = ({ item }: { item: Customer }) => (
-    <AppCard>
-      <View style={styles.cardHeader}>
-        <View style={[styles.avatar, { backgroundColor: colors.primarySoft }]}>
-          <Feather name="user" size={23} color={theme.colors.primary} />
+    <View style={[styles.customerCard, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), shadowColor: isDark ? '#000000' : colors.primaryStrong }]}>
+      <View style={styles.cardTop}>
+        <View style={[styles.avatar, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.12) }]}>
+          <Text style={[styles.avatarText, { color: theme.colors.primary }]}>{initials(item.name)}</Text>
         </View>
         <View style={styles.cardTitleBlock}>
-          <Text variant="titleMedium" numberOfLines={1} style={styles.cardTitle}>{item.name}</Text>
-          <Text numberOfLines={1} style={[styles.cardSubtitle, { color: theme.colors.onSurfaceVariant }]}>Customer profile</Text>
+          <Text numberOfLines={1} style={[styles.cardTitle, { color: theme.colors.onSurface }]}>{item.name}</Text>
+          <Text numberOfLines={1} style={[styles.cardSubtitle, { color: theme.colors.onSurfaceVariant }]}>{item.countryCode || '+91'} {item.phone}</Text>
         </View>
       </View>
-      <View style={styles.metaBlock}>
-        <View style={styles.metaRow}>
-          <Feather name="phone" size={17} color={theme.colors.onSurfaceVariant} />
-          <Text style={styles.metaText}>{item.countryCode || '+91'} {item.phone}</Text>
+      <View style={[styles.cardDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) }]} />
+      <View style={styles.cardBottom}>
+        <View style={styles.contactChips}>
+          <View style={[styles.contactPill, { backgroundColor: item.email ? alpha(colors.accent, isDark ? 0.18 : 0.1) : alpha(colors.warning, isDark ? 0.18 : 0.1), borderColor: item.email ? alpha(colors.accent, isDark ? 0.32 : 0.24) : alpha(colors.warning, isDark ? 0.32 : 0.24) }]}>
+            <Feather name={item.email ? 'mail' : 'mail'} size={13} color={item.email ? colors.accent : colors.warning} />
+            <Text numberOfLines={1} style={[styles.contactPillText, { color: item.email ? colors.accent : colors.warning }]}>{item.email || 'No email'}</Text>
+          </View>
+          {item.address ? (
+            <View style={[styles.contactPill, { backgroundColor: alpha(colors.primary, isDark ? 0.18 : 0.08), borderColor: alpha(colors.primary, isDark ? 0.3 : 0.18) }]}>
+              <Feather name="map-pin" size={13} color={theme.colors.primary} />
+              <Text numberOfLines={1} style={[styles.contactPillText, { color: theme.colors.primary }]}>{item.address}</Text>
+            </View>
+          ) : null}
         </View>
-        {item.email ? (
-          <View style={styles.metaRow}>
-            <Feather name="mail" size={17} color={theme.colors.onSurfaceVariant} />
-            <Text numberOfLines={1} style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>{item.email}</Text>
-          </View>
-        ) : null}
-        {item.address ? (
-          <View style={styles.metaRow}>
-            <Feather name="map-pin" size={17} color={theme.colors.onSurfaceVariant} />
-            <Text numberOfLines={1} style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>{item.address}</Text>
-          </View>
-        ) : null}
+        <View style={styles.iconActions}>
+          <Pressable onPress={() => setEditing(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.08) }]}>
+            <Feather name="edit-2" size={14} color={theme.colors.primary} />
+          </Pressable>
+          <Pressable onPress={() => setDeleting(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: alpha(colors.destructive, isDark ? 0.16 : 0.08) }]}>
+            <Feather name="trash-2" size={14} color={theme.colors.error} />
+          </Pressable>
+        </View>
       </View>
-      <View style={styles.cardActions}>
-        <Button mode="text" icon={({ size, color }) => <Feather name="edit-2" size={size} color={color} />} compact onPress={() => setEditing(item)}>Edit</Button>
-        <Button mode="text" icon={({ size, color }) => <Feather name="trash-2" size={size} color={color} />} compact textColor={theme.colors.error} onPress={() => setDeleting(item)}>Delete</Button>
-      </View>
-    </AppCard>
+    </View>
+  );
+
+  const headerCreateAction = (
+    <Pressable
+      onPress={() => setEditing(null)}
+      style={({ pressed }) => [
+        styles.headerCreateBtn,
+        {
+          backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary,
+          shadowColor: isDark ? '#000000' : colors.primaryStrong
+        }
+      ]}
+    >
+      <MaterialCommunityIcons name="account-plus-outline" size={23} color="#FFFFFF" />
+    </Pressable>
   );
 
   return (
-    <Screen title="Customers" scroll={false} contentStyle={styles.screenContent}>
-      <FlatList data={customers} keyExtractor={(item) => item._id} style={styles.list} contentContainerStyle={styles.listContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} refreshing={isRefreshing} onRefresh={() => query.refetch()} onEndReached={loadMoreCustomers} onEndReachedThreshold={0.35} ListHeaderComponent={renderCustomersHeader} ListEmptyComponent={isInitialLoading ? <ActivityIndicator color={theme.colors.primary} style={styles.emptyLoader} /> : <EmptyState title="No customers" message="Add customers once and reuse them in every invoice." actionLabel="Add customer" onAction={() => setEditing(null)} />} ListFooterComponent={renderCustomersFooter} renderItem={renderCustomerCard} />
-      <Portal><Dialog visible={filtersOpen} onDismiss={() => setFiltersOpen(false)}><Dialog.Title>Filter customers</Dialog.Title><Dialog.Content>
-        <Text variant="labelLarge" style={styles.dialogLabel}>Contact info</Text>
-        <RadioButton.Group value={draftContactInfo} onValueChange={(value) => setDraftContactInfo(value as CustomerFilters['contactInfo'])}>
-          {CONTACT_FILTERS.map((option) => <RadioButton.Item key={option.value || 'all'} label={option.label} value={option.value} />)}
-        </RadioButton.Group>
-      </Dialog.Content><Dialog.Actions><Button onPress={clearFilters}>Clear</Button><Button onPress={() => setFiltersOpen(false)}>Cancel</Button><Button mode="contained" onPress={applyFilters}>Apply</Button></Dialog.Actions></Dialog><Dialog visible={editing !== undefined} onDismiss={() => setEditing(undefined)}><Dialog.Title>{editing?._id ? 'Edit customer' : 'Add customer'}</Dialog.Title><Dialog.Content><FormTextInput control={form.control} name="name" label="Name" /><PhoneInput control={form.control} name="phone" /><FormTextInput control={form.control} name="email" label="Email" keyboardType="email-address" /><FormTextInput control={form.control} name="address" label="Address" multiline /></Dialog.Content><Dialog.Actions><Button onPress={() => setEditing(undefined)}>Cancel</Button><Button loading={save.isPending} onPress={form.handleSubmit((values) => save.mutate(values))}>Save</Button></Dialog.Actions></Dialog></Portal>
+    <Screen title="Customers" scroll={false} headerAction={headerCreateAction} contentStyle={styles.screenContent}>
+      {stickyHeader}
+      <FlatList
+        data={customers}
+        keyExtractor={(item) => item._id}
+        style={styles.list}
+        contentContainerStyle={[styles.listContent, !customers.length && styles.emptyListContent]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        refreshing={isRefreshing}
+        onRefresh={() => query.refetch()}
+        onEndReached={loadMoreCustomers}
+        onEndReachedThreshold={0.35}
+        ListEmptyComponent={isInitialLoading ? <ActivityIndicator color={theme.colors.primary} style={styles.emptyLoader} /> : <EmptyState title="No customers" message="Add customers once and reuse them in every invoice." actionLabel="Add customer" onAction={() => setEditing(null)} />}
+        ListFooterComponent={renderCustomersFooter}
+        renderItem={renderCustomerCard}
+      />
+      <Portal>
+        <Dialog visible={editing !== undefined} onDismiss={() => setEditing(undefined)}>
+          <Dialog.Title>{editing?._id ? 'Edit customer' : 'Add customer'}</Dialog.Title>
+          <Dialog.Content>
+            <FormTextInput control={form.control} name="name" label="Name" />
+            <PhoneInput control={form.control} name="phone" />
+            <FormTextInput control={form.control} name="email" label="Email" keyboardType="email-address" />
+            <FormTextInput control={form.control} name="address" label="Address" multiline />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setEditing(undefined)}>Cancel</Button>
+            <Button loading={save.isPending} onPress={form.handleSubmit((values) => save.mutate(values))}>Save</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+      <CustomerFilterSheet
+        visible={filtersOpen}
+        values={draftFilterValues}
+        onChange={setDraftFilterValues}
+        onClose={() => setFiltersOpen(false)}
+        onApply={applyDraft}
+      />
       <ConfirmDialog visible={Boolean(deleting)} title="Delete customer?" message="This removes the customer from your saved list. Existing invoices remain unchanged." onCancel={() => setDeleting(null)} onConfirm={() => deleting && remove.mutate(deleting._id)} />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  actionsRow: { flexDirection: 'row', gap: 8 },
-  avatar: { alignItems: 'center', borderRadius: radii.card, height: 44, justifyContent: 'center', width: 44 },
-  cardActions: { flexDirection: 'row', gap: 4, justifyContent: 'flex-end', marginTop: 12 },
-  cardHeader: { alignItems: 'center', flexDirection: 'row', gap: 12 },
-  cardSubtitle: { ...typeScale.caption, marginTop: 1 },
-  cardTitle: { ...typeScale.sectionTitle, letterSpacing: -0.2 },
+  activeFilterLabel: { ...fontStyles.bold, fontSize: 11, letterSpacing: 0.3 },
+  activeFilterPill: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', gap: 5, paddingHorizontal: 10, paddingVertical: 4 },
+  avatar: { alignItems: 'center', borderRadius: radii.pill, height: 44, justifyContent: 'center', width: 44 },
+  avatarText: { ...fontStyles.bold, fontSize: 15, letterSpacing: 0.4 },
+  cardBottom: { alignItems: 'center', flexDirection: 'row', gap: 10, justifyContent: 'space-between' },
+  cardDivider: { height: 1, marginBottom: 12, marginTop: 14 },
+  cardSubtitle: { ...typeScale.caption, fontSize: 12, marginTop: 2 },
+  cardTitle: { ...fontStyles.bold, fontSize: 15, letterSpacing: -0.2 },
   cardTitleBlock: { flex: 1, minWidth: 0 },
-  dialogLabel: { ...fontStyles.medium, marginBottom: 4 },
+  cardTop: { alignItems: 'center', flexDirection: 'row', gap: 12 },
+  contactChips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 6, minWidth: 0 },
+  contactPill: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', flexShrink: 1, gap: 5, maxWidth: '100%', paddingHorizontal: 9, paddingVertical: 4 },
+  contactPillText: { ...fontStyles.semiBold, flexShrink: 1, fontSize: 11 },
+  countBold: { ...fontStyles.bold },
+  countStrip: { flex: 1, minWidth: 0 },
+  countText: { ...typeScale.caption, fontSize: 12 },
+  customerCard: {
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    elevation: 2,
+    marginBottom: 12,
+    padding: 16,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 16
+  },
+  emptyListContent: { flexGrow: 1 },
   emptyLoader: { marginTop: 40 },
-  endText: { marginVertical: 16, textAlign: 'center' },
-  filterButton: { borderRadius: radii.input, flex: 1 },
+  endText: { ...typeScale.caption, marginVertical: 16, textAlign: 'center' },
+  filterBadge: {
+    alignItems: 'center',
+    borderRadius: radii.pill,
+    height: 14,
+    justifyContent: 'center',
+    minWidth: 14,
+    paddingHorizontal: 3,
+    position: 'absolute',
+    right: -2,
+    top: -2
+  },
+  filterBadgeText: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 9, lineHeight: 11 },
+  filterIconBtn: { alignItems: 'center', borderRadius: radii.md, height: 34, justifyContent: 'center', position: 'relative', width: 34 },
+  filterTagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: -2 },
   footerLoader: { marginVertical: 16 },
-  growButton: { borderRadius: radii.input, flex: 1 },
-  inputOutline: { borderRadius: radii.input },
+  headerCreateBtn: {
+    alignItems: 'center',
+    borderRadius: radii.pill,
+    elevation: 4,
+    height: 44,
+    justifyContent: 'center',
+    marginLeft: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    width: 44
+  },
+  headerMetaRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  iconAction: { alignItems: 'center', borderRadius: radii.pill, height: 30, justifyContent: 'center', width: 30 },
+  iconActions: { alignItems: 'center', flexDirection: 'row', gap: 6 },
   list: { flex: 1 },
   listContent: { paddingBottom: 24 },
-  listHeader: { gap: 10, marginBottom: 12 },
-  metaBlock: { gap: 8, marginTop: 14 },
-  metaRow: { alignItems: 'center', flexDirection: 'row', gap: 8 },
-  metaText: { flex: 1 },
-  screenContent: { flex: 1 }
+  screenContent: { flex: 1 },
+  searchInput: { ...fontStyles.regular, flex: 1, fontSize: 14, paddingHorizontal: 0, paddingVertical: 0 },
+  searchWrap: {
+    alignItems: 'center',
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    minHeight: 46,
+    paddingHorizontal: 12,
+    paddingVertical: 6
+  },
+  stickyHeader: { gap: 12, marginBottom: 10, paddingBottom: 4, paddingTop: 4 }
 });

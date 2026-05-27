@@ -17,6 +17,7 @@ export const authApi = {
 export const productsApi = {
   list: (params?: Record<string, unknown>) => api.get<{ products: Product[] }>('/products', { params }).then((res) => res.data.products),
   page: (params: Record<string, unknown>) => api.get<ProductPage>('/products', { params: { ...params, paginated: true } }).then((res) => res.data),
+  categories: () => api.get<{ success: boolean; categories: string[] }>('/products/categories').then((res) => res.data.categories),
   create: (payload: Record<string, unknown>) => api.post<{ product: Product }>('/products', payload).then((res) => res.data.product),
   update: (id: string, payload: Record<string, unknown>) => api.patch<{ product: Product }>(`/products/${id}`, payload).then((res) => res.data.product),
   stockMovementsPage: (id: string, params: Record<string, unknown>) => api.get<MovementPage>(`/products/${id}/stock-movements`, { params: { ...params, paginated: true } }).then((res) => res.data),

@@ -16,6 +16,7 @@ import { InvoiceBuilderScreen } from '@/screens/InvoiceBuilderScreen';
 import { InvoiceDetailScreen } from '@/screens/InvoiceDetailScreen';
 import { ReportsScreen } from '@/screens/ReportsScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
+import { BusinessProfileScreen } from '@/screens/BusinessProfileScreen';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 
@@ -23,6 +24,7 @@ const AuthStack = createNativeStackNavigator<any>();
 const RootStack = createNativeStackNavigator<any>();
 const InvoiceStack = createNativeStackNavigator<any>();
 const CatalogStack = createNativeStackNavigator<any>();
+const SettingsStack = createNativeStackNavigator<any>();
 const Tabs = createBottomTabNavigator<any>();
 const navigationRef = createNavigationContainerRef<any>();
 const TAB_BAR_HEIGHT = 72;
@@ -60,6 +62,15 @@ function CatalogNavigator() {
       <CatalogStack.Screen name="Products" component={ProductsScreen} />
       <CatalogStack.Screen name="Customers" component={CustomersScreen} />
     </CatalogStack.Navigator>
+  );
+}
+
+function SettingsNavigator() {
+  return (
+    <SettingsStack.Navigator screenOptions={{ headerShown: false }}>
+      <SettingsStack.Screen name="SettingsHome" component={SettingsScreen} />
+      <SettingsStack.Screen name="BusinessProfile" component={BusinessProfileScreen} />
+    </SettingsStack.Navigator>
   );
 }
 
@@ -116,17 +127,11 @@ function AppTabs() {
         <Tabs.Screen
           name="InvoicesTab"
           component={InvoiceNavigator}
-          options={{ title: 'Invoices' }}
-          listeners={({ navigation }) => ({
-            tabPress: (event) => {
-              event.preventDefault();
-              navigation.navigate('InvoicesTab', { screen: 'InvoiceList' });
-            }
-          })}
+          options={{ title: 'Invoices', popToTopOnBlur: true }}
         />
         <Tabs.Screen name="CatalogTab" component={CatalogNavigator} options={{ title: 'Inventory' }} />
         <Tabs.Screen name="CustomersTab" component={CustomersScreen} options={{ title: 'Customers' }} />
-        <Tabs.Screen name="SettingsTab" component={SettingsScreen} options={{ title: 'Settings' }} />
+        <Tabs.Screen name="SettingsTab" component={SettingsNavigator} options={{ title: 'Settings', popToTopOnBlur: true }} />
       </Tabs.Navigator>
     </View>
   );
