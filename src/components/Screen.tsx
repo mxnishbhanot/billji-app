@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View, ViewStyle } from 'react-native';
+import { Animated, KeyboardAvoidingView, Platform, ScrollViewProps, StyleSheet, View, ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Appbar, Text, useTheme } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
@@ -8,10 +8,10 @@ import { alpha, appColors, radii, spacing, typeScale } from '@/theme/theme';
 import { BrandMark } from './BrandMark';
 import { NotificationButton } from './NotificationButton';
 
-type Props = { title: string; children: ReactNode; scroll?: boolean; showNotifications?: boolean; headerAction?: ReactNode; contentStyle?: ViewStyle };
+type Props = { title: string; children: ReactNode; scroll?: boolean; showNotifications?: boolean; headerAction?: ReactNode; contentStyle?: ViewStyle; scrollViewProps?: ScrollViewProps };
 const CONTENT_BOTTOM_PADDING = 96;
 
-export function Screen({ title, children, scroll = true, showNotifications = true, headerAction, contentStyle }: Props) {
+export function Screen({ title, children, scroll = true, showNotifications = true, headerAction, contentStyle, scrollViewProps }: Props) {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
@@ -29,30 +29,46 @@ export function Screen({ title, children, scroll = true, showNotifications = tru
     </View>
   );
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right']}>
-      <View
-        style={[
-          styles.headerShell,
-          {
-            backgroundColor: 'transparent',
-            borderColor: 'transparent',
-            shadowColor: isDark ? theme.colors.primary : colors.primaryStrong,
-            shadowOpacity: 0
-          }
-        ]}
-      >
-        {canGoBackInStack ? <Appbar.BackAction onPress={() => navigation.goBack()} style={styles.backAction} /> : null}
-        <View style={[styles.logoChip, { backgroundColor: isDark ? alpha(colors.primary, 0.18) : alpha('#FFFFFF', 0.7), borderColor: isDark ? alpha(colors.primary, 0.24) : alpha(colors.primaryStrong, 0.08) }]}>
-          <BrandMark size={44} compact imageUri={businessProfile?.logoUrl} label={businessName} />
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+      enabled={Platform.OS !== 'web'}
+    >
+      <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right']}>
+        <View
+          style={[
+            styles.headerShell,
+            {
+              backgroundColor: 'transparent',
+              borderColor: 'transparent',
+              shadowColor: isDark ? theme.colors.primary : colors.primaryStrong,
+              shadowOpacity: 0
+            }
+          ]}
+        >
+          {canGoBackInStack ? <Appbar.BackAction onPress={() => navigation.goBack()} style={styles.backAction} /> : null}
+          <View style={[styles.logoChip, { backgroundColor: isDark ? alpha(colors.primary, 0.18) : alpha('#FFFFFF', 0.7), borderColor: isDark ? alpha(colors.primary, 0.24) : alpha(colors.primaryStrong, 0.08) }]}>
+            <BrandMark size={44} compact imageUri={businessProfile?.logoUrl} label={businessName} />
+          </View>
+          <View style={styles.titleBlock}>
+            <Text numberOfLines={1} style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>{businessName || 'Billji Business'}</Text>
+            <Text numberOfLines={1} variant="titleLarge" style={[styles.title, { color: theme.colors.onBackground }]}>{title}</Text>
+          </View>
+          {headerAction ?? (showNotifications ? <NotificationButton /> : null)}
         </View>
-        <View style={styles.titleBlock}>
-          <Text numberOfLines={1} style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>{businessName || 'Billji Business'}</Text>
-          <Text numberOfLines={1} variant="titleLarge" style={[styles.title, { color: theme.colors.onBackground }]}>{title}</Text>
-        </View>
-        {headerAction ?? (showNotifications ? <NotificationButton /> : null)}
-      </View>
-      {scroll ? <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>{content}</ScrollView> : content}
-    </SafeAreaView>
+        {scroll ? (
+          <Animated.ScrollView
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            {...scrollViewProps}
+          >
+            {content}
+          </Animated.ScrollView>
+        ) : content}
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 const styles = StyleSheet.create({

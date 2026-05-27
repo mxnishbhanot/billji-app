@@ -22,6 +22,7 @@ import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 
 const AuthStack = createNativeStackNavigator<any>();
 const RootStack = createNativeStackNavigator<any>();
+const DashboardStack = createNativeStackNavigator<any>();
 const InvoiceStack = createNativeStackNavigator<any>();
 const CatalogStack = createNativeStackNavigator<any>();
 const SettingsStack = createNativeStackNavigator<any>();
@@ -43,6 +44,15 @@ function AuthNavigator() {
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
     </AuthStack.Navigator>
+  );
+}
+
+function DashboardNavigator() {
+  return (
+    <DashboardStack.Navigator screenOptions={{ headerShown: false }}>
+      <DashboardStack.Screen name="DashboardHome" component={DashboardScreen} />
+      <DashboardStack.Screen name="Reports" component={ReportsScreen} />
+    </DashboardStack.Navigator>
   );
 }
 
@@ -123,7 +133,7 @@ function AppTabs() {
           }
         })}
       >
-        <Tabs.Screen name="DashboardTab" component={DashboardScreen} options={{ title: 'Home' }} />
+        <Tabs.Screen name="DashboardTab" component={DashboardNavigator} options={{ title: 'Home' }} />
         <Tabs.Screen
           name="InvoicesTab"
           component={InvoiceNavigator}
@@ -141,7 +151,6 @@ function AppShell() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="MainTabs" component={AppTabs} />
-      <RootStack.Screen name="Reports" component={ReportsScreen} />
     </RootStack.Navigator>
   );
 }
@@ -153,7 +162,8 @@ export function AppNavigator() {
     if (Platform.OS !== 'android' || !token) return undefined;
 
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (navigationRef.getCurrentRoute()?.name !== 'DashboardTab') return false;
+      const currentRouteName = navigationRef.getCurrentRoute()?.name;
+      if (currentRouteName !== 'DashboardTab' && currentRouteName !== 'DashboardHome') return false;
 
       BackHandler.exitApp();
       return true;

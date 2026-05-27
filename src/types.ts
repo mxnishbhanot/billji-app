@@ -31,10 +31,15 @@ export type Pagination = { page: number; limit: number; total: number; totalPage
 
 export type Product = {
   _id: string; id?: string; name: string; price: number; stockQuantity: number; sku?: string; category?: string;
-  lowStockThreshold: number; isLowStock?: boolean; createdAt?: string; updatedAt?: string;
+  lowStockThreshold: number; isLowStock?: boolean; totalSales?: number; quantitySold?: number; createdAt?: string; updatedAt?: string;
 };
 
-export type StockMovement = { _id: string; type: string; quantityChange: number; stockBefore: number; stockAfter: number; note?: string; invoiceNumber?: string; createdAt?: string };
+export type StockMovement = {
+  _id: string; type: string; quantityChange: number; stockBefore: number; stockAfter: number; note?: string; invoiceNumber?: string; createdAt?: string;
+  customerName?: string; invoiceQuantity?: number; invoiceTotalForProduct?: number; invoiceStatus?: string; invoiceDate?: string | null;
+};
+export type ProductHistorySummary = { quantitySold: number; revenue: number; orderCount: number };
+export type ProductStockHistory = Page<StockMovement, 'movements'> & { product?: Pick<Product, '_id' | 'name' | 'price' | 'stockQuantity' | 'sku' | 'category'>; summary?: ProductHistorySummary };
 export type Customer = { _id: string; name: string; phone: string; countryCode?: string; email?: string; address?: string; createdAt?: string; updatedAt?: string };
 export type InvoiceItem = { _id?: string; product?: string | null; productId?: string; name: string; sku?: string; quantity: number; price: number; total?: number; isCustom?: boolean };
 
@@ -46,7 +51,7 @@ export type Invoice = {
 
 export type NotificationItem = {
   id: string; type: string; resourceType: 'product' | 'invoice'; resourceId: string; tone: 'danger' | 'warning' | 'info';
-  title: string; description: string; to: string; read: boolean;
+  title: string; description: string; to: string; read: boolean; sortDate?: string;
 };
 
 export type ReportSummary = {

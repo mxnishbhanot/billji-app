@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Text, useTheme } from 'react-native-paper';
@@ -22,6 +22,13 @@ const activityTime = (value?: string | Date | null) => {
   const day = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   return `${time} • ${day}`;
 };
+const padDatePart = (value: number) => String(value).padStart(2, '0');
+const formatISODate = (date: Date) => `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+const recentActivityRange = () => {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
+  return { from: formatISODate(start), to: formatISODate(today) };
+};
 
 function HeroPattern() {
   return (
@@ -34,16 +41,113 @@ function HeroPattern() {
         </LinearGradient>
       </Defs>
       <Rect x="0" y="0" width={360} height={210} fill="url(#heroGrad)" />
-      <G opacity="0.18">
-        {Array.from({ length: 14 }).map((_, row) =>
-          Array.from({ length: 22 }).map((__, col) => (
-            <Circle key={`${row}-${col}`} cx={col * 18 + 9} cy={row * 18 + 9} r={1} fill="#FFFFFF" />
-          ))
-        )}
+      <G opacity="0.2" stroke="#FFFFFF" strokeWidth={1.2} fill="none" strokeLinecap="round">
+        <Path d="M -26 48 C 28 12, 84 12, 134 44 S 236 88, 392 24" />
+        <Path d="M -30 82 C 38 38, 96 42, 154 76 S 270 126, 392 72" opacity={0.72} />
+        <Path d="M -28 126 C 48 84, 116 96, 176 122 S 282 166, 390 116" opacity={0.58} />
+        <Path d="M 32 202 C 92 158, 148 170, 204 188 S 294 224, 388 174" opacity={0.42} />
       </G>
-      <Circle cx={342} cy={220} r={86} fill="#6366F1" opacity={0.22} />
-      <Circle cx={-12} cy={-12} r={70} fill="#F472B6" opacity={0.08} />
+      <G opacity="0.18" stroke="#FFFFFF" strokeWidth={1.1} fill="none">
+        <Circle cx={272} cy={54} r={18} />
+        <Circle cx={302} cy={86} r={8} />
+        <Circle cx={70} cy={154} r={13} />
+        <Circle cx={110} cy={38} r={6} />
+      </G>
+      <G opacity="0.08" stroke="#A5B4FC" strokeWidth={18} fill="none">
+        <Path d="M 238 -18 C 284 16, 318 52, 386 48" />
+        <Path d="M -34 188 C 36 150, 86 166, 146 206" />
+      </G>
     </Svg>
+  );
+}
+
+function FloatingHeroBubbles() {
+  const first = useMemo(() => new Animated.Value(0), []);
+  const second = useMemo(() => new Animated.Value(0), []);
+  const third = useMemo(() => new Animated.Value(0), []);
+  const fourth = useMemo(() => new Animated.Value(0), []);
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(first, { toValue: 1, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(first, { toValue: 0, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+        ]),
+        Animated.sequence([
+          Animated.timing(second, { toValue: 1, duration: 12000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(second, { toValue: 0, duration: 12000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+        ]),
+        Animated.sequence([
+          Animated.timing(third, { toValue: 1, duration: 15000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(third, { toValue: 0, duration: 15000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+        ]),
+        Animated.sequence([
+          Animated.timing(fourth, { toValue: 1, duration: 18000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(fourth, { toValue: 0, duration: 18000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+        ])
+      ])
+    );
+
+    animation.start();
+    return () => animation.stop();
+  }, [first, fourth, second, third]);
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Animated.View
+        style={[
+          styles.heroBubbleLarge,
+          {
+            opacity: first.interpolate({ inputRange: [0, 1], outputRange: [0.16, 0.26] }),
+            transform: [
+              { translateX: first.interpolate({ inputRange: [0, 1], outputRange: [0, -20] }) },
+              { translateY: first.interpolate({ inputRange: [0, 1], outputRange: [0, 12] }) },
+              { scale: first.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.08] }) }
+            ]
+          }
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.heroBubbleSmall,
+          {
+            opacity: second.interpolate({ inputRange: [0, 1], outputRange: [0.1, 0.2] }),
+            transform: [
+              { translateX: second.interpolate({ inputRange: [0, 1], outputRange: [0, 18] }) },
+              { translateY: second.interpolate({ inputRange: [0, 1], outputRange: [0, -10] }) },
+              { scale: second.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1.1] }) }
+            ]
+          }
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.heroBubbleMedium,
+          {
+            opacity: third.interpolate({ inputRange: [0, 1], outputRange: [0.08, 0.18] }),
+            transform: [
+              { translateX: third.interpolate({ inputRange: [0, 1], outputRange: [0, 24] }) },
+              { translateY: third.interpolate({ inputRange: [0, 1], outputRange: [0, 18] }) },
+              { scale: third.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.12] }) }
+            ]
+          }
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.heroBubbleTiny,
+          {
+            opacity: fourth.interpolate({ inputRange: [0, 1], outputRange: [0.12, 0.22] }),
+            transform: [
+              { translateX: fourth.interpolate({ inputRange: [0, 1], outputRange: [0, -16] }) },
+              { translateY: fourth.interpolate({ inputRange: [0, 1], outputRange: [0, -18] }) },
+              { scale: fourth.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.14] }) }
+            ]
+          }
+        ]}
+      />
+    </View>
   );
 }
 
@@ -147,6 +251,14 @@ export function DashboardScreen({ navigation }: any) {
   const { showDialog } = useAppDialog();
   const isDark = theme.dark;
   const colors = appColors(isDark);
+  const scrollY = useMemo(() => new Animated.Value(0), []);
+  const heroParallaxStyle = {
+    opacity: scrollY.interpolate({ inputRange: [0, 190], outputRange: [1, 0.94], extrapolate: 'clamp' }),
+    transform: [
+      { translateY: scrollY.interpolate({ inputRange: [0, 190], outputRange: [0, 26], extrapolate: 'clamp' }) },
+      { scale: scrollY.interpolate({ inputRange: [0, 190], outputRange: [1, 0.975], extrapolate: 'clamp' }) }
+    ]
+  };
   const query = useQuery({ queryKey: ['report'], queryFn: reportsApi.summary });
 
   useEffect(() => {
@@ -167,6 +279,12 @@ export function DashboardScreen({ navigation }: any) {
     { label: 'Products', icon: 'package-variant-closed', onPress: () => navigation.navigate('CatalogTab', { screen: 'Products' }) },
     { label: 'Reports', icon: 'chart-box', onPress: () => navigation.navigate('Reports') }
   ];
+  const viewAllRecentActivity = () => {
+    navigation.navigate('InvoicesTab', {
+      screen: 'InvoiceList',
+      params: { ...recentActivityRange(), sort: 'newest', fromReports: true }
+    });
+  };
 
   const trendData = useMemo(() => (report?.salesTrend ?? []).slice(-5).map((point) => {
     const date = new Date(point.date);
@@ -185,9 +303,17 @@ export function DashboardScreen({ navigation }: any) {
   const recent = report?.recentInvoices ?? [];
 
   return (
-    <Screen title="Dashboard" contentStyle={styles.screenContent}>
-      <View style={[styles.heroCard, { borderColor: alpha('#C3C0FF', 0.3) }]}>
+    <Screen
+      title="Dashboard"
+      contentStyle={styles.screenContent}
+      scrollViewProps={{
+        scrollEventThrottle: 16,
+        onScroll: Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })
+      }}
+    >
+      <Animated.View style={[styles.heroCard, { borderColor: alpha('#C3C0FF', 0.3) }, heroParallaxStyle]}>
         <HeroPattern />
+        <FloatingHeroBubbles />
         <View style={styles.heroInner}>
           <View style={[styles.heroEyebrowBadge, { borderColor: alpha('#FFFFFF', 0.22), backgroundColor: alpha('#1C1A4A', 0.4) }]}>
             <Text style={styles.heroEyebrow}>BILLJI COMMAND CENTER</Text>
@@ -215,7 +341,7 @@ export function DashboardScreen({ navigation }: any) {
             </Pressable>
           </View>
         </View>
-      </View>
+      </Animated.View>
 
       <View style={styles.statRow}>{stats.slice(0, 2).map((item) => <StatCard key={item.label} {...item} />)}</View>
       <View style={styles.statRow}>{stats.slice(2).map((item) => <StatCard key={item.label} {...item} />)}</View>
@@ -267,11 +393,11 @@ export function DashboardScreen({ navigation }: any) {
 
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Recent activity</Text>
-        <Pressable onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceList' })}>
+        <Pressable onPress={viewAllRecentActivity}>
           <Text style={[styles.viewAll, { color: colors.primary }]}>View all</Text>
         </Pressable>
       </View>
-      {recent.length ? recent.slice(0, 3).map((invoice) => {
+      {recent.length ? recent.slice(0, 5).map((invoice) => {
         const isPaid = invoice.status === 'paid';
         const tileColor = isPaid ? alpha(colors.accent, isDark ? 0.2 : 0.12) : alpha(colors.primary, isDark ? 0.2 : 0.1);
         const iconColor = isPaid ? colors.accent : colors.primary;
@@ -322,6 +448,10 @@ const styles = StyleSheet.create({
   flex1: { flex: 1, minWidth: 0 },
   heroActions: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },
   heroBody: { color: 'rgba(255,255,255,0.78)', fontSize: 13, lineHeight: 20, marginTop: 6, maxWidth: 320 },
+  heroBubbleLarge: { backgroundColor: alpha('#FFFFFF', 0.18), borderColor: alpha('#FFFFFF', 0.34), borderRadius: 78, borderWidth: 1, height: 156, position: 'absolute', right: -44, top: 96, width: 156 },
+  heroBubbleMedium: { backgroundColor: alpha('#A5B4FC', 0.16), borderColor: alpha('#FFFFFF', 0.24), borderRadius: 60, borderWidth: 1, bottom: -28, height: 120, left: 30, position: 'absolute', width: 120 },
+  heroBubbleSmall: { backgroundColor: alpha('#FFFFFF', 0.14), borderColor: alpha('#FFFFFF', 0.28), borderRadius: 46, borderWidth: 1, height: 92, left: -26, position: 'absolute', top: -18, width: 92 },
+  heroBubbleTiny: { backgroundColor: alpha('#FFFFFF', 0.16), borderColor: alpha('#FFFFFF', 0.3), borderRadius: 26, borderWidth: 1, height: 52, position: 'absolute', right: 94, top: 40, width: 52 },
   heroButton: { borderRadius: radii.pill, elevation: 4, shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 10 },
   heroButtonContent: { height: 42, paddingHorizontal: 14 },
   heroButtonLabel: { ...fontStyles.bold, fontSize: 14 },

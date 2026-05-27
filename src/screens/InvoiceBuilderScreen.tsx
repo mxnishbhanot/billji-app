@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -18,6 +18,10 @@ import { customItemSchema, customerSchema } from '@/validation/schemas';
 
 const customerDefaults = { name: '', phone: '', countryCode: '+91', email: '', address: '' };
 const customDefaults = { name: '', price: '', quantity: '1' };
+const VISIBLE_PRODUCT_ROWS = 5;
+const VISIBLE_INVOICE_ITEM_ROWS = 5;
+const PRODUCT_ROW_HEIGHT = 72;
+const INVOICE_ITEM_ROW_HEIGHT = 112;
 
 const initials = (name: string) => {
   const parts = name.trim().split(/\s+/).slice(0, 2);
@@ -83,22 +87,29 @@ export function InvoiceBuilderScreen({ navigation }: any) {
       <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
         <View style={styles.sectionHead}>
           <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Customer</Text>
-          {selectedCustomer ? (
-            <Pressable onPress={() => setCustomerPicker(true)}>
-              <Text style={[styles.linkText, { color: theme.colors.primary }]}>Change</Text>
-            </Pressable>
-          ) : null}
         </View>
         {selectedCustomer ? (
-          <View style={[styles.customerSelected, { backgroundColor: subSurface, borderColor: cardBorder }]}>
-            <View style={[styles.avatar, { backgroundColor: alpha(colors.primary, isDark ? 0.22 : 0.14) }]}>
-              <Text style={[styles.avatarText, { color: colors.primary }]}>{initials(selectedCustomer.name)}</Text>
+          <>
+            <View style={[styles.customerSelected, { backgroundColor: subSurface, borderColor: cardBorder }]}>
+              <View style={[styles.avatar, { backgroundColor: alpha(colors.primary, isDark ? 0.22 : 0.14) }]}>
+                <Text style={[styles.avatarText, { color: colors.primary }]}>{initials(selectedCustomer.name)}</Text>
+              </View>
+              <View style={styles.flexContent}>
+                <Text style={[styles.customerName, { color: theme.colors.onSurface }]}>{selectedCustomer.name}</Text>
+                <Text style={[styles.customerMeta, { color: theme.colors.onSurfaceVariant }]}>{selectedCustomer.countryCode || '+91'} {selectedCustomer.phone}</Text>
+              </View>
             </View>
-            <View style={styles.flexContent}>
-              <Text style={[styles.customerName, { color: theme.colors.onSurface }]}>{selectedCustomer.name}</Text>
-              <Text style={[styles.customerMeta, { color: theme.colors.onSurfaceVariant }]}>{selectedCustomer.countryCode || '+91'} {selectedCustomer.phone}</Text>
+            <View style={styles.customerActions}>
+              <Pressable onPress={() => setCustomerPicker(true)} style={({ pressed }) => [styles.secondaryPick, { backgroundColor: alpha(colors.primary, pressed ? 0.18 : 0.1), borderColor: alpha(colors.primary, isDark ? 0.32 : 0.2) }]}>
+                <Feather name="users" size={15} color={theme.colors.primary} />
+                <Text style={[styles.secondaryPickLabel, { color: theme.colors.primary }]}>Change</Text>
+              </Pressable>
+              <Pressable onPress={() => setCustomerModal(true)} style={({ pressed }) => [styles.primaryPick, { backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary }]}>
+                <Feather name="plus" size={15} color="#FFFFFF" />
+                <Text style={styles.primaryPickLabel}>Add new</Text>
+              </Pressable>
             </View>
-          </View>
+          </>
         ) : (
           <View style={styles.customerActions}>
             <Pressable onPress={() => setCustomerPicker(true)} style={({ pressed }) => [styles.primaryPick, { backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary }]}>
@@ -114,7 +125,12 @@ export function InvoiceBuilderScreen({ navigation }: any) {
       </View>
 
       <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface, marginBottom: 12 }]}>Products</Text>
+        <View style={styles.sectionHead}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Products</Text>
+          {filteredProducts.length ? (
+            <Text style={[styles.listHint, { color: theme.colors.onSurfaceVariant }]}>{filteredProducts.length} found</Text>
+          ) : null}
+        </View>
         <TextInput
           mode="outlined"
           placeholder="Search products"
@@ -125,29 +141,33 @@ export function InvoiceBuilderScreen({ navigation }: any) {
           outlineStyle={styles.inputOutline}
           style={[styles.input, { backgroundColor: isDark ? colors.surface : '#FFFFFF' }]}
         />
-        <FlatList
-          data={filteredProducts.slice(0, 20)}
-          keyExtractor={(item) => item._id}
-          scrollEnabled={false}
-          style={styles.productList}
-          ListEmptyComponent={<Text style={[styles.emptyProductsText, { color: theme.colors.onSurfaceVariant }]}>No saved products found. Add a custom item below.</Text>}
-          renderItem={({ item }) => (
-            <List.Item
-              title={item.name}
-              titleStyle={[styles.productTitle, { color: theme.colors.onSurface }]}
-              description={`${formatCurrency(item.price)} · Stock ${item.stockQuantity}`}
-              descriptionStyle={{ color: theme.colors.onSurfaceVariant }}
-              style={[styles.productRow, { backgroundColor: subSurface, borderColor: cardBorder }]}
-              onPress={() => addProduct(item)}
-              right={() => (
-                <Pressable onPress={() => addProduct(item)} style={({ pressed }) => [styles.addBtn, { backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary }]}>
-                  <Feather name="plus" size={14} color="#FFFFFF" />
-                  <Text style={styles.addBtnLabel}>Add</Text>
-                </Pressable>
-              )}
-            />
-          )}
-        />
+        {filteredProducts.length ? (
+          <ScrollView
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={filteredProducts.length > VISIBLE_PRODUCT_ROWS}
+            scrollEnabled={filteredProducts.length > VISIBLE_PRODUCT_ROWS}
+            style={styles.productList}
+          >
+            {filteredProducts.map((item) => (
+              <List.Item
+                key={item._id}
+                title={item.name}
+                titleStyle={[styles.productTitle, { color: theme.colors.onSurface }]}
+                description={`${formatCurrency(item.price)} · Stock ${item.stockQuantity}`}
+                descriptionStyle={{ color: theme.colors.onSurfaceVariant }}
+                style={[styles.productRow, { backgroundColor: subSurface, borderColor: cardBorder }]}
+                onPress={() => addProduct(item)}
+                right={() => (
+                  <Pressable onPress={() => addProduct(item)} style={({ pressed }) => [styles.addBtn, { backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary }]}>
+                    <Feather name="plus" size={14} color="#FFFFFF" />
+                    <Text style={styles.addBtnLabel}>Add</Text>
+                  </Pressable>
+                )}
+              />
+            ))}
+          </ScrollView>
+        ) : <Text style={[styles.emptyProductsText, { color: theme.colors.onSurfaceVariant }]}>No saved products found. Add a custom item below.</Text>}
         <Pressable onPress={() => setCustomModal(true)} style={({ pressed }) => [styles.dashedBtn, { borderColor: alpha(colors.primary, isDark ? 0.4 : 0.28), backgroundColor: alpha(colors.primary, pressed ? 0.12 : 0.04) }]}>
           <MaterialCommunityIcons name="plus-circle-outline" size={16} color={theme.colors.primary} />
           <Text style={[styles.dashedBtnLabel, { color: theme.colors.primary }]}>Add custom item</Text>
@@ -163,32 +183,41 @@ export function InvoiceBuilderScreen({ navigation }: any) {
             </View>
           ) : null}
         </View>
-        {items.length ? items.map((item, index) => (
-          <View key={`${item.name}-${index}`} style={[styles.invoiceItem, { backgroundColor: subSurface, borderColor: cardBorder }]}>
-            <View style={styles.itemHeader}>
-              <View style={styles.flexContent}>
-                <Text style={[styles.itemName, { color: theme.colors.onSurface }]}>{item.name}</Text>
-                <Text style={[styles.itemMeta, { color: theme.colors.onSurfaceVariant }]}>{item.quantity} × {formatCurrency(item.price)}</Text>
+        {items.length ? (
+          <ScrollView
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={items.length > VISIBLE_INVOICE_ITEM_ROWS}
+            scrollEnabled={items.length > VISIBLE_INVOICE_ITEM_ROWS}
+            style={styles.invoiceItemsList}
+          >
+            {items.map((item, index) => (
+              <View key={`${item.name}-${index}`} style={[styles.invoiceItem, { backgroundColor: subSurface, borderColor: cardBorder }]}>
+                <View style={styles.itemHeader}>
+                  <View style={styles.flexContent}>
+                    <Text style={[styles.itemName, { color: theme.colors.onSurface }]}>{item.name}</Text>
+                    <Text style={[styles.itemMeta, { color: theme.colors.onSurfaceVariant }]}>{item.quantity} × {formatCurrency(item.price)}</Text>
+                  </View>
+                  <Text style={[styles.itemTotal, { color: theme.colors.onSurface }]}>{formatCurrency(item.quantity * item.price)}</Text>
+                </View>
+                <View style={styles.itemActions}>
+                  <View style={[styles.stepper, { borderColor: cardBorder, backgroundColor: colors.card }]}>
+                    <Pressable onPress={() => updateQuantity(index, -1)} style={styles.stepperBtn}>
+                      <Feather name="minus" size={14} color={theme.colors.onSurface} />
+                    </Pressable>
+                    <Text style={[styles.stepperValue, { color: theme.colors.onSurface }]}>{item.quantity}</Text>
+                    <Pressable onPress={() => updateQuantity(index, 1)} style={styles.stepperBtn}>
+                      <Feather name="plus" size={14} color={theme.colors.onSurface} />
+                    </Pressable>
+                  </View>
+                  <Pressable onPress={() => removeItem(index)} style={({ pressed }) => [styles.removeBtn, { backgroundColor: alpha(colors.destructive, pressed ? 0.2 : isDark ? 0.16 : 0.1) }]}>
+                    <Feather name="trash-2" size={14} color={colors.destructive} />
+                    <Text style={[styles.removeBtnLabel, { color: colors.destructive }]}>Remove</Text>
+                  </Pressable>
+                </View>
               </View>
-              <Text style={[styles.itemTotal, { color: theme.colors.onSurface }]}>{formatCurrency(item.quantity * item.price)}</Text>
-            </View>
-            <View style={styles.itemActions}>
-              <View style={[styles.stepper, { borderColor: cardBorder, backgroundColor: colors.card }]}>
-                <Pressable onPress={() => updateQuantity(index, -1)} style={styles.stepperBtn}>
-                  <Feather name="minus" size={14} color={theme.colors.onSurface} />
-                </Pressable>
-                <Text style={[styles.stepperValue, { color: theme.colors.onSurface }]}>{item.quantity}</Text>
-                <Pressable onPress={() => updateQuantity(index, 1)} style={styles.stepperBtn}>
-                  <Feather name="plus" size={14} color={theme.colors.onSurface} />
-                </Pressable>
-              </View>
-              <Pressable onPress={() => removeItem(index)} style={({ pressed }) => [styles.removeBtn, { backgroundColor: alpha(colors.destructive, pressed ? 0.2 : isDark ? 0.16 : 0.1) }]}>
-                <Feather name="trash-2" size={14} color={colors.destructive} />
-                <Text style={[styles.removeBtnLabel, { color: colors.destructive }]}>Remove</Text>
-              </Pressable>
-            </View>
-          </View>
-        )) : <Text style={[styles.emptyItemsText, { color: theme.colors.onSurfaceVariant }]}>No items yet.</Text>}
+            ))}
+          </ScrollView>
+        ) : <Text style={[styles.emptyItemsText, { color: theme.colors.onSurfaceVariant }]}>No items yet.</Text>}
       </View>
 
       <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
@@ -331,15 +360,17 @@ const styles = StyleSheet.create({
   input: { fontSize: 14 },
   inputOutline: { borderRadius: radii.input },
   invoiceItem: { borderRadius: radii.md, borderWidth: 1, marginTop: 10, padding: spacing.cardPaddingCompact },
+  invoiceItemsList: { maxHeight: INVOICE_ITEM_ROW_HEIGHT * VISIBLE_INVOICE_ITEM_ROWS },
   itemActions: { alignItems: 'center', flexDirection: 'row', gap: 10, marginTop: 12 },
   itemHeader: { alignItems: 'center', flexDirection: 'row', gap: 12, justifyContent: 'space-between' },
   itemMeta: { ...typeScale.caption, fontSize: 12, marginTop: 2 },
   itemName: { ...fontStyles.semiBold, fontSize: 14 },
   itemTotal: { ...fontStyles.bold, fontSize: 14 },
   linkText: { ...fontStyles.bold, fontSize: 12 },
+  listHint: { ...typeScale.caption, fontSize: 12 },
   primaryPick: { alignItems: 'center', borderRadius: radii.input, flex: 1, flexDirection: 'row', gap: 8, justifyContent: 'center', paddingVertical: 11 },
   primaryPickLabel: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 13 },
-  productList: { marginTop: 10 },
+  productList: { marginTop: 10, maxHeight: PRODUCT_ROW_HEIGHT * VISIBLE_PRODUCT_ROWS },
   productRow: { borderRadius: radii.md, borderWidth: 1, marginBottom: 8, paddingRight: 12 },
   productTitle: { ...fontStyles.semiBold, fontSize: 14 },
   removeBtn: { alignItems: 'center', borderRadius: radii.pill, flexDirection: 'row', gap: 4, paddingHorizontal: 10, paddingVertical: 6 },

@@ -7,7 +7,7 @@ import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
 
 export type ProductStockPreset = 'all' | 'available' | 'low' | 'out';
 export type ProductPricePreset = 'any' | 'under-500' | '500-2000' | 'over-2000';
-export type ProductSortOption = 'updated' | 'name-asc' | 'price-high' | 'price-low' | 'stock-low';
+export type ProductSortOption = 'updated' | 'top-sales' | 'name-asc' | 'price-high' | 'price-low' | 'stock-low';
 
 export type ProductFilterValues = {
   category: string;
@@ -46,6 +46,7 @@ const PRICE_OPTIONS: { label: string; value: ProductPricePreset; icon: keyof typ
 
 const SORT_OPTIONS: { label: string; value: ProductSortOption; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [
   { label: 'Recently updated', value: 'updated', icon: 'arrow-down' },
+  { label: 'Top sales', value: 'top-sales', icon: 'chart-line' },
   { label: 'Name A-Z', value: 'name-asc', icon: 'sort-alphabetical-ascending' },
   { label: 'Highest price', value: 'price-high', icon: 'cash-plus' },
   { label: 'Lowest price', value: 'price-low', icon: 'cash-minus' },
@@ -78,11 +79,10 @@ export function ProductFilterSheet({ visible, values, categories = [], categorie
         Animated.timing(backdropOpacity, { toValue: 1, duration: 220, useNativeDriver: true })
       ]).start();
     } else {
-      setCategoryOpen(false);
       Animated.parallel([
         Animated.timing(translateY, { toValue: 600, duration: 220, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
         Animated.timing(backdropOpacity, { toValue: 0, duration: 180, useNativeDriver: true })
-      ]).start();
+      ]).start(() => setCategoryOpen(false));
     }
   }, [visible, translateY, backdropOpacity]);
 

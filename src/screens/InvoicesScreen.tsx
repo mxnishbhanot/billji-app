@@ -53,11 +53,20 @@ const initials = (name: string) => {
   return parts.map((part) => part.charAt(0).toUpperCase()).join('') || '?';
 };
 const webSearchInputStyle = { outlineStyle: 'none', outlineWidth: 0 } as unknown as TextStyle;
+const reportRangeLabel = (range: { from?: string; to?: string }) => {
+  if (!range.from && !range.to) return 'Any time';
+  return `${range.from ? formatDate(range.from) : 'Start'} - ${range.to ? formatDate(range.to) : 'Today'}`;
+};
 
-export function InvoicesScreen({ navigation }: any) {
+export function InvoicesScreen({ navigation, route }: any) {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
+  const routeFrom = route?.params?.from || '';
+  const routeTo = route?.params?.to || '';
+  const routeSort = route?.params?.sort as InvoiceSortOption | undefined;
+  const reportRange = route?.params?.fromReports && (routeFrom || routeTo) ? { from: routeFrom, to: routeTo } : null;
+  const activeSort = route?.params?.fromReports && routeSort ? routeSort : undefined;
   const [search, setSearch] = useState('');
   const [filterValues, setFilterValues] = useState<InvoiceFilterValues>(defaultInvoiceFilterValues);
   const [draftFilterValues, setDraftFilterValues] = useState<InvoiceFilterValues>(defaultInvoiceFilterValues);
@@ -68,12 +77,15 @@ export function InvoicesScreen({ navigation }: any) {
     setFiltersOpen(true);
   };
   const applyDraft = () => {
+    navigation.setParams({ fromReports: false, from: '', to: '', sort: undefined });
     setFilterValues(draftFilterValues);
     setFiltersOpen(false);
   };
 
   const queryParams = useMemo(() => {
-    const { from, to } = resolveDateRange(filterValues.dateRange);
+    const presetRange = resolveDateRange(filterValues.dateRange);
+    const from = reportRange ? reportRange.from : presetRange.from;
+    const to = reportRange ? reportRange.to : presetRange.to;
     const { minAmount, maxAmount } = resolveAmountRange(filterValues.amountRange);
     return {
       search,
@@ -82,9 +94,9 @@ export function InvoicesScreen({ navigation }: any) {
       to,
       minAmount,
       maxAmount,
-      sort: filterValues.sort
+      sort: activeSort || filterValues.sort
     };
-  }, [search, filterValues]);
+  }, [search, filterValues, reportRange, activeSort]);
 
   const query = useInfiniteQuery({
     queryKey: ['invoices', queryParams],
@@ -97,9 +109,9 @@ export function InvoicesScreen({ navigation }: any) {
   const isInitialLoading = query.isLoading && !invoices.length;
   const isRefreshing = query.isRefetching && !query.isFetchingNextPage;
   const activeFilterCount = (filterValues.status ? 1 : 0) +
-    (filterValues.dateRange !== 'all' ? 1 : 0) +
+    (reportRange || filterValues.dateRange !== 'all' ? 1 : 0) +
     (filterValues.amountRange !== 'any' ? 1 : 0) +
-    (filterValues.sort !== 'newest' ? 1 : 0);
+    ((activeSort || filterValues.sort) !== 'newest' ? 1 : 0);
   const totalCount = query.data?.pages[0]?.pagination.total ?? 0;
   const visibleCount = invoices.length;
   const statusIcon: Record<InvoiceStatus, keyof typeof MaterialCommunityIcons.glyphMap> = {
@@ -110,9 +122,13 @@ export function InvoicesScreen({ navigation }: any) {
 
   const activeFilterTags: { key: string; label: string; onClear: () => void }[] = [
     filterValues.status ? { key: 'status', label: STATUS_LABELS[filterValues.status], onClear: () => setFilterValues((v) => ({ ...v, status: '' })) } : null,
-    filterValues.dateRange !== 'all' ? { key: 'date', label: DATE_LABELS[filterValues.dateRange], onClear: () => setFilterValues((v) => ({ ...v, dateRange: 'all' })) } : null,
+    reportRange ? { key: 'date', label: reportRangeLabel(reportRange), onClear: () => navigation.setParams({ fromReports: false, from: '', to: '' }) } : null,
+    !reportRange && filterValues.dateRange !== 'all' ? { key: 'date', label: DATE_LABELS[filterValues.dateRange], onClear: () => setFilterValues((v) => ({ ...v, dateRange: 'all' })) } : null,
     filterValues.amountRange !== 'any' ? { key: 'amount', label: AMOUNT_LABELS[filterValues.amountRange], onClear: () => setFilterValues((v) => ({ ...v, amountRange: 'any' })) } : null,
-    filterValues.sort !== 'newest' ? { key: 'sort', label: SORT_LABELS[filterValues.sort], onClear: () => setFilterValues((v) => ({ ...v, sort: 'newest' })) } : null
+    (activeSort || filterValues.sort) !== 'newest' ? { key: 'sort', label: SORT_LABELS[activeSort || filterValues.sort], onClear: () => {
+      navigation.setParams({ sort: undefined });
+      setFilterValues((v) => ({ ...v, sort: 'newest' }));
+    } } : null
   ].filter(Boolean) as { key: string; label: string; onClear: () => void }[];
 
   const loadMoreInvoices = () => {

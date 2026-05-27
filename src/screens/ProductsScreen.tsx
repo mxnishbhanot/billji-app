@@ -4,13 +4,14 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Button, Dialog, List, Portal, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, Dialog, Portal, Text, useTheme } from 'react-native-paper';
 import { productsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { FormTextInput } from '@/components/FormTextInput';
+import { ProductHistorySheet } from '@/components/ProductHistorySheet';
 import {
   ProductFilterSheet,
   ProductFilterValues,
@@ -45,12 +46,18 @@ const PRICE_LABELS: Record<ProductPricePreset, string> = {
 };
 const SORT_LABELS: Record<ProductSortOption, string> = {
   updated: 'Recently updated',
+  'top-sales': 'Top sales',
   'name-asc': 'Name A-Z',
   'price-high': 'Highest price',
   'price-low': 'Lowest price',
   'stock-low': 'Lowest stock'
 };
 const webSearchInputStyle = { outlineStyle: 'none', outlineWidth: 0 } as unknown as TextStyle;
+const reportRangeLabel = (range: { from?: string; to?: string }) => {
+  if (!range.from && !range.to) return 'Any time';
+  return `${range.from ? formatDate(range.from) : 'Start'} - ${range.to ? formatDate(range.to) : 'Today'}`;
+};
+const isProductSortOption = (value?: string): value is ProductSortOption => Boolean(value && value in SORT_LABELS);
 
 export function ProductsScreen({ navigation, route }: any) {
   const queryClient = useQueryClient();
@@ -58,6 +65,11 @@ export function ProductsScreen({ navigation, route }: any) {
   const isDark = theme.dark;
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
+  const routeFrom = route?.params?.from || '';
+  const routeTo = route?.params?.to || '';
+  const routeSort = route?.params?.sort;
+  const reportRange = route?.params?.fromReports && (routeFrom || routeTo) ? { from: routeFrom, to: routeTo } : null;
+  const activeSort = route?.params?.fromReports && isProductSortOption(routeSort) ? routeSort : undefined;
   const [filters, setFilters] = useState<ProductFilters>(emptyProductFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftFilterValues, setDraftFilterValues] = useState<ProductFilterValues>(defaultProductFilterValues);
@@ -74,9 +86,11 @@ export function ProductsScreen({ navigation, route }: any) {
       stockStatus: filters.stockStatus,
       minPrice,
       maxPrice,
-      sort: filters.sort
+      from: reportRange?.from || '',
+      to: reportRange?.to || '',
+      sort: activeSort || filters.sort
     };
-  }, [filters]);
+  }, [filters, reportRange, activeSort]);
   const query = useInfiniteQuery({ queryKey: ['products', queryParams], initialPageParam: 1, queryFn: ({ pageParam }) => productsApi.page({ ...queryParams, page: pageParam, limit: PAGE_SIZE }), getNextPageParam: (lastPage) => lastPage.pagination.nextPage });
   const categoriesQuery = useQuery({ queryKey: ['products', 'categories'], queryFn: productsApi.categories });
   const products = useMemo(() => query.data?.pages.flatMap((page) => page.products) ?? [], [query.data]);
@@ -85,7 +99,7 @@ export function ProductsScreen({ navigation, route }: any) {
   const activeFilterCount = (filters.category ? 1 : 0) +
     (filters.stockStatus !== 'all' ? 1 : 0) +
     (filters.priceRange !== 'any' ? 1 : 0) +
-    (filters.sort !== 'updated' ? 1 : 0);
+    ((activeSort || filters.sort) !== 'updated' ? 1 : 0);
   const totalCount = query.data?.pages[0]?.pagination.total ?? 0;
   const visibleCount = products.length;
   const save = useMutation({ mutationFn: (values: any) => {
@@ -116,15 +130,20 @@ export function ProductsScreen({ navigation, route }: any) {
   };
 
   const applyDraft = () => {
+    navigation.setParams({ fromReports: false, from: '', to: '', sort: undefined });
     setFilters((current) => ({ ...current, ...draftFilterValues, category: draftFilterValues.category.trim() }));
     setFiltersOpen(false);
   };
 
   const activeFilterTags: { key: string; label: string; onClear: () => void }[] = [
     filters.category ? { key: 'category', label: filters.category, onClear: () => setFilters((current) => ({ ...current, category: '' })) } : null,
+    reportRange && (activeSort || filters.sort) === 'top-sales' ? { key: 'range', label: reportRangeLabel(reportRange), onClear: () => navigation.setParams({ fromReports: false, from: '', to: '' }) } : null,
     filters.stockStatus !== 'all' ? { key: 'stock', label: STOCK_LABELS[filters.stockStatus], onClear: () => setFilters((current) => ({ ...current, stockStatus: 'all' })) } : null,
     filters.priceRange !== 'any' ? { key: 'price', label: PRICE_LABELS[filters.priceRange], onClear: () => setFilters((current) => ({ ...current, priceRange: 'any' })) } : null,
-    filters.sort !== 'updated' ? { key: 'sort', label: SORT_LABELS[filters.sort], onClear: () => setFilters((current) => ({ ...current, sort: 'updated' })) } : null
+    (activeSort || filters.sort) !== 'updated' ? { key: 'sort', label: SORT_LABELS[activeSort || filters.sort], onClear: () => {
+      navigation.setParams({ sort: undefined });
+      setFilters((current) => ({ ...current, sort: 'updated' }));
+    } } : null
   ].filter(Boolean) as { key: string; label: string; onClear: () => void }[];
 
   const stickyHeader = (
@@ -190,7 +209,6 @@ export function ProductsScreen({ navigation, route }: any) {
 
   const renderProductCard = ({ item }: { item: Product }) => {
     const isLowStock = Boolean(item.isLowStock || item.stockQuantity <= item.lowStockThreshold);
-    const stockColor = isLowStock ? colors.destructive : colors.accent;
     const stockTone = isLowStock ? colors.destructive : colors.accent;
     const highlightedCard = item._id === highlighted;
     const productMeta = [item.sku || 'No SKU', item.category].filter(Boolean).join('  ·  ');
@@ -216,6 +234,11 @@ export function ProductsScreen({ navigation, route }: any) {
           </View>
           <View style={styles.amountBlock}>
             <Text numberOfLines={1} style={[styles.priceText, { color: theme.colors.onSurface }]}>{formatCurrency(item.price)}</Text>
+            {(activeSort || filters.sort) === 'top-sales' ? (
+              <Text numberOfLines={1} style={[styles.salesMeta, { color: colors.accent }]}>
+                {formatCurrency(item.totalSales)} sold
+              </Text>
+            ) : null}
           </View>
         </View>
         <View style={[styles.cardDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) }]} />
@@ -279,28 +302,14 @@ export function ProductsScreen({ navigation, route }: any) {
         <Dialog visible={editing !== undefined} onDismiss={() => setEditing(undefined)}><Dialog.Title>{editing?._id ? 'Edit product' : 'Add product'}</Dialog.Title><Dialog.Content>
           <FormTextInput control={form.control} name="name" label="Name" /><FormTextInput control={form.control} name="price" label="Price" keyboardType="decimal-pad" /><FormTextInput control={form.control} name="stockQuantity" label="Stock" keyboardType="number-pad" /><FormTextInput control={form.control} name="sku" label="SKU" /><FormTextInput control={form.control} name="category" label="Category" /><FormTextInput control={form.control} name="lowStockThreshold" label="Low stock alert" keyboardType="number-pad" />
         </Dialog.Content><Dialog.Actions><Button onPress={() => setEditing(undefined)}>Cancel</Button><Button loading={save.isPending} onPress={form.handleSubmit((values) => save.mutate(values))}>Save</Button></Dialog.Actions></Dialog>
-        <Dialog visible={Boolean(historyProduct)} onDismiss={() => setHistoryProduct(null)}>
-          <Dialog.Title>{historyProduct?.name} stock history</Dialog.Title>
-          <Dialog.ScrollArea>
-            <FlatList
-              data={history.data?.movements || []}
-              keyExtractor={(item) => item._id}
-              ListEmptyComponent={history.isLoading ? (
-                <ActivityIndicator color={theme.colors.primary} style={styles.historyLoader} />
-              ) : (
-                <Text style={[styles.historyEmptyText, { color: theme.colors.onSurfaceVariant }]}>No stock movements yet</Text>
-              )}
-              renderItem={({ item }) => (
-                <List.Item
-                  title={item.type.replace(/_/g, ' ')}
-                  description={`${item.quantityChange > 0 ? '+' : ''}${item.quantityChange} · ${formatDate(item.createdAt)}\n${item.note || ''}`}
-                />
-              )}
-            />
-          </Dialog.ScrollArea>
-          <Dialog.Actions><Button onPress={() => setHistoryProduct(null)}>Close</Button></Dialog.Actions>
-        </Dialog>
       </Portal>
+      <ProductHistorySheet
+        visible={Boolean(historyProduct)}
+        product={historyProduct}
+        history={history.data}
+        loading={history.isLoading}
+        onClose={() => setHistoryProduct(null)}
+      />
       <ProductFilterSheet
         visible={filtersOpen}
         values={draftFilterValues}
@@ -369,6 +378,7 @@ const styles = StyleSheet.create({
   list: { flex: 1 },
   listContent: { paddingBottom: 24 },
   priceText: { ...fontStyles.bold, fontSize: 18, letterSpacing: -0.3 },
+  salesMeta: { ...fontStyles.bold, fontSize: 11, marginTop: 2 },
   productCard: {
     borderRadius: radii.lg,
     borderWidth: 1,

@@ -23,6 +23,7 @@
     "android": {
       "package": "com.billji.mobile",
       "versionCode": 1,
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

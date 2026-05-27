@@ -1,10 +1,9 @@
 import { api } from './client';
-import { AuthSession, Customer, Invoice, NotificationItem, Page, Product, ReportSummary, StockMovement, User } from '@/types';
+import { AuthSession, Customer, Invoice, NotificationItem, Page, Product, ProductStockHistory, ReportSummary, User } from '@/types';
 
 type ProductPage = Page<Product, 'products'>;
 type CustomerPage = Page<Customer, 'customers'>;
 type InvoicePage = Page<Invoice, 'invoices'>;
-type MovementPage = Page<StockMovement, 'movements'>;
 type NotificationPage = Page<NotificationItem, 'notifications'> & { unreadCount: number };
 
 export const authApi = {
@@ -20,7 +19,7 @@ export const productsApi = {
   categories: () => api.get<{ success: boolean; categories: string[] }>('/products/categories').then((res) => res.data.categories),
   create: (payload: Record<string, unknown>) => api.post<{ product: Product }>('/products', payload).then((res) => res.data.product),
   update: (id: string, payload: Record<string, unknown>) => api.patch<{ product: Product }>(`/products/${id}`, payload).then((res) => res.data.product),
-  stockMovementsPage: (id: string, params: Record<string, unknown>) => api.get<MovementPage>(`/products/${id}/stock-movements`, { params: { ...params, paginated: true } }).then((res) => res.data),
+  stockMovementsPage: (id: string, params: Record<string, unknown>) => api.get<ProductStockHistory>(`/products/${id}/stock-movements`, { params: { ...params, paginated: true } }).then((res) => res.data),
   remove: (id: string) => api.delete(`/products/${id}`).then((res) => res.data)
 };
 
@@ -50,5 +49,6 @@ export const reportsApi = {
 
 export const notificationsApi = {
   page: (params: Record<string, unknown>) => api.get<NotificationPage>('/notifications', { params }).then((res) => res.data),
-  markSeen: (notificationIds: string[]) => api.patch('/notifications/seen', { notificationIds }).then((res) => res.data)
+  markSeen: (notificationIds: string[], all = false) => api.patch('/notifications/seen', { notificationIds, all }).then((res) => res.data),
+  dismiss: (notificationIds: string[]) => api.patch('/notifications/dismiss', { notificationIds }).then((res) => res.data)
 };

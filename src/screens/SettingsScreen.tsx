@@ -1,5 +1,5 @@
-import { ReactNode, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { ActivityIndicator, Button, Dialog, Portal, Switch, Text, useTheme } from 'react-native-paper';
-import Svg, { Circle, Defs, G, LinearGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { authApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
@@ -39,16 +39,113 @@ function SettingsHeroPattern() {
         </LinearGradient>
       </Defs>
       <Rect x="0" y="0" width={360} height={150} fill="url(#settingsHeroGrad)" />
-      <G opacity="0.16">
-        {Array.from({ length: 10 }).map((_, row) =>
-          Array.from({ length: 22 }).map((__, col) => (
-            <Circle key={`${row}-${col}`} cx={col * 18 + 9} cy={row * 18 + 9} r={1} fill="#FFFFFF" />
-          ))
-        )}
+      <G opacity="0.2" stroke="#FFFFFF" strokeWidth={1.2} fill="none" strokeLinecap="round">
+        <Path d="M -26 38 C 28 2, 84 2, 134 34 S 236 78, 392 14" />
+        <Path d="M -30 72 C 38 28, 96 32, 154 66 S 270 116, 392 62" opacity={0.72} />
+        <Path d="M -28 112 C 48 70, 116 82, 176 108 S 282 152, 390 102" opacity={0.58} />
+        <Path d="M 32 156 C 92 112, 148 124, 204 142 S 294 178, 388 128" opacity={0.42} />
       </G>
-      <Circle cx={340} cy={150} r={78} fill="#6366F1" opacity={0.22} />
-      <Circle cx={-10} cy={-10} r={58} fill="#F472B6" opacity={0.08} />
+      <G opacity="0.18" stroke="#FFFFFF" strokeWidth={1.1} fill="none">
+        <Circle cx={272} cy={44} r={18} />
+        <Circle cx={302} cy={76} r={8} />
+        <Circle cx={70} cy={116} r={13} />
+        <Circle cx={110} cy={28} r={6} />
+      </G>
+      <G opacity="0.08" stroke="#A5B4FC" strokeWidth={18} fill="none">
+        <Path d="M 238 -18 C 284 16, 318 52, 386 48" />
+        <Path d="M -34 144 C 36 106, 86 122, 146 162" />
+      </G>
     </Svg>
+  );
+}
+
+function FloatingHeroBubbles() {
+  const first = useMemo(() => new Animated.Value(0), []);
+  const second = useMemo(() => new Animated.Value(0), []);
+  const third = useMemo(() => new Animated.Value(0), []);
+  const fourth = useMemo(() => new Animated.Value(0), []);
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(first, { toValue: 1, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(first, { toValue: 0, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+        ]),
+        Animated.sequence([
+          Animated.timing(second, { toValue: 1, duration: 12000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(second, { toValue: 0, duration: 12000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+        ]),
+        Animated.sequence([
+          Animated.timing(third, { toValue: 1, duration: 15000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(third, { toValue: 0, duration: 15000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+        ]),
+        Animated.sequence([
+          Animated.timing(fourth, { toValue: 1, duration: 18000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(fourth, { toValue: 0, duration: 18000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+        ])
+      ])
+    );
+
+    animation.start();
+    return () => animation.stop();
+  }, [first, fourth, second, third]);
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Animated.View
+        style={[
+          styles.heroBubbleLarge,
+          {
+            opacity: first.interpolate({ inputRange: [0, 1], outputRange: [0.16, 0.26] }),
+            transform: [
+              { translateX: first.interpolate({ inputRange: [0, 1], outputRange: [0, -20] }) },
+              { translateY: first.interpolate({ inputRange: [0, 1], outputRange: [0, 12] }) },
+              { scale: first.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.08] }) }
+            ]
+          }
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.heroBubbleSmall,
+          {
+            opacity: second.interpolate({ inputRange: [0, 1], outputRange: [0.1, 0.2] }),
+            transform: [
+              { translateX: second.interpolate({ inputRange: [0, 1], outputRange: [0, 18] }) },
+              { translateY: second.interpolate({ inputRange: [0, 1], outputRange: [0, -10] }) },
+              { scale: second.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1.1] }) }
+            ]
+          }
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.heroBubbleMedium,
+          {
+            opacity: third.interpolate({ inputRange: [0, 1], outputRange: [0.08, 0.18] }),
+            transform: [
+              { translateX: third.interpolate({ inputRange: [0, 1], outputRange: [0, 24] }) },
+              { translateY: third.interpolate({ inputRange: [0, 1], outputRange: [0, 18] }) },
+              { scale: third.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.12] }) }
+            ]
+          }
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.heroBubbleTiny,
+          {
+            opacity: fourth.interpolate({ inputRange: [0, 1], outputRange: [0.12, 0.22] }),
+            transform: [
+              { translateX: fourth.interpolate({ inputRange: [0, 1], outputRange: [0, -16] }) },
+              { translateY: fourth.interpolate({ inputRange: [0, 1], outputRange: [0, -18] }) },
+              { scale: fourth.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.14] }) }
+            ]
+          }
+        ]}
+      />
+    </View>
   );
 }
 
@@ -92,6 +189,14 @@ export function SettingsScreen() {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
+  const scrollY = useMemo(() => new Animated.Value(0), []);
+  const heroParallaxStyle = {
+    opacity: scrollY.interpolate({ inputRange: [0, 150], outputRange: [1, 0.94], extrapolate: 'clamp' }),
+    transform: [
+      { translateY: scrollY.interpolate({ inputRange: [0, 150], outputRange: [0, 22], extrapolate: 'clamp' }) },
+      { scale: scrollY.interpolate({ inputRange: [0, 150], outputRange: [1, 0.975], extrapolate: 'clamp' }) }
+    ]
+  };
   const { showDialog } = useAppDialog();
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
   const [themeSaving, setThemeSaving] = useState(false);
@@ -224,9 +329,17 @@ export function SettingsScreen() {
   };
 
   return (
-    <Screen title="Settings" contentStyle={styles.screenContent}>
-      <View style={[styles.profileCard, { borderColor: alpha('#C3C0FF', 0.3) }]}>
+    <Screen
+      title="Settings"
+      contentStyle={styles.screenContent}
+      scrollViewProps={{
+        scrollEventThrottle: 16,
+        onScroll: Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })
+      }}
+    >
+      <Animated.View style={[styles.profileCard, { borderColor: alpha('#C3C0FF', 0.3) }, heroParallaxStyle]}>
         <SettingsHeroPattern />
+        <FloatingHeroBubbles />
         <View style={[styles.profileLogo, { backgroundColor: alpha('#FFFFFF', 0.16), borderColor: alpha('#FFFFFF', 0.24) }]}>
           <BrandMark size={56} imageUri={logoPreview} label={businessName} />
         </View>
@@ -241,7 +354,7 @@ export function SettingsScreen() {
         <Pressable onPress={() => setActivePanel('brand')} style={({ pressed }) => [styles.profileEdit, { backgroundColor: alpha('#1C1A4A', pressed ? 0.55 : 0.36), borderColor: alpha('#C3C0FF', 0.36) }]} hitSlop={8}>
           <Feather name="edit-2" size={18} color="#FFFFFF" />
         </Pressable>
-      </View>
+      </Animated.View>
 
       <SettingsGroup title="BUSINESS">
         <SettingsRow icon="briefcase-outline" title="Business Profile" subtitle={`${businessName || 'Name'}, ${phone ? 'phone' : 'phone missing'}, ${businessEmail ? 'email' : 'email missing'}`} tone={colors.primary} onPress={() => navigation.navigate('BusinessProfile')} />
@@ -312,6 +425,10 @@ const styles = StyleSheet.create({
   profileContent: { flex: 1, minWidth: 0 },
   profileEdit: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, height: 38, justifyContent: 'center', width: 38 },
   profileEmail: { ...typeScale.caption, color: 'rgba(255,255,255,0.82)', fontSize: 12, marginTop: 1 },
+  heroBubbleLarge: { backgroundColor: alpha('#FFFFFF', 0.18), borderColor: alpha('#FFFFFF', 0.34), borderRadius: 70, borderWidth: 1, height: 140, position: 'absolute', right: -42, top: 54, width: 140 },
+  heroBubbleMedium: { backgroundColor: alpha('#A5B4FC', 0.16), borderColor: alpha('#FFFFFF', 0.24), borderRadius: 48, borderWidth: 1, bottom: -28, height: 96, left: 48, position: 'absolute', width: 96 },
+  heroBubbleSmall: { backgroundColor: alpha('#FFFFFF', 0.14), borderColor: alpha('#FFFFFF', 0.28), borderRadius: 38, borderWidth: 1, height: 76, left: -24, position: 'absolute', top: -22, width: 76 },
+  heroBubbleTiny: { backgroundColor: alpha('#FFFFFF', 0.16), borderColor: alpha('#FFFFFF', 0.3), borderRadius: 23, borderWidth: 1, height: 46, position: 'absolute', right: 92, top: 24, width: 46 },
   profileLogo: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, height: 64, justifyContent: 'center', overflow: 'hidden', width: 64 },
   profileName: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 20, letterSpacing: -0.5, lineHeight: 26 },
   readOnlyBox: { borderRadius: radii.lg, borderWidth: 1, padding: 12 },
