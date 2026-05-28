@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput as RNTextInput, View, type TextStyle } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { Button, Dialog, Portal, Text, useTheme } from 'react-native-paper';
@@ -20,8 +22,13 @@ import { EmptyState } from '@/components/EmptyState';
 import { FormTextInput } from '@/components/FormTextInput';
 import { PhoneInput } from '@/components/PhoneInput';
 import { Screen } from '@/components/Screen';
+import { CustomersStackParamList } from '@/navigation/types';
+import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
+import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
+import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
-import { Customer } from '@/types';
+import { Customer, CustomerFormValues } from '@/types';
+import { formatCurrency } from '@/utils/format';
 import { customerSchema } from '@/validation/schemas';
 
 const PAGE_SIZE = 10;
@@ -46,25 +53,30 @@ const webSearchInputStyle = { outlineStyle: 'none', outlineWidth: 0 } as unknown
 
 export function CustomersScreen() {
   const queryClient = useQueryClient();
+  const navigation = useNavigation<NativeStackNavigationProp<CustomersStackParamList>>();
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
+  const { can } = usePermissions();
+  const canManage = can(PERMISSION.customersManage);
   const [filters, setFilters] = useState<CustomerFilters>(emptyCustomerFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftFilterValues, setDraftFilterValues] = useState<CustomerFilterValues>(defaultCustomerFilterValues);
   const [editing, setEditing] = useState<Customer | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<Customer | null>(null);
-  const form = useForm<any>({ defaultValues: blankCustomer, resolver: zodResolver(customerSchema) });
-  const query = useInfiniteQuery({ queryKey: ['customers', filters], initialPageParam: 1, queryFn: ({ pageParam }) => customersApi.page({ ...filters, page: pageParam, limit: PAGE_SIZE }), getNextPageParam: (lastPage) => lastPage.pagination.nextPage });
+  const form = useForm<CustomerFormValues>({ defaultValues: blankCustomer, resolver: zodResolver(customerSchema) });
+  const debouncedSearch = useDebouncedValue(filters.search, 300);
+  const queryFilters = useMemo(() => ({ ...filters, search: debouncedSearch }), [filters, debouncedSearch]);
+  const query = useInfiniteQuery({ queryKey: queryKeys.customers.list(queryFilters), initialPageParam: 1, queryFn: ({ pageParam }) => customersApi.page({ ...queryFilters, page: pageParam, limit: PAGE_SIZE }), getNextPageParam: (lastPage) => lastPage.pagination.nextPage });
   const customers = useMemo(() => query.data?.pages.flatMap((page) => page.customers) ?? [], [query.data]);
   const isInitialLoading = query.isLoading && !customers.length;
   const isRefreshing = query.isRefetching && !query.isFetchingNextPage;
   const activeFilterCount = (filters.billingStatus !== 'all' ? 1 : 0) + (filters.sort !== 'updated' ? 1 : 0);
   const totalCount = query.data?.pages[0]?.pagination.total ?? 0;
   const visibleCount = customers.length;
-  const save = useMutation({ mutationFn: (values: any) => editing?._id ? customersApi.update(editing._id, values) : customersApi.create(values), onSuccess: () => { setEditing(undefined); queryClient.invalidateQueries({ queryKey: ['customers'] }); }, onError: (error) => showDialog({ title: 'Could not save customer', message: apiErrorMessage(error), tone: 'error' }) });
-  const remove = useMutation({ mutationFn: (id: string) => customersApi.remove(id), onSuccess: () => { setDeleting(null); queryClient.invalidateQueries({ queryKey: ['customers'] }); }, onError: (error) => showDialog({ title: 'Could not delete customer', message: apiErrorMessage(error), tone: 'error' }) });
+  const save = useMutation({ mutationFn: (values: CustomerFormValues) => editing?._id ? customersApi.update(editing._id, values) : customersApi.create(values), onSuccess: () => { setEditing(undefined); queryClient.invalidateQueries({ queryKey: queryKeys.customers.all }); }, onError: (error) => showDialog({ title: 'Could not save customer', message: apiErrorMessage(error), tone: 'error' }) });
+  const remove = useMutation({ mutationFn: (id: string) => customersApi.remove(id), onSuccess: () => { setDeleting(null); queryClient.invalidateQueries({ queryKey: queryKeys.customers.all }); }, onError: (error) => showDialog({ title: 'Could not delete customer', message: apiErrorMessage(error), tone: 'error' }) });
   useEffect(() => { if (editing !== undefined) form.reset(editing || blankCustomer); }, [editing, form]);
 
   const loadMoreCustomers = () => {
@@ -142,7 +154,10 @@ export function CustomersScreen() {
   };
 
   const renderCustomerCard = ({ item }: { item: Customer }) => (
-    <View style={[styles.customerCard, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), shadowColor: isDark ? '#000000' : colors.primaryStrong }]}>
+    <Pressable
+      onPress={() => navigation.navigate('CustomerDetail', { customer: item })}
+      style={({ pressed }) => [styles.customerCard, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), shadowColor: isDark ? '#000000' : colors.primaryStrong, opacity: pressed ? 0.94 : 1 }]}
+    >
       <View style={styles.cardTop}>
         <View style={[styles.avatar, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.12) }]}>
           <Text style={[styles.avatarText, { color: theme.colors.primary }]}>{initials(item.name)}</Text>
@@ -155,6 +170,18 @@ export function CustomersScreen() {
       <View style={[styles.cardDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) }]} />
       <View style={styles.cardBottom}>
         <View style={styles.contactChips}>
+          {typeof item.outstandingDues === 'number' && item.outstandingDues > 0 ? (
+            <View style={[styles.contactPill, { backgroundColor: alpha(colors.destructive, isDark ? 0.18 : 0.1), borderColor: alpha(colors.destructive, isDark ? 0.32 : 0.24) }]}>
+              <Feather name="alert-circle" size={13} color={colors.destructive} />
+              <Text numberOfLines={1} style={[styles.contactPillText, { color: colors.destructive }]}>Due {formatCurrency(item.outstandingDues)}</Text>
+            </View>
+          ) : null}
+          {typeof item.creditBalance === 'number' && item.creditBalance > 0 ? (
+            <View style={[styles.contactPill, { backgroundColor: alpha(colors.accent, isDark ? 0.18 : 0.1), borderColor: alpha(colors.accent, isDark ? 0.32 : 0.24) }]}>
+              <Feather name="arrow-down-circle" size={13} color={colors.accent} />
+              <Text numberOfLines={1} style={[styles.contactPillText, { color: colors.accent }]}>Credit {formatCurrency(item.creditBalance)}</Text>
+            </View>
+          ) : null}
           <View style={[styles.contactPill, { backgroundColor: item.email ? alpha(colors.accent, isDark ? 0.18 : 0.1) : alpha(colors.warning, isDark ? 0.18 : 0.1), borderColor: item.email ? alpha(colors.accent, isDark ? 0.32 : 0.24) : alpha(colors.warning, isDark ? 0.32 : 0.24) }]}>
             <Feather name={item.email ? 'mail' : 'mail'} size={13} color={item.email ? colors.accent : colors.warning} />
             <Text numberOfLines={1} style={[styles.contactPillText, { color: item.email ? colors.accent : colors.warning }]}>{item.email || 'No email'}</Text>
@@ -166,16 +193,18 @@ export function CustomersScreen() {
             </View>
           ) : null}
         </View>
-        <View style={styles.iconActions}>
-          <Pressable onPress={() => setEditing(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.08) }]}>
-            <Feather name="edit-2" size={14} color={theme.colors.primary} />
-          </Pressable>
-          <Pressable onPress={() => setDeleting(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: alpha(colors.destructive, isDark ? 0.16 : 0.08) }]}>
-            <Feather name="trash-2" size={14} color={theme.colors.error} />
-          </Pressable>
-        </View>
+        {canManage ? (
+          <View style={styles.iconActions}>
+            <Pressable onPress={() => setEditing(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.08) }]}>
+              <Feather name="edit-2" size={14} color={theme.colors.primary} />
+            </Pressable>
+            <Pressable onPress={() => setDeleting(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: alpha(colors.destructive, isDark ? 0.16 : 0.08) }]}>
+              <Feather name="trash-2" size={14} color={theme.colors.error} />
+            </Pressable>
+          </View>
+        ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 
   const headerCreateAction = (
@@ -194,7 +223,7 @@ export function CustomersScreen() {
   );
 
   return (
-    <Screen title="Customers" scroll={false} headerAction={headerCreateAction} contentStyle={styles.screenContent}>
+    <Screen title="Customers" scroll={false} headerAction={canManage ? headerCreateAction : undefined} contentStyle={styles.screenContent}>
       {stickyHeader}
       <FlatList
         data={customers}
@@ -207,7 +236,11 @@ export function CustomersScreen() {
         onRefresh={() => query.refetch()}
         onEndReached={loadMoreCustomers}
         onEndReachedThreshold={0.35}
-        ListEmptyComponent={isInitialLoading ? <ActivityIndicator color={theme.colors.primary} style={styles.emptyLoader} /> : <EmptyState title="No customers" message="Add customers once and reuse them in every invoice." actionLabel="Add customer" onAction={() => setEditing(null)} />}
+        removeClippedSubviews
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        ListEmptyComponent={isInitialLoading ? <ActivityIndicator color={theme.colors.primary} style={styles.emptyLoader} /> : <EmptyState title="No customers" message="Add customers once and reuse them in every invoice." actionLabel={canManage ? 'Add customer' : undefined} onAction={canManage ? () => setEditing(null) : undefined} />}
         ListFooterComponent={renderCustomersFooter}
         renderItem={renderCustomerCard}
       />

@@ -6,6 +6,9 @@ const SESSION_KEY = 'billji-auth-session';
 
 type AuthState = {
   token: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  sessionId: string | null;
   user: User | null;
   hydrated: boolean;
   hydrate: () => Promise<void>;
@@ -16,6 +19,9 @@ type AuthState = {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
+  accessToken: null,
+  refreshToken: null,
+  sessionId: null,
   user: null,
   hydrated: false,
   hydrate: async () => {
@@ -23,23 +29,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const raw = await SecureStore.getItemAsync(SESSION_KEY);
       if (raw) {
         const session = JSON.parse(raw) as AuthSession;
-        set({ token: session.token, user: session.user });
+        const accessToken = session.accessToken || session.token;
+        set({ token: accessToken, accessToken, refreshToken: session.refreshToken || null, sessionId: session.sessionId || null, user: session.user });
       }
     } finally {
       set({ hydrated: true });
     }
   },
-  setSession: async ({ token, user }) => {
-    set({ token, user });
-    await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify({ token, user }));
+  setSession: async (session) => {
+    const accessToken = session.accessToken || session.token;
+    set({ token: accessToken, accessToken, refreshToken: session.refreshToken || null, sessionId: session.sessionId || null, user: session.user });
+    await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify({ ...session, token: accessToken, accessToken }));
   },
   setUser: async (user) => {
-    const token = get().token;
+    const { accessToken, refreshToken, sessionId, token } = get();
     set({ user });
-    if (token) await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify({ token, user }));
+    if (token) await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify({ token, accessToken: accessToken || token, refreshToken, sessionId, user }));
   },
   logout: async () => {
-    set({ token: null, user: null });
+    set({ token: null, accessToken: null, refreshToken: null, sessionId: null, user: null });
     await SecureStore.deleteItemAsync(SESSION_KEY);
   }
 }));

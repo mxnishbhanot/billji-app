@@ -1,23 +1,46 @@
 import { create, isAxiosError } from 'axios';
 import { Platform } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
+import { ApiParams, AuthSession } from '@/types';
 
 const devHost = Platform.OS === 'android' ? 'http://10.0.2.2:5000/api' : 'http://localhost:5000/api';
 export const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || devHost;
 export const api = create({ baseURL: apiBaseUrl, timeout: 20000 });
+const refreshApi = create({ baseURL: apiBaseUrl, timeout: 20000 });
+let refreshPromise: Promise<AuthSession> | null = null;
 
-const removeEmptyParams = (params: Record<string, unknown> = {}) =>
+const removeEmptyParams = (params: ApiParams = {}) =>
   Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '' && value !== null && value !== undefined));
 
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
   if (token) config.headers.Authorization = `Bearer ${token}`;
-  if (config.params) config.params = removeEmptyParams(config.params as Record<string, unknown>);
+  if (config.params) config.params = removeEmptyParams(config.params as ApiParams);
   return config;
 });
 
-api.interceptors.response.use((response) => response, (error) => {
-  if (error.response?.status === 401) void useAuthStore.getState().logout();
+api.interceptors.response.use((response) => response, async (error) => {
+  const originalRequest = error.config as (typeof error.config & { _retry?: boolean }) | undefined;
+
+  if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+    const refreshToken = useAuthStore.getState().refreshToken;
+    if (refreshToken) {
+      originalRequest._retry = true;
+      try {
+        refreshPromise ??= refreshApi.post<AuthSession>('/auth/refresh', { refreshToken }).then((res) => res.data).finally(() => { refreshPromise = null; });
+        const session = await refreshPromise;
+        await useAuthStore.getState().setSession(session);
+        originalRequest.headers = originalRequest.headers || {};
+        originalRequest.headers.Authorization = `Bearer ${session.accessToken || session.token}`;
+        return api(originalRequest);
+      } catch {
+        await useAuthStore.getState().logout();
+      }
+    } else {
+      await useAuthStore.getState().logout();
+    }
+  }
+
   return Promise.reject(error);
 });
 

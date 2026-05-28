@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
-import { Controller, useController } from 'react-hook-form';
+import { Control, Controller, FieldValues, Path, useController } from 'react-hook-form';
 import { Dialog, HelperText, Portal, Text, TextInput, useTheme } from 'react-native-paper';
 import { fontStyles, radii, spacing, typeScale } from '@/theme/theme';
 
@@ -22,14 +22,14 @@ export const COUNTRY_CODES = [
   { code: '+254', country: 'KE', label: 'Kenya' },
 ];
 
-type Props = { control: any; name?: string; phoneName?: string; codeName?: string; label?: string };
+type Props<T extends FieldValues> = { control: Control<T>; name?: Path<T>; phoneName?: Path<T>; codeName?: Path<T>; label?: string };
 
-export function PhoneInput({ control, name, phoneName, codeName = 'countryCode', label = 'Phone' }: Props) {
+export function PhoneInput<T extends FieldValues>({ control, name, phoneName, codeName = 'countryCode' as Path<T>, label = 'Phone' }: Props<T>) {
   const theme = useTheme();
   const [pickerOpen, setPickerOpen] = useState(false);
   const codeController = useController({ control, name: codeName });
   const currentCode = codeController.field.value || '+91';
-  const resolvedPhoneName = phoneName ?? name ?? 'phone';
+  const resolvedPhoneName = phoneName ?? name ?? ('phone' as Path<T>);
 
   return (
     <Controller

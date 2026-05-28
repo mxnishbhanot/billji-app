@@ -11,6 +11,8 @@ import { DateRange, DateRangePicker } from '@/components/DateRangePicker';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
 import { StatCard } from '@/components/StatCard';
+import { ReportsScreenProps } from '@/navigation/types';
+import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, statusTone, typeScale } from '@/theme/theme';
 import { formatCurrency, formatDate } from '@/utils/format';
 
@@ -119,14 +121,14 @@ function ReportRangeSheet({
   );
 }
 
-export function ReportsScreen({ navigation }: any) {
+export function ReportsScreen({ navigation }: ReportsScreenProps) {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(theme.dark);
   const [range, setRange] = useState<DateRange>({ from: '', to: '' });
   const [draftRange, setDraftRange] = useState<DateRange>(range);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const { data: report, isFetching, refetch } = useQuery({ queryKey: ['report', range], queryFn: () => reportsApi.summary(range) });
+  const { data: report, isFetching, refetch } = useQuery({ queryKey: queryKeys.report.summary(range), queryFn: () => reportsApi.summary(range) });
 
   const openFilters = () => {
     setDraftRange(range);

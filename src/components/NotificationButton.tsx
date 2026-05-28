@@ -7,36 +7,38 @@ import { Appbar, Badge, useTheme } from 'react-native-paper';
 import { notificationsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { NotificationSheet } from '@/components/NotificationSheet';
+import { AppNavigation } from '@/navigation/types';
 import { connectSocket } from '@/services/socket';
+import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, radii } from '@/theme/theme';
 import { NotificationItem } from '@/types';
 
 const PAGE_SIZE = 10;
 export function NotificationButton() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<AppNavigation>();
   const queryClient = useQueryClient();
   const theme = useTheme();
   const colors = appColors(theme.dark);
   const token = useAuthStore((state) => state.token);
   const [open, setOpen] = useState(false);
-  const query = useInfiniteQuery({ queryKey: ['notifications'], enabled: Boolean(token), initialPageParam: 1, queryFn: ({ pageParam }) => notificationsApi.page({ page: pageParam, limit: PAGE_SIZE }), getNextPageParam: (lastPage) => lastPage.pagination.nextPage });
+  const query = useInfiniteQuery({ queryKey: queryKeys.notifications.all, enabled: Boolean(token), initialPageParam: 1, queryFn: ({ pageParam }) => notificationsApi.page({ page: pageParam, limit: PAGE_SIZE }), getNextPageParam: (lastPage) => lastPage.pagination.nextPage });
 
   useEffect(() => {
     if (!token) return undefined;
     return connectSocket(token, (event) => {
-      if (event.includes('notifications')) void queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      if (event.includes('products')) void queryClient.invalidateQueries({ queryKey: ['products'] });
-      if (event.includes('customers')) void queryClient.invalidateQueries({ queryKey: ['customers'] });
-      if (event.includes('invoices')) void queryClient.invalidateQueries({ queryKey: ['invoices'] });
-      void queryClient.invalidateQueries({ queryKey: ['report'] });
+      if (event.includes('notifications')) void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+      if (event.includes('products')) void queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+      if (event.includes('customers')) void queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      if (event.includes('invoices')) void queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
     });
   }, [queryClient, token]);
 
   const notifications = useMemo(() => query.data?.pages.flatMap((page) => page.notifications) ?? [], [query.data]);
   const unreadCount = query.data?.pages[0]?.unreadCount ?? 0;
-  const markSeen = useMutation({ mutationFn: ({ ids, all = false }: { ids: string[]; all?: boolean }) => notificationsApi.markSeen(ids, all), onSettled: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }) });
-  const dismiss = useMutation({ mutationFn: (ids: string[]) => notificationsApi.dismiss(ids), onSettled: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }) });
+  const markSeen = useMutation({ mutationFn: ({ ids, all = false }: { ids: string[]; all?: boolean }) => notificationsApi.markSeen(ids, all), onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all }) });
+  const dismiss = useMutation({ mutationFn: (ids: string[]) => notificationsApi.dismiss(ids), onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all }) });
   const openPanel = () => setOpen(true);
   const markAllRead = () => markSeen.mutate({ ids: [], all: true });
   const loadMore = () => {
@@ -46,7 +48,8 @@ export function NotificationButton() {
     setOpen(false);
     markSeen.mutate({ ids: [notification.id] });
     if (notification.resourceType === 'invoice') navigation.navigate('InvoicesTab', { screen: 'InvoiceDetail', params: { id: notification.resourceId } });
-    else navigation.navigate('CatalogTab', { screen: 'Products', params: { highlight: notification.resourceId } });
+    else if (notification.resourceType === 'product') navigation.navigate('CatalogTab', { screen: 'Products', params: { highlight: notification.resourceId } });
+    else if (notification.resourceType === 'customer') navigation.navigate('CustomersTab', { screen: 'Customers' });
   };
   return (
     <>

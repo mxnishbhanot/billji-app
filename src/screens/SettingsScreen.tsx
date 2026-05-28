@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigation } from '@react-navigation/native';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { ActivityIndicator, Button, Dialog, Portal, Switch, Text, useTheme } from 'react-native-paper';
 import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
@@ -14,11 +14,16 @@ import { useAppDialog } from '@/components/AppDialog';
 import { BrandMark } from '@/components/BrandMark';
 import { FormTextInput } from '@/components/FormTextInput';
 import { Screen } from '@/components/Screen';
+import { AppNavigation } from '@/navigation/types';
+import { disconnectSocket } from '@/services/socket';
+import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
+import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
+import { BusinessProfileFormValues } from '@/types';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { settingsSchema } from '@/validation/schemas';
 
-type SettingsPanel = 'brand' | 'tax' | 'invoice' | 'account' | null;
+type SettingsPanel = 'brand' | 'tax' | 'invoice' | 'account' | 'security' | null;
 type SettingsRowProps = {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   title: string;
@@ -185,7 +190,7 @@ export function SettingsScreen() {
   const setUser = useAuthStore((state) => state.setUser);
   const logout = useAuthStore((state) => state.logout);
   const queryClient = useQueryClient();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<AppNavigation>();
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
@@ -198,9 +203,12 @@ export function SettingsScreen() {
     ]
   };
   const { showDialog } = useAppDialog();
+  const { can } = usePermissions();
+  const canViewLedger = can(PERMISSION.reportsView);
+  const canViewActivity = can(PERMISSION.settingsManage);
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
   const [themeSaving, setThemeSaving] = useState(false);
-  const form = useForm<any>({ defaultValues: { theme: 'light', ...(user?.businessProfile || {}) }, resolver: zodResolver(settingsSchema) });
+  const form = useForm<BusinessProfileFormValues>({ defaultValues: { businessName: '', invoicePrefix: 'INV', theme: 'light', ...(user?.businessProfile || {}) }, resolver: zodResolver(settingsSchema) });
   const selectedTheme = useWatch({ control: form.control, name: 'theme' }) || 'light';
   const logoPreview = useWatch({ control: form.control, name: 'logoUrl' }) || '';
   const businessName = useWatch({ control: form.control, name: 'businessName' }) || '';
@@ -210,18 +218,34 @@ export function SettingsScreen() {
   const invoicePrefix = useWatch({ control: form.control, name: 'invoicePrefix' }) || 'INV';
 
   useEffect(() => {
-    form.reset({ theme: 'light', ...(user?.businessProfile || {}) });
+    form.reset({ businessName: '', invoicePrefix: 'INV', theme: 'light', ...(user?.businessProfile || {}) });
   }, [user, form]);
 
   const save = useMutation({
     mutationFn: authApi.updateSettings,
     onSuccess: async (response) => {
       await setUser(response.user);
-      queryClient.invalidateQueries({ queryKey: ['report'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
       showDialog({ title: 'Settings saved', message: 'Your business profile has been updated.', tone: 'success' });
     },
     onError: (error) => showDialog({ title: 'Could not save settings', message: apiErrorMessage(error), tone: 'error' })
   });
+  const sessionsQuery = useQuery({ queryKey: queryKeys.auth.sessions, queryFn: authApi.sessions, enabled: activePanel === 'security' });
+  const revokeSession = useMutation({
+    mutationFn: authApi.revokeSession,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.auth.sessions }),
+    onError: (error) => showDialog({ title: 'Could not revoke session', message: apiErrorMessage(error), tone: 'error' })
+  });
+  const signOut = async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      // Local sign out must still work if network/session already expired.
+    }
+    disconnectSocket();
+    queryClient.clear();
+    await logout();
+  };
 
   const saveAndClose = form.handleSubmit((values) => save.mutate(values, { onSuccess: () => setActivePanel(null) }));
 
@@ -271,6 +295,29 @@ export function SettingsScreen() {
               <Text style={[styles.readOnlyHint, { color: theme.colors.onSurfaceVariant }]}>This is only used for signing in. Business email is managed separately.</Text>
             </View>
           </Dialog.Content>
+          <Dialog.Actions><Button onPress={closePanel}>Close</Button></Dialog.Actions>
+        </>
+      );
+    }
+
+    if (activePanel === 'security') {
+      return (
+        <>
+          <Dialog.Title>Security & Sessions</Dialog.Title>
+          <Dialog.ScrollArea>
+            <Animated.ScrollView contentContainerStyle={styles.dialogScrollContent}>
+              {sessionsQuery.isLoading ? <ActivityIndicator color={theme.colors.primary} /> : null}
+              {sessionsQuery.data?.map((session) => (
+                <View key={session.id} style={[styles.readOnlyBox, { backgroundColor: isDark ? colors.surface : alpha(colors.primaryStrong, 0.04), borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), marginBottom: 10 }]}>
+                  <Text style={[styles.readOnlyLabel, { color: theme.colors.onSurfaceVariant }]}>{session.current ? 'Current session' : 'Active session'}</Text>
+                  <Text numberOfLines={2} style={[styles.readOnlyValue, { color: theme.colors.onSurface }]}>{session.userAgent || 'Unknown device'}</Text>
+                  <Text style={[styles.readOnlyHint, { color: theme.colors.onSurfaceVariant }]}>Last used {session.lastUsedAt ? new Date(session.lastUsedAt).toLocaleString() : 'recently'}{session.ipAddress ? ` · ${session.ipAddress}` : ''}</Text>
+                  {!session.current ? <Button compact loading={revokeSession.isPending} onPress={() => revokeSession.mutate(session.id)}>Revoke</Button> : null}
+                </View>
+              ))}
+              {!sessionsQuery.isLoading && !sessionsQuery.data?.length ? <Text style={{ color: theme.colors.onSurfaceVariant }}>No active sessions found.</Text> : null}
+            </Animated.ScrollView>
+          </Dialog.ScrollArea>
           <Dialog.Actions><Button onPress={closePanel}>Close</Button></Dialog.Actions>
         </>
       );
@@ -384,15 +431,29 @@ export function SettingsScreen() {
         />
       </SettingsGroup>
 
+      {canViewLedger || canViewActivity ? (
+        <SettingsGroup title="RECORDS">
+          {canViewLedger ? (
+            <SettingsRow icon="book-open-outline" title="Ledger" subtitle="Accounting entries" tone={colors.primary} onPress={() => navigation.navigate('Ledger')} />
+          ) : null}
+          {canViewLedger && canViewActivity ? <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} /> : null}
+          {canViewActivity ? (
+            <SettingsRow icon="history" title="Activity log" subtitle="Recent account actions" tone={colors.accent} onPress={() => navigation.navigate('ActivityLog')} />
+          ) : null}
+        </SettingsGroup>
+      ) : null}
+
       <SettingsGroup title="ACCOUNT">
         <SettingsRow icon="account-circle-outline" title="Login Account" subtitle={user?.email || 'Signed in'} tone={colors.primary} onPress={() => setActivePanel('account')} />
+        <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
+        <SettingsRow icon="shield-key-outline" title="Security & Sessions" subtitle="Manage active sessions" tone={colors.warning} onPress={() => setActivePanel('security')} />
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow
           icon="logout"
           title="Logout"
           subtitle="Sign out of this device"
           tone={colors.destructive}
-          onPress={() => logout()}
+          onPress={signOut}
           trailing={<Feather name="log-out" size={17} color={theme.colors.error} />}
         />
       </SettingsGroup>

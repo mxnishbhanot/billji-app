@@ -25,8 +25,9 @@ const compactCurrency = (value?: number) => {
 const movementTone = (type: string, colors: ReturnType<typeof appColors>, isDark: boolean) => {
   if (type === 'sale') return { icon: 'shopping-cart' as const, color: colors.primary, background: alpha(colors.primary, isDark ? 0.2 : 0.12) };
   if (type === 'oversell') return { icon: 'alert-circle' as const, color: colors.warning, background: alpha(colors.warning, isDark ? 0.22 : 0.12) };
-  if (type === 'invoice_deleted') return { icon: 'rotate-ccw' as const, color: colors.destructive, background: alpha(colors.destructive, isDark ? 0.2 : 0.1) };
+  if (type === 'sale_cancelled' || type === 'invoice_deleted' || type === 'return') return { icon: 'rotate-ccw' as const, color: colors.destructive, background: alpha(colors.destructive, isDark ? 0.2 : 0.1) };
   if (type === 'manual_adjustment') return { icon: 'tag' as const, color: colors.warning, background: alpha(colors.warning, isDark ? 0.22 : 0.12) };
+  if (type === 'stock_correction') return { icon: 'tool' as const, color: colors.warning, background: alpha(colors.warning, isDark ? 0.22 : 0.12) };
   return { icon: 'package' as const, color: colors.accent, background: alpha(colors.accent, isDark ? 0.2 : 0.1) };
 };
 
@@ -34,14 +35,17 @@ const movementTitle = (movement: StockMovement) => {
   const quantity = Math.abs(Number(movement.quantityChange || 0));
   if (movement.type === 'sale') return `Sold ${quantity} ${quantity === 1 ? 'unit' : 'units'}`;
   if (movement.type === 'oversell') return `Oversold ${quantity} ${quantity === 1 ? 'unit' : 'units'}`;
-  if (movement.type === 'invoice_deleted') return `Returned ${quantity} ${quantity === 1 ? 'unit' : 'units'}`;
+  if (movement.type === 'sale_cancelled' || movement.type === 'invoice_deleted') return `Returned ${quantity} ${quantity === 1 ? 'unit' : 'units'}`;
+  if (movement.type === 'return') return `Return ${quantity} ${quantity === 1 ? 'unit' : 'units'}`;
   if (movement.type === 'manual_adjustment') return 'Stock updated';
-  if (movement.type === 'initial_stock') return 'Opening stock added';
+  if (movement.type === 'stock_correction') return 'Stock corrected';
+  if (movement.type === 'opening_stock' || movement.type === 'initial_stock') return 'Opening stock added';
+  if (movement.type === 'purchase') return `Purchased ${quantity} ${quantity === 1 ? 'unit' : 'units'}`;
   return movement.type.replace(/_/g, ' ');
 };
 
 const movementSubtitle = (movement: StockMovement) => {
-  const invoiceText = [movement.invoiceNumber, movement.customerName].filter(Boolean).join(' · ');
+  const invoiceText = [movement.documentNumber || movement.invoiceNumber, movement.customerName].filter(Boolean).join(' · ');
   if (invoiceText) return invoiceText;
   return movement.note || `Stock ${movement.stockBefore} to ${movement.stockAfter}`;
 };

@@ -11,12 +11,13 @@ import { useAppDialog } from '@/components/AppDialog';
 import { FormTextInput } from '@/components/FormTextInput';
 import { PhoneInput } from '@/components/PhoneInput';
 import { Screen } from '@/components/Screen';
+import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
-import { BusinessProfile } from '@/types';
+import { BusinessProfile, BusinessProfileFormValues } from '@/types';
 import { settingsSchema } from '@/validation/schemas';
 
-const profileDefaults = (profile?: BusinessProfile) => ({
+const profileDefaults = (profile?: BusinessProfile): BusinessProfileFormValues => ({
   businessName: profile?.businessName || '',
   logoUrl: profile?.logoUrl || '',
   gstNumber: profile?.gstNumber || '',
@@ -55,7 +56,7 @@ export function BusinessProfileScreen() {
   const isDark = theme.dark;
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
-  const form = useForm<any>({
+  const form = useForm<BusinessProfileFormValues>({
     defaultValues: profileDefaults(user?.businessProfile),
     resolver: zodResolver(settingsSchema)
   });
@@ -69,7 +70,7 @@ export function BusinessProfileScreen() {
     mutationFn: authApi.updateSettings,
     onSuccess: async (response) => {
       await setUser(response.user);
-      queryClient.invalidateQueries({ queryKey: ['report'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
       showDialog({ title: 'Business profile saved', message: 'Your business details have been updated.', tone: 'success' });
     },
     onError: (error) => showDialog({ title: 'Could not save profile', message: apiErrorMessage(error), tone: 'error' })

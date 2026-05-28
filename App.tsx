@@ -9,13 +9,15 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider, Text } from 'react-native-paper';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { AppDialogProvider } from '@/components/AppDialog';
 import { BrandMark } from '@/components/BrandMark';
 import { queryClient } from '@/query/queryClient';
+import { queryPersistOptions } from '@/query/persistence';
+import { setupNetworkBridge } from '@/query/networkBridge';
 import { useAuthStore } from '@/store/authStore';
 import { darkTheme, lightTheme } from '@/theme/theme';
 
@@ -32,10 +34,11 @@ export default function App() {
   });
 
   useEffect(() => { void hydrate(); }, [hydrate]);
+  useEffect(() => setupNetworkBridge(), []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider client={queryClient} persistOptions={queryPersistOptions}>
         <PaperProvider theme={theme}>
           <AppDialogProvider>
             <SafeAreaProvider>
@@ -50,7 +53,7 @@ export default function App() {
             </SafeAreaProvider>
           </AppDialogProvider>
         </PaperProvider>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </GestureHandlerRootView>
   );
 }

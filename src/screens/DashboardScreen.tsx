@@ -10,6 +10,9 @@ import { useAppDialog } from '@/components/AppDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
 import { StatCard } from '@/components/StatCard';
+import { DashboardScreenProps } from '@/navigation/types';
+import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
+import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { formatCurrency, formatDate } from '@/utils/format';
 
@@ -246,9 +249,11 @@ function TrendChart({ currency, data, accent, gridColor, baselineColor, axisLabe
   );
 }
 
-export function DashboardScreen({ navigation }: any) {
+export function DashboardScreen({ navigation }: DashboardScreenProps) {
   const theme = useTheme();
   const { showDialog } = useAppDialog();
+  const { can } = usePermissions();
+  const canCreateInvoice = can(PERMISSION.invoicesCreate);
   const isDark = theme.dark;
   const colors = appColors(isDark);
   const scrollY = useMemo(() => new Animated.Value(0), []);
@@ -259,7 +264,7 @@ export function DashboardScreen({ navigation }: any) {
       { scale: scrollY.interpolate({ inputRange: [0, 190], outputRange: [1, 0.975], extrapolate: 'clamp' }) }
     ]
   };
-  const query = useQuery({ queryKey: ['report'], queryFn: reportsApi.summary });
+  const query = useQuery({ queryKey: queryKeys.report.all, queryFn: () => reportsApi.summary() });
 
   useEffect(() => {
     if (query.error) showDialog({ title: 'Could not load dashboard', message: apiErrorMessage(query.error), tone: 'error' });
@@ -276,6 +281,7 @@ export function DashboardScreen({ navigation }: any) {
 
   const quickActions: { label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; onPress: () => void }[] = [
     { label: 'Invoices', icon: 'file-document', onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList' }) },
+    { label: 'Payments', icon: 'cash-multiple', onPress: () => navigation.navigate('Payments') },
     { label: 'Products', icon: 'package-variant-closed', onPress: () => navigation.navigate('CatalogTab', { screen: 'Products' }) },
     { label: 'Reports', icon: 'chart-box', onPress: () => navigation.navigate('Reports') }
   ];
@@ -321,18 +327,20 @@ export function DashboardScreen({ navigation }: any) {
           <Text style={styles.heroTitle}>Today billing pulse</Text>
           <Text style={styles.heroBody}>Track invoices, stock, and cash flow without digging through desktop screens.</Text>
           <View style={styles.heroActions}>
-            <Button
-              mode="contained"
-              icon={({ size, color }) => <Feather name="plus" size={size} color={color} strokeWidth={3} />}
-              buttonColor="#FFFFFF"
-              textColor={colors.primaryStrong}
-              onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceCreate' })}
-              contentStyle={styles.heroButtonContent}
-              labelStyle={styles.heroButtonLabel}
-              style={styles.heroButton}
-            >
-              Create Invoice
-            </Button>
+            {canCreateInvoice ? (
+              <Button
+                mode="contained"
+                icon={({ size, color }) => <Feather name="plus" size={size} color={color} strokeWidth={3} />}
+                buttonColor="#FFFFFF"
+                textColor={colors.primaryStrong}
+                onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceCreate' })}
+                contentStyle={styles.heroButtonContent}
+                labelStyle={styles.heroButtonLabel}
+                style={styles.heroButton}
+              >
+                Create Invoice
+              </Button>
+            ) : <View />}
             <Pressable
               onPress={() => void query.refetch()}
               style={({ pressed }) => [styles.heroGhostButton, { borderColor: alpha('#C3C0FF', 0.36), backgroundColor: alpha('#1C1A4A', pressed ? 0.55 : 0.36) }]}
