@@ -11,6 +11,7 @@ import { apiErrorMessage } from '@/api/client';
 import { AppCard } from '@/components/AppCard';
 import { useAppDialog } from '@/components/AppDialog';
 import { FormTextInput } from '@/components/FormTextInput';
+import { LoginScreenProps } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
 import { loginSchema } from '@/validation/schemas';
@@ -138,7 +139,7 @@ function FloatingBubbles() {
   );
 }
 
-export function LoginScreen({ navigation }: any) {
+export function LoginScreen({ navigation }: LoginScreenProps) {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
@@ -153,7 +154,7 @@ export function LoginScreen({ navigation }: any) {
       { scale: scrollY.interpolate({ inputRange: [0, 180], outputRange: [1, 0.97], extrapolate: 'clamp' }) }
     ]
   };
-  const form = useForm<any>({ defaultValues: { email: '', password: '' }, resolver: zodResolver(loginSchema) });
+  const form = useForm<{ email: string; password: string }>({ defaultValues: { email: '', password: '' }, resolver: zodResolver(loginSchema) });
   const mutation = useMutation({ mutationFn: authApi.login, onSuccess: setSession, onError: (error) => showDialog({ title: 'Login failed', message: apiErrorMessage(error, 'Login failed'), tone: 'error' }) });
 
   return (

@@ -22,8 +22,12 @@ import {
   resolveProductPriceRange
 } from '@/components/ProductFilterSheet';
 import { Screen } from '@/components/Screen';
+import { ProductsScreenProps } from '@/navigation/types';
+import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
+import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
+import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
-import { Product } from '@/types';
+import { Product, ProductFormValues } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/format';
 import { productSchema } from '@/validation/schemas';
 
@@ -59,16 +63,18 @@ const reportRangeLabel = (range: { from?: string; to?: string }) => {
 };
 const isProductSortOption = (value?: string): value is ProductSortOption => Boolean(value && value in SORT_LABELS);
 
-export function ProductsScreen({ navigation, route }: any) {
+export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
   const queryClient = useQueryClient();
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
+  const { can } = usePermissions();
+  const canManage = can(PERMISSION.productsManage);
   const routeFrom = route?.params?.from || '';
   const routeTo = route?.params?.to || '';
   const routeSort = route?.params?.sort;
-  const reportRange = route?.params?.fromReports && (routeFrom || routeTo) ? { from: routeFrom, to: routeTo } : null;
+  const reportRange = useMemo(() => route?.params?.fromReports && (routeFrom || routeTo) ? { from: routeFrom, to: routeTo } : null, [route?.params?.fromReports, routeFrom, routeTo]);
   const activeSort = route?.params?.fromReports && isProductSortOption(routeSort) ? routeSort : undefined;
   const [filters, setFilters] = useState<ProductFilters>(emptyProductFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -76,12 +82,13 @@ export function ProductsScreen({ navigation, route }: any) {
   const [editing, setEditing] = useState<Product | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<Product | null>(null);
   const [historyProduct, setHistoryProduct] = useState<Product | null>(null);
-  const form = useForm<any>({ defaultValues: blankProduct, resolver: zodResolver(productSchema) });
+  const form = useForm<ProductFormValues>({ defaultValues: blankProduct, resolver: zodResolver(productSchema) });
   const highlighted = route?.params?.highlight;
+  const debouncedSearch = useDebouncedValue(filters.search, 300);
   const queryParams = useMemo(() => {
     const { minPrice, maxPrice } = resolveProductPriceRange(filters.priceRange);
     return {
-      search: filters.search,
+      search: debouncedSearch,
       category: filters.category,
       stockStatus: filters.stockStatus,
       minPrice,
@@ -90,9 +97,9 @@ export function ProductsScreen({ navigation, route }: any) {
       to: reportRange?.to || '',
       sort: activeSort || filters.sort
     };
-  }, [filters, reportRange, activeSort]);
-  const query = useInfiniteQuery({ queryKey: ['products', queryParams], initialPageParam: 1, queryFn: ({ pageParam }) => productsApi.page({ ...queryParams, page: pageParam, limit: PAGE_SIZE }), getNextPageParam: (lastPage) => lastPage.pagination.nextPage });
-  const categoriesQuery = useQuery({ queryKey: ['products', 'categories'], queryFn: productsApi.categories });
+  }, [debouncedSearch, filters.category, filters.stockStatus, filters.priceRange, filters.sort, reportRange, activeSort]);
+  const query = useInfiniteQuery({ queryKey: queryKeys.products.list(queryParams), initialPageParam: 1, queryFn: ({ pageParam }) => productsApi.page({ ...queryParams, page: pageParam, limit: PAGE_SIZE }), getNextPageParam: (lastPage) => lastPage.pagination.nextPage });
+  const categoriesQuery = useQuery({ queryKey: queryKeys.products.categories, queryFn: productsApi.categories });
   const products = useMemo(() => query.data?.pages.flatMap((page) => page.products) ?? [], [query.data]);
   const isInitialLoading = query.isLoading && !products.length;
   const isRefreshing = query.isRefetching && !query.isFetchingNextPage;
@@ -102,12 +109,12 @@ export function ProductsScreen({ navigation, route }: any) {
     ((activeSort || filters.sort) !== 'updated' ? 1 : 0);
   const totalCount = query.data?.pages[0]?.pagination.total ?? 0;
   const visibleCount = products.length;
-  const save = useMutation({ mutationFn: (values: any) => {
+  const save = useMutation({ mutationFn: (values: ProductFormValues) => {
     const payload = { ...values, price: Number(values.price), stockQuantity: Number(values.stockQuantity), lowStockThreshold: values.lowStockThreshold === '' ? 5 : Number(values.lowStockThreshold) };
     return editing?._id ? productsApi.update(editing._id, payload) : productsApi.create(payload);
-  }, onSuccess: () => { setEditing(undefined); queryClient.invalidateQueries({ queryKey: ['products'] }); }, onError: (error) => showDialog({ title: 'Could not save product', message: apiErrorMessage(error), tone: 'error' }) });
-  const remove = useMutation({ mutationFn: (id: string) => productsApi.remove(id), onSuccess: () => { setDeleting(null); queryClient.invalidateQueries({ queryKey: ['products'] }); }, onError: (error) => showDialog({ title: 'Could not delete product', message: apiErrorMessage(error), tone: 'error' }) });
-  const history = useQuery({ queryKey: ['products', historyProduct?._id, 'stock-movements'], enabled: Boolean(historyProduct), queryFn: () => productsApi.stockMovementsPage(historyProduct!._id, { page: 1, limit: 30 }) });
+  }, onSuccess: () => { setEditing(undefined); queryClient.invalidateQueries({ queryKey: queryKeys.products.all }); }, onError: (error) => showDialog({ title: 'Could not save product', message: apiErrorMessage(error), tone: 'error' }) });
+  const remove = useMutation({ mutationFn: (id: string) => productsApi.remove(id), onSuccess: () => { setDeleting(null); queryClient.invalidateQueries({ queryKey: queryKeys.products.all }); }, onError: (error) => showDialog({ title: 'Could not delete product', message: apiErrorMessage(error), tone: 'error' }) });
+  const history = useQuery({ queryKey: queryKeys.products.stockMovements(historyProduct?._id), enabled: Boolean(historyProduct), queryFn: () => productsApi.stockMovementsPage(historyProduct!._id, { page: 1, limit: 30 }) });
 
   useEffect(() => {
     if (editing === undefined) return;
@@ -250,15 +257,19 @@ export function ProductsScreen({ navigation, route }: any) {
             </Text>
           </View>
           <View style={styles.iconActions}>
-            <Pressable onPress={() => setEditing(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.08) }]}>
-              <Feather name="edit-2" size={14} color={theme.colors.primary} />
-            </Pressable>
+            {canManage ? (
+              <Pressable onPress={() => setEditing(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.08) }]}>
+                <Feather name="edit-2" size={14} color={theme.colors.primary} />
+              </Pressable>
+            ) : null}
             <Pressable onPress={() => setHistoryProduct(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: isDark ? colors.surface : alpha(colors.primaryStrong, 0.05) }]}>
               <Feather name="clock" size={14} color={theme.colors.onSurfaceVariant} />
             </Pressable>
-            <Pressable onPress={() => setDeleting(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: alpha(colors.destructive, isDark ? 0.16 : 0.08) }]}>
-              <Feather name="trash-2" size={14} color={theme.colors.error} />
-            </Pressable>
+            {canManage ? (
+              <Pressable onPress={() => setDeleting(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: alpha(colors.destructive, isDark ? 0.16 : 0.08) }]}>
+                <Feather name="trash-2" size={14} color={theme.colors.error} />
+              </Pressable>
+            ) : null}
           </View>
         </View>
       </View>
@@ -267,6 +278,8 @@ export function ProductsScreen({ navigation, route }: any) {
 
   const headerCreateAction = (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Add product"
       onPress={() => setEditing(null)}
       style={({ pressed }) => [
         styles.headerCreateBtn,
@@ -281,7 +294,7 @@ export function ProductsScreen({ navigation, route }: any) {
   );
 
   return (
-    <Screen title="Inventory" scroll={false} headerAction={headerCreateAction} contentStyle={styles.screenContent}>
+    <Screen title="Inventory" scroll={false} headerAction={canManage ? headerCreateAction : undefined} contentStyle={styles.screenContent}>
       {stickyHeader}
       <FlatList
         data={products}
@@ -294,7 +307,11 @@ export function ProductsScreen({ navigation, route }: any) {
         onRefresh={() => query.refetch()}
         onEndReached={loadMoreProducts}
         onEndReachedThreshold={0.35}
-        ListEmptyComponent={isInitialLoading ? <ActivityIndicator color={theme.colors.primary} style={styles.emptyLoader} /> : <EmptyState title="No products" message="Add your first product to speed up invoice creation." actionLabel="Add product" onAction={() => setEditing(null)} />}
+        removeClippedSubviews
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        ListEmptyComponent={isInitialLoading ? <ActivityIndicator color={theme.colors.primary} style={styles.emptyLoader} /> : <EmptyState title="No products" message="Add your first product to speed up invoice creation." actionLabel={canManage ? 'Add product' : undefined} onAction={canManage ? () => setEditing(null) : undefined} />}
         ListFooterComponent={renderProductsFooter}
         renderItem={renderProductCard}
       />

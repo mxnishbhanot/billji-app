@@ -11,6 +11,7 @@ import { apiErrorMessage } from '@/api/client';
 import { AppCard } from '@/components/AppCard';
 import { useAppDialog } from '@/components/AppDialog';
 import { FormTextInput } from '@/components/FormTextInput';
+import { RegisterScreenProps } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
 import { registerSchema } from '@/validation/schemas';
@@ -138,7 +139,7 @@ function FloatingBubbles() {
   );
 }
 
-export function RegisterScreen({ navigation }: any) {
+export function RegisterScreen({ navigation }: RegisterScreenProps) {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
@@ -153,7 +154,7 @@ export function RegisterScreen({ navigation }: any) {
       { scale: scrollY.interpolate({ inputRange: [0, 180], outputRange: [1, 0.97], extrapolate: 'clamp' }) }
     ]
   };
-  const form = useForm<any>({ defaultValues: { name: '', email: '', password: '' }, resolver: zodResolver(registerSchema) });
+  const form = useForm<{ name: string; email: string; password: string }>({ defaultValues: { name: '', email: '', password: '' }, resolver: zodResolver(registerSchema) });
   const mutation = useMutation({ mutationFn: authApi.register, onSuccess: setSession, onError: (error) => showDialog({ title: 'Registration failed', message: apiErrorMessage(error, 'Registration failed'), tone: 'error' }) });
 
   return (

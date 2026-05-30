@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput as RNTextInput, View, type TextStyle } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { Text, useTheme } from 'react-native-paper';
-import { invoicesApi } from '@/api/endpoints';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { SegmentedButtons, Text, useTheme } from 'react-native-paper';
+import { draftsApi, invoicesApi } from '@/api/endpoints';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
+import { StatusPill, paymentStatusMeta } from '@/components/StatusPill';
 import {
   AmountRangePreset,
   DateRangePreset,
@@ -16,6 +17,11 @@ import {
   resolveAmountRange,
   resolveDateRange
 } from '@/components/InvoiceFilterSheet';
+import { safeInvoiceSortParam } from '@/navigation/params';
+import { InvoicesScreenProps } from '@/navigation/types';
+import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
+import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
+import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, statusTone, typeScale } from '@/theme/theme';
 import { Invoice, InvoiceStatus } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/format';
@@ -58,16 +64,19 @@ const reportRangeLabel = (range: { from?: string; to?: string }) => {
   return `${range.from ? formatDate(range.from) : 'Start'} - ${range.to ? formatDate(range.to) : 'Today'}`;
 };
 
-export function InvoicesScreen({ navigation, route }: any) {
+export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
+  const { can } = usePermissions();
+  const canCreate = can(PERMISSION.invoicesCreate);
   const routeFrom = route?.params?.from || '';
   const routeTo = route?.params?.to || '';
-  const routeSort = route?.params?.sort as InvoiceSortOption | undefined;
-  const reportRange = route?.params?.fromReports && (routeFrom || routeTo) ? { from: routeFrom, to: routeTo } : null;
+  const routeSort = safeInvoiceSortParam(route?.params?.sort) as InvoiceSortOption | undefined;
+  const reportRange = useMemo(() => route?.params?.fromReports && (routeFrom || routeTo) ? { from: routeFrom, to: routeTo } : null, [route?.params?.fromReports, routeFrom, routeTo]);
   const activeSort = route?.params?.fromReports && routeSort ? routeSort : undefined;
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [filterValues, setFilterValues] = useState<InvoiceFilterValues>(defaultInvoiceFilterValues);
   const [draftFilterValues, setDraftFilterValues] = useState<InvoiceFilterValues>(defaultInvoiceFilterValues);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -88,7 +97,7 @@ export function InvoicesScreen({ navigation, route }: any) {
     const to = reportRange ? reportRange.to : presetRange.to;
     const { minAmount, maxAmount } = resolveAmountRange(filterValues.amountRange);
     return {
-      search,
+      search: debouncedSearch,
       status: filterValues.status,
       from,
       to,
@@ -96,14 +105,17 @@ export function InvoicesScreen({ navigation, route }: any) {
       maxAmount,
       sort: activeSort || filterValues.sort
     };
-  }, [search, filterValues, reportRange, activeSort]);
+  }, [debouncedSearch, filterValues, reportRange, activeSort]);
 
   const query = useInfiniteQuery({
-    queryKey: ['invoices', queryParams],
+    queryKey: queryKeys.invoices.list(queryParams),
     initialPageParam: 1,
     queryFn: ({ pageParam }) => invoicesApi.page({ ...queryParams, page: pageParam, limit: PAGE_SIZE }),
     getNextPageParam: (lastPage) => lastPage.pagination.nextPage
   });
+
+  const draftsQuery = useQuery({ queryKey: queryKeys.drafts.all, queryFn: () => draftsApi.list('invoice') });
+  const draftCount = draftsQuery.data?.length ?? 0;
 
   const invoices = useMemo(() => query.data?.pages.flatMap((page) => page.invoices) ?? [], [query.data]);
   const isInitialLoading = query.isLoading && !invoices.length;
@@ -138,6 +150,16 @@ export function InvoicesScreen({ navigation, route }: any) {
 
   const stickyHeader = (
     <View style={[styles.stickyHeader, { backgroundColor: theme.colors.background }]}>
+      <SegmentedButtons
+        value="invoices"
+        onValueChange={(value) => {
+          if (value === 'orders') navigation.navigate('OrderList');
+        }}
+        buttons={[
+          { value: 'invoices', label: 'Invoices', icon: 'file-document' },
+          { value: 'orders', label: 'Orders', icon: 'clipboard-list-outline' }
+        ]}
+      />
       <View style={[styles.searchWrap, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.1) }]}>
         <Feather name="search" size={18} color={theme.colors.onSurfaceVariant} />
         <RNTextInput
@@ -167,6 +189,14 @@ export function InvoicesScreen({ navigation, route }: any) {
         </View>
       ) : null}
 
+      {draftCount > 0 ? (
+        <Pressable onPress={() => navigation.navigate('Drafts')} style={[styles.draftsLink, { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.08), borderColor: alpha(colors.primary, isDark ? 0.28 : 0.16) }]}>
+          <Feather name="file-text" size={14} color={theme.colors.primary} />
+          <Text style={[styles.draftsLinkText, { color: theme.colors.primary }]}>{draftCount} saved draft{draftCount === 1 ? '' : 's'}</Text>
+          <Feather name="chevron-right" size={15} color={theme.colors.primary} />
+        </Pressable>
+      ) : null}
+
       {activeFilterTags.length ? (
         <View style={styles.filterTagsRow}>
           {activeFilterTags.map((tag) => (
@@ -194,6 +224,8 @@ export function InvoicesScreen({ navigation, route }: any) {
     const tone = statusTone(item.status, isDark);
     const avatarBg = item.status === 'paid' ? alpha(colors.accent, isDark ? 0.22 : 0.14) : alpha(colors.primary, isDark ? 0.22 : 0.14);
     const avatarFg = item.status === 'paid' ? colors.accent : colors.primary;
+    const paymentMeta = item.paymentStatus !== 'paid' ? paymentStatusMeta(item.paymentStatus) : null;
+    const hasBalance = typeof item.balanceDue === 'number' && item.balanceDue > 0;
     return (
       <Pressable
         onPress={() => navigation.navigate('InvoiceDetail', { id: item._id })}
@@ -220,13 +252,19 @@ export function InvoicesScreen({ navigation, route }: any) {
           </View>
           <View style={styles.amountBlock}>
             <Text style={[styles.invoiceAmount, { color: theme.colors.onSurface }]}>{formatCurrency(item.total)}</Text>
+            {hasBalance ? (
+              <Text style={[styles.balanceDue, { color: colors.warning }]}>Due {formatCurrency(item.balanceDue)}</Text>
+            ) : null}
           </View>
         </View>
         <View style={[styles.cardDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) }]} />
         <View style={styles.cardBottom}>
-          <View style={[styles.statusPill, { backgroundColor: tone.background, borderColor: tone.border }]}>
-            <MaterialCommunityIcons name={statusIcon[item.status]} size={13} color={tone.foreground} />
-            <Text style={[styles.statusText, { color: tone.foreground }]}>{item.status}</Text>
+          <View style={styles.pillRow}>
+            <View style={[styles.statusPill, { backgroundColor: tone.background, borderColor: tone.border }]}>
+              <MaterialCommunityIcons name={statusIcon[item.status]} size={13} color={tone.foreground} />
+              <Text style={[styles.statusText, { color: tone.foreground }]}>{item.status}</Text>
+            </View>
+            {paymentMeta ? <StatusPill label={paymentMeta.label} tone={paymentMeta.tone} /> : null}
           </View>
           <View style={styles.viewHint}>
             <Text style={[styles.viewHintLabel, { color: theme.colors.primary }]}>View</Text>
@@ -253,7 +291,7 @@ export function InvoicesScreen({ navigation, route }: any) {
   );
 
   return (
-    <Screen title="Invoices" scroll={false} headerAction={headerCreateAction} contentStyle={styles.screenContent}>
+    <Screen title="Invoices" scroll={false} headerAction={canCreate ? headerCreateAction : undefined} contentStyle={styles.screenContent}>
       {stickyHeader}
       <FlatList
         data={invoices}
@@ -266,7 +304,11 @@ export function InvoicesScreen({ navigation, route }: any) {
         onEndReached={loadMoreInvoices}
         onEndReachedThreshold={0.35}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={isInitialLoading ? <ActivityIndicator color={theme.colors.primary} style={styles.emptyLoader} /> : <EmptyState title="No invoices found" message="Try a different search or create a new invoice." actionLabel="Create invoice" onAction={() => navigation.navigate('InvoiceCreate')} />}
+        removeClippedSubviews
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        ListEmptyComponent={isInitialLoading ? <ActivityIndicator color={theme.colors.primary} style={styles.emptyLoader} /> : <EmptyState title="No invoices found" message="Try a different search or create a new invoice." actionLabel={canCreate ? 'Create invoice' : undefined} onAction={canCreate ? () => navigation.navigate('InvoiceCreate') : undefined} />}
         ListFooterComponent={renderInvoicesFooter}
         renderItem={renderInvoiceCard}
       />
@@ -287,6 +329,7 @@ const styles = StyleSheet.create({
   amountBlock: { alignItems: 'flex-end' },
   avatar: { alignItems: 'center', borderRadius: radii.pill, height: 44, justifyContent: 'center', width: 44 },
   avatarText: { ...fontStyles.bold, fontSize: 15, letterSpacing: 0.4 },
+  balanceDue: { ...fontStyles.semiBold, fontSize: 11, marginTop: 2 },
   cardBottom: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   cardDivider: { height: 1, marginBottom: 12, marginTop: 14 },
   cardTitleBlock: { flex: 1, minWidth: 0 },
@@ -294,6 +337,8 @@ const styles = StyleSheet.create({
   countBold: { ...fontStyles.bold },
   countStrip: { alignItems: 'center', flexDirection: 'row', gap: 8, justifyContent: 'space-between', marginTop: 4, paddingHorizontal: 2 },
   countText: { ...typeScale.caption, fontSize: 12 },
+  draftsLink: { alignItems: 'center', alignSelf: 'flex-start', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingVertical: 6 },
+  draftsLinkText: { ...fontStyles.semiBold, fontSize: 12 },
   emptyLoader: { marginTop: 40 },
   endText: { ...typeScale.caption, marginVertical: 16, textAlign: 'center' },
   filterBadge: {
@@ -338,6 +383,7 @@ const styles = StyleSheet.create({
   invoiceTitle: { ...fontStyles.bold, fontSize: 15 },
   list: { flex: 1 },
   listContent: { paddingBottom: 24 },
+  pillRow: { alignItems: 'center', flexDirection: 'row', flexShrink: 1, flexWrap: 'wrap', gap: 6 },
   stickyHeader: { gap: 12, marginBottom: 10, paddingBottom: 4, paddingTop: 4 },
   screenContent: { flex: 1 },
   searchInput: { ...fontStyles.regular, flex: 1, fontSize: 14, paddingHorizontal: 0, paddingVertical: 0 },

@@ -3,17 +3,22 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Button, Dialog, Portal, SegmentedButtons, Text, useTheme } from 'react-native-paper';
+import { Button, Dialog, Portal, Text, useTheme } from 'react-native-paper';
 import Svg, { Circle, Defs, G, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { invoicesApi } from '@/api/endpoints';
+import { invoicesApi, paymentsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { FormTextInput } from '@/components/FormTextInput';
+import { PaymentHistorySheet } from '@/components/PaymentHistorySheet';
+import { RecordPaymentSheet } from '@/components/RecordPaymentSheet';
 import { Screen } from '@/components/Screen';
+import { InvoiceDetailScreenProps } from '@/navigation/types';
 import { openOrSharePdf } from '@/services/pdf';
+import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
+import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, statusTone, typeScale } from '@/theme/theme';
-import { InvoiceStatus } from '@/types';
+import { InvoicePaymentStatus, InvoiceStatus, RecordPaymentPayload } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/format';
 import { emailSchema } from '@/validation/schemas';
 import { useState } from 'react';
@@ -45,31 +50,72 @@ function HeroPattern() {
 const statusIconName = (status: InvoiceStatus): keyof typeof MaterialCommunityIcons.glyphMap =>
   status === 'paid' ? 'check-decagram' : status === 'cancelled' ? 'close-circle' : 'clock-outline';
 
-export function InvoiceDetailScreen({ route, navigation }: any) {
+const paymentStatusIconName = (status: InvoicePaymentStatus): keyof typeof MaterialCommunityIcons.glyphMap =>
+  status === 'paid' ? 'check-decagram' : status === 'partial' ? 'progress-clock' : status === 'refunded' ? 'cash-refund' : 'clock-outline';
+
+export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenProps) {
   const { id } = route.params;
   const queryClient = useQueryClient();
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
+  const { can } = usePermissions();
+  const canRecordPayment = can(PERMISSION.paymentsRecord);
+  const canUpdateInvoice = can(PERMISSION.invoicesUpdate);
+  const canDeleteInvoice = can(PERMISSION.invoicesDelete);
   const [emailOpen, setEmailOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [localStatus, setLocalStatus] = useState<InvoiceStatus | null>(null);
-  const emailForm = useForm<any>({ defaultValues: { email: '' }, resolver: zodResolver(emailSchema) });
-  const query = useQuery({ queryKey: ['invoices', id], queryFn: () => invoicesApi.get(id) });
+  const [cancelling, setCancelling] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const emailForm = useForm<{ email: string }>({ defaultValues: { email: '' }, resolver: zodResolver(emailSchema) });
+  const query = useQuery({ queryKey: queryKeys.invoices.detail(id), queryFn: () => invoicesApi.get(id) });
+  const paymentsQuery = useQuery({ queryKey: queryKeys.payments.invoice(id), queryFn: () => paymentsApi.list({ invoiceId: id }) });
   const invoice = query.data;
-  const invalidate = () => { queryClient.invalidateQueries({ queryKey: ['invoices'] }); queryClient.invalidateQueries({ queryKey: ['products'] }); queryClient.invalidateQueries({ queryKey: ['report'] }); };
-  const status = useMutation({ mutationFn: (next: InvoiceStatus) => invoicesApi.status(id, next), onSuccess: () => { setLocalStatus(null); invalidate(); query.refetch(); }, onError: (error) => showDialog({ title: 'Could not update status', message: apiErrorMessage(error), tone: 'error' }) });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.payments.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
+  };
+  const cancelInvoice = useMutation({ mutationFn: () => invoicesApi.status(id, 'cancelled'), onSuccess: () => { setCancelling(false); invalidate(); query.refetch(); }, onError: (error) => { setCancelling(false); showDialog({ title: 'Could not cancel invoice', message: apiErrorMessage(error), tone: 'error' }); } });
   const remove = useMutation({ mutationFn: () => invoicesApi.remove(id), onSuccess: () => { setDeleting(false); invalidate(); navigation.navigate('InvoiceList'); }, onError: (error) => showDialog({ title: 'Could not delete invoice', message: apiErrorMessage(error), tone: 'error' }) });
   const sendEmail = useMutation({ mutationFn: (email: string) => invoicesApi.email(id, email), onSuccess: () => { setEmailOpen(false); query.refetch(); }, onError: (error) => showDialog({ title: 'Could not send email', message: apiErrorMessage(error), tone: 'error' }) });
+  const recordPayment = useMutation({
+    mutationFn: (payload: RecordPaymentPayload) => paymentsApi.recordInvoicePayment(id, payload),
+    onSuccess: () => {
+      setPaymentOpen(false);
+      invalidate();
+      query.refetch();
+      paymentsQuery.refetch();
+    },
+    onError: (error) => showDialog({ title: 'Could not record payment', message: apiErrorMessage(error), tone: 'error' })
+  });
   const shareWhatsApp = async () => { try { const result = await invoicesApi.whatsapp(id); await Linking.openURL(result.link); } catch (error) { showDialog({ title: 'Could not prepare WhatsApp link', message: apiErrorMessage(error), tone: 'error' }); } };
 
   if (!invoice) return <Screen title="Invoice"><Text>Loading invoice...</Text></Screen>;
 
-  const currentStatus = localStatus ?? invoice.status;
-  const hasStatusChange = localStatus !== null && localStatus !== invoice.status;
+  const currentStatus = invoice.status;
+  const paidAmount = invoice.paidAmount ?? (invoice.paymentStatus === 'paid' ? invoice.total : 0);
+  const balanceDue = invoice.balanceDue ?? Math.max(invoice.total - paidAmount, 0);
+  const paymentStatus = invoice.paymentStatus ?? (currentStatus === 'paid' ? 'paid' : 'unpaid');
   const tone = statusTone(currentStatus, isDark);
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.08);
+  const isCancelled = currentStatus === 'cancelled';
+  const hasPayments = paidAmount > 0 || (paymentsQuery.data?.length ?? 0) > 0;
+  const requestCancel = () => {
+    if (hasPayments) {
+      showDialog({
+        title: 'Refund before cancelling',
+        message: 'This invoice has recorded payments. Refund or reverse them first, then cancel.',
+        tone: 'error'
+      });
+      return;
+    }
+    setCancelling(true);
+  };
 
   const actions: { label: string; icon: keyof typeof Feather.glyphMap; onPress: () => void }[] = [
     { label: 'PDF', icon: 'file-text', onPress: () => openOrSharePdf(invoice.pdfUrl, invoice.invoiceNumber) },
@@ -160,36 +206,68 @@ export function InvoiceDetailScreen({ route, navigation }: any) {
       <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
         <Text style={[styles.sectionTitle, { color: theme.colors.onSurface, marginBottom: 12 }]}>Payment status</Text>
         <View style={[styles.statusPreview, { backgroundColor: tone.background, borderColor: tone.border }]}>
-          <MaterialCommunityIcons name={statusIconName(currentStatus)} size={16} color={tone.foreground} />
-          <Text style={[styles.statusPreviewText, { color: tone.foreground }]}>{currentStatus}</Text>
+          <MaterialCommunityIcons name={paymentStatusIconName(paymentStatus)} size={16} color={tone.foreground} />
+          <Text style={[styles.statusPreviewText, { color: tone.foreground }]}>{paymentStatus}</Text>
         </View>
-        <SegmentedButtons
-          value={currentStatus}
-          onValueChange={(value) => setLocalStatus(value as InvoiceStatus)}
-          buttons={[
-            { value: 'pending', label: 'Pending' },
-            { value: 'paid', label: 'Paid' },
-            { value: 'cancelled', label: 'Cancelled' }
-          ]}
-        />
+        <View style={styles.paymentSummaryRows}>
+          <View style={styles.totalRow}>
+            <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>Paid</Text>
+            <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>{formatCurrency(paidAmount)}</Text>
+          </View>
+          <View style={styles.totalRow}>
+            <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>Balance due</Text>
+            <Text style={[styles.totalValue, { color: balanceDue > 0 ? colors.destructive : theme.colors.onSurface }]}>{formatCurrency(balanceDue)}</Text>
+          </View>
+        </View>
+        {canRecordPayment && !isCancelled && balanceDue > 0 ? (
+          <Button mode="contained" icon="cash-plus" onPress={() => setPaymentOpen(true)} style={styles.recordPaymentButton}>
+            Record payment
+          </Button>
+        ) : null}
+        {paymentsQuery.data?.length ? (
+          <>
+            <View style={[styles.paymentHistory, { borderColor: cardBorder }]}>
+              {paymentsQuery.data.slice(0, 3).map((payment) => (
+                <View key={payment._id} style={styles.paymentHistoryRow}>
+                  <Text style={[styles.paymentHistoryLabel, { color: theme.colors.onSurface }]}>{payment.method.replace('_', ' ')}</Text>
+                  <Text style={[styles.paymentHistoryValue, { color: theme.colors.onSurfaceVariant }]}>{formatCurrency(payment.amount)}</Text>
+                </View>
+              ))}
+            </View>
+            <Pressable onPress={() => setHistoryOpen(true)} style={styles.historyLink} hitSlop={8}>
+              <Text style={[styles.historyLinkText, { color: theme.colors.primary }]}>
+                {paymentsQuery.data.length > 3 ? `View all ${paymentsQuery.data.length} payments` : 'View payment history'}
+              </Text>
+              <Feather name="chevron-right" size={14} color={theme.colors.primary} />
+            </Pressable>
+          </>
+        ) : null}
       </View>
 
       <View style={styles.footerActions}>
-        {hasStatusChange && (
-          <Button mode="contained" loading={status.isPending} onPress={() => status.mutate(localStatus)} style={styles.footerButton}>
-            Save invoice
+        {canUpdateInvoice && !isCancelled ? (
+          <Button
+            mode="outlined"
+            textColor={theme.colors.error}
+            icon={({ size, color }) => <Feather name="slash" size={size} color={color} />}
+            onPress={requestCancel}
+            style={styles.footerButton}
+          >
+            Cancel invoice
           </Button>
-        )}
-        <Button
-          mode="contained"
-          buttonColor={theme.colors.error}
-          textColor={theme.colors.onError}
-          icon={({ size, color }) => <Feather name="trash-2" size={size} color={color} />}
-          onPress={() => setDeleting(true)}
-          style={styles.footerButton}
-        >
-          Delete invoice
-        </Button>
+        ) : null}
+        {canDeleteInvoice ? (
+          <Button
+            mode="contained"
+            buttonColor={theme.colors.error}
+            textColor={theme.colors.onError}
+            icon={({ size, color }) => <Feather name="trash-2" size={size} color={color} />}
+            onPress={() => setDeleting(true)}
+            style={styles.footerButton}
+          >
+            Delete invoice
+          </Button>
+        ) : null}
       </View>
 
       <Portal>
@@ -202,6 +280,22 @@ export function InvoiceDetailScreen({ route, navigation }: any) {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+
+      <RecordPaymentSheet
+        visible={paymentOpen}
+        balanceDue={balanceDue}
+        loading={recordPayment.isPending}
+        onClose={() => setPaymentOpen(false)}
+        onSubmit={(payload) => recordPayment.mutate(payload)}
+      />
+      <PaymentHistorySheet
+        visible={historyOpen}
+        payments={paymentsQuery.data ?? []}
+        loading={paymentsQuery.isLoading}
+        onClose={() => setHistoryOpen(false)}
+      />
+
+      <ConfirmDialog visible={cancelling} title="Cancel invoice?" message="This marks the invoice as cancelled. It stays on record but is excluded from active dues." confirmLabel="Cancel invoice" onCancel={() => setCancelling(false)} onConfirm={() => cancelInvoice.mutate()} />
       <ConfirmDialog visible={deleting} title="Delete invoice?" message="This permanently removes the invoice and returns catalog stock for product items." onCancel={() => setDeleting(false)} onConfirm={() => remove.mutate()} />
     </Screen>
   );
@@ -241,6 +335,8 @@ const styles = StyleSheet.create({
   heroEyebrow: { ...fontStyles.bold, color: '#C7D2FE', fontSize: 10, letterSpacing: 1.4 },
   heroEyebrowBadge: { alignSelf: 'flex-start', borderRadius: radii.pill, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 3 },
   heroInner: { padding: 22 },
+  historyLink: { alignItems: 'center', alignSelf: 'flex-start', flexDirection: 'row', gap: 2, marginTop: 12 },
+  historyLinkText: { ...fontStyles.semiBold, fontSize: 13 },
   heroStatusPill: {
     alignItems: 'center',
     alignSelf: 'flex-start',
@@ -257,6 +353,12 @@ const styles = StyleSheet.create({
   itemName: { ...fontStyles.semiBold, fontSize: 14 },
   itemRow: { alignItems: 'center', flexDirection: 'row', gap: 12, justifyContent: 'space-between', paddingVertical: 12 },
   itemTotal: { ...fontStyles.bold, fontSize: 14 },
+  paymentHistory: { borderTopWidth: 1, gap: 8, marginBottom: 14, marginTop: 12, paddingTop: 12 },
+  paymentHistoryLabel: { ...fontStyles.semiBold, fontSize: 13, textTransform: 'capitalize' },
+  paymentHistoryRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  paymentHistoryValue: { ...fontStyles.semiBold, fontSize: 13 },
+  paymentSummaryRows: { gap: 8, marginBottom: 12 },
+  recordPaymentButton: { borderRadius: radii.input, marginBottom: 12 },
   sectionCard: { borderRadius: radii.lg, borderWidth: 1, marginBottom: 16, padding: 16 },
   sectionHead: { alignItems: 'center', flexDirection: 'row', gap: 10, justifyContent: 'space-between', marginBottom: 6 },
   sectionTitle: { ...fontStyles.bold, fontSize: 16 },

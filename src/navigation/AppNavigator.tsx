@@ -11,26 +11,45 @@ import { LoginScreen } from '@/screens/LoginScreen';
 import { RegisterScreen } from '@/screens/RegisterScreen';
 import { ProductsScreen } from '@/screens/ProductsScreen';
 import { CustomersScreen } from '@/screens/CustomersScreen';
+import { CustomerDetailScreen } from '@/screens/CustomerDetailScreen';
 import { InvoicesScreen } from '@/screens/InvoicesScreen';
 import { InvoiceBuilderScreen } from '@/screens/InvoiceBuilderScreen';
 import { InvoiceDetailScreen } from '@/screens/InvoiceDetailScreen';
+import { DraftsScreen } from '@/screens/DraftsScreen';
+import { OrdersScreen } from '@/screens/OrdersScreen';
+import { OrderBuilderScreen } from '@/screens/OrderBuilderScreen';
+import { OrderDetailScreen } from '@/screens/OrderDetailScreen';
 import { ReportsScreen } from '@/screens/ReportsScreen';
+import { PaymentsScreen } from '@/screens/PaymentsScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { BusinessProfileScreen } from '@/screens/BusinessProfileScreen';
+import { ActivityLogScreen } from '@/screens/ActivityLogScreen';
+import { LedgerScreen } from '@/screens/LedgerScreen';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
+import {
+  AuthStackParamList,
+  CatalogStackParamList,
+  CustomersStackParamList,
+  DashboardStackParamList,
+  InvoiceStackParamList,
+  RootStackParamList,
+  SettingsStackParamList,
+  TabParamList
+} from './types';
 
-const AuthStack = createNativeStackNavigator<any>();
-const RootStack = createNativeStackNavigator<any>();
-const DashboardStack = createNativeStackNavigator<any>();
-const InvoiceStack = createNativeStackNavigator<any>();
-const CatalogStack = createNativeStackNavigator<any>();
-const SettingsStack = createNativeStackNavigator<any>();
-const Tabs = createBottomTabNavigator<any>();
-const navigationRef = createNavigationContainerRef<any>();
+const AuthStack = createNativeStackNavigator<AuthStackParamList>();
+const RootStack = createNativeStackNavigator<RootStackParamList>();
+const DashboardStack = createNativeStackNavigator<DashboardStackParamList>();
+const InvoiceStack = createNativeStackNavigator<InvoiceStackParamList>();
+const CatalogStack = createNativeStackNavigator<CatalogStackParamList>();
+const CustomersStack = createNativeStackNavigator<CustomersStackParamList>();
+const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
+const Tabs = createBottomTabNavigator<TabParamList>();
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
 const TAB_BAR_HEIGHT = 72;
 const TAB_BAR_BOTTOM_PADDING = 10;
-const tabIcons: Record<string, { active: keyof typeof MaterialCommunityIcons.glyphMap; inactive: keyof typeof MaterialCommunityIcons.glyphMap }> = {
+const tabIcons: Record<keyof TabParamList, { active: keyof typeof MaterialCommunityIcons.glyphMap; inactive: keyof typeof MaterialCommunityIcons.glyphMap }> = {
   DashboardTab: { active: 'home', inactive: 'home' },
   InvoicesTab: { active: 'file-document', inactive: 'file-document' },
   CatalogTab: { active: 'package-variant-closed', inactive: 'cube' },
@@ -52,6 +71,7 @@ function DashboardNavigator() {
     <DashboardStack.Navigator screenOptions={{ headerShown: false }}>
       <DashboardStack.Screen name="DashboardHome" component={DashboardScreen} />
       <DashboardStack.Screen name="Reports" component={ReportsScreen} />
+      <DashboardStack.Screen name="Payments" component={PaymentsScreen} />
     </DashboardStack.Navigator>
   );
 }
@@ -62,6 +82,10 @@ function InvoiceNavigator() {
       <InvoiceStack.Screen name="InvoiceList" component={InvoicesScreen} />
       <InvoiceStack.Screen name="InvoiceCreate" component={InvoiceBuilderScreen} />
       <InvoiceStack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
+      <InvoiceStack.Screen name="Drafts" component={DraftsScreen} />
+      <InvoiceStack.Screen name="OrderList" component={OrdersScreen} />
+      <InvoiceStack.Screen name="OrderCreate" component={OrderBuilderScreen} />
+      <InvoiceStack.Screen name="OrderDetail" component={OrderDetailScreen} />
     </InvoiceStack.Navigator>
   );
 }
@@ -71,7 +95,17 @@ function CatalogNavigator() {
     <CatalogStack.Navigator screenOptions={{ headerShown: false }}>
       <CatalogStack.Screen name="Products" component={ProductsScreen} />
       <CatalogStack.Screen name="Customers" component={CustomersScreen} />
+      <CatalogStack.Screen name="CustomerDetail" component={CustomerDetailScreen} />
     </CatalogStack.Navigator>
+  );
+}
+
+function CustomersNavigator() {
+  return (
+    <CustomersStack.Navigator screenOptions={{ headerShown: false }}>
+      <CustomersStack.Screen name="Customers" component={CustomersScreen} />
+      <CustomersStack.Screen name="CustomerDetail" component={CustomerDetailScreen} />
+    </CustomersStack.Navigator>
   );
 }
 
@@ -80,6 +114,8 @@ function SettingsNavigator() {
     <SettingsStack.Navigator screenOptions={{ headerShown: false }}>
       <SettingsStack.Screen name="SettingsHome" component={SettingsScreen} />
       <SettingsStack.Screen name="BusinessProfile" component={BusinessProfileScreen} />
+      <SettingsStack.Screen name="ActivityLog" component={ActivityLogScreen} />
+      <SettingsStack.Screen name="Ledger" component={LedgerScreen} />
     </SettingsStack.Navigator>
   );
 }
@@ -124,7 +160,7 @@ function AppTabs() {
           },
           tabBarItemStyle: styles.tabItem,
           tabBarIcon: ({ color, focused }) => {
-            const icon = tabIcons[route.name];
+            const icon = tabIcons[route.name as keyof TabParamList];
             return (
               <View style={[styles.iconPill, focused && { backgroundColor: alpha(theme.colors.primary, isDark ? 0.2 : 0.14) }]}>
                 <MaterialCommunityIcons name={focused ? icon.active : icon.inactive} size={focused ? 22 : 21} color={color} />
@@ -140,7 +176,7 @@ function AppTabs() {
           options={{ title: 'Invoices', popToTopOnBlur: true }}
         />
         <Tabs.Screen name="CatalogTab" component={CatalogNavigator} options={{ title: 'Inventory' }} />
-        <Tabs.Screen name="CustomersTab" component={CustomersScreen} options={{ title: 'Customers' }} />
+        <Tabs.Screen name="CustomersTab" component={CustomersNavigator} options={{ title: 'Customers', popToTopOnBlur: true }} />
         <Tabs.Screen name="SettingsTab" component={SettingsNavigator} options={{ title: 'Settings', popToTopOnBlur: true }} />
       </Tabs.Navigator>
     </View>
@@ -162,7 +198,7 @@ export function AppNavigator() {
     if (Platform.OS !== 'android' || !token) return undefined;
 
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      const currentRouteName = navigationRef.getCurrentRoute()?.name;
+      const currentRouteName = String(navigationRef.getCurrentRoute()?.name || '');
       if (currentRouteName !== 'DashboardTab' && currentRouteName !== 'DashboardHome') return false;
 
       BackHandler.exitApp();

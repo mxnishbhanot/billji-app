@@ -1,11 +1,11 @@
-import { Controller } from 'react-hook-form';
+import { Control, Controller, FieldValues, Path } from 'react-hook-form';
 import { StyleSheet } from 'react-native';
 import { HelperText, TextInput, TextInputProps, useTheme } from 'react-native-paper';
 import { appColors, radii, spacing } from '@/theme/theme';
 
-type Props = Omit<TextInputProps, 'value' | 'onChangeText'> & { control: any; name: string };
+type Props<T extends FieldValues> = Omit<TextInputProps, 'value' | 'onChangeText'> & { control: Control<T>; name: Path<T> };
 
-export function FormTextInput({ control, name, style, ...props }: Props) {
+export function FormTextInput<T extends FieldValues>({ control, name, style, ...props }: Props<T>) {
   const theme = useTheme();
   const colors = appColors(theme.dark);
   return (

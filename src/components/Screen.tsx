@@ -5,6 +5,7 @@ import { Appbar, Text, useTheme } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, radii, spacing, typeScale } from '@/theme/theme';
+import { AppNavigation } from '@/navigation/types';
 import { BrandMark } from './BrandMark';
 import { NotificationButton } from './NotificationButton';
 
@@ -15,7 +16,7 @@ export function Screen({ title, children, scroll = true, showNotifications = tru
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<AppNavigation>();
   const businessProfile = useAuthStore((state) => state.user?.businessProfile);
   const businessName = businessProfile?.businessName?.trim();
   const insets = useSafeAreaInsets();
