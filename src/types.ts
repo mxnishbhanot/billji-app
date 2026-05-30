@@ -299,7 +299,13 @@ export type InvoiceQuery = PageQuery & {
 export type OrderQuery = PageQuery & {
   search?: string;
   orderStatus?: '' | OrderStatus;
+  paymentStatus?: '' | InvoicePaymentStatus;
+  fulfillmentStatus?: '' | OrderFulfillmentStatus;
   customerId?: string;
+  from?: string;
+  to?: string;
+  minAmount?: number | string;
+  maxAmount?: number | string;
   sort?: 'newest' | 'oldest' | 'amount-high' | 'amount-low';
 };
 

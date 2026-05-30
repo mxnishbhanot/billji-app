@@ -83,7 +83,8 @@ export const draftsApi = {
 export const invoicesApi = {
   list: (params?: InvoiceQuery) => api.get<{ invoices: Invoice[] }>('/invoices', { params }).then((res) => res.data.invoices),
   page: (params: InvoiceQuery) => api.get<InvoicePage>('/invoices', { params: { ...params, paginated: true } }).then((res) => res.data),
-  create: (payload: InvoiceCreatePayload) => api.post<{ invoice: Invoice }>('/invoices', payload).then((res) => res.data.invoice),
+  create: (payload: InvoiceCreatePayload) =>
+    api.post<{ invoice: Invoice }>('/invoices', payload, { headers: { 'Idempotency-Key': idempotencyKey('invoice') } }).then((res) => res.data.invoice),
   get: (id: string) => api.get<{ invoice: Invoice }>(`/invoices/${id}`).then((res) => res.data.invoice),
   status: (id: string, status: string) => api.patch<{ invoice: Invoice }>(`/invoices/${id}/status`, { status }).then((res) => res.data.invoice),
   duplicate: (id: string) => api.post<{ invoice: Invoice }>(`/invoices/${id}/duplicate`).then((res) => res.data.invoice),

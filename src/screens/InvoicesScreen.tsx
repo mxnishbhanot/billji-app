@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput as RNTextInput, View, type TextStyle } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { SegmentedButtons, Text, useTheme } from 'react-native-paper';
+import { Text, useTheme } from 'react-native-paper';
 import { draftsApi, invoicesApi } from '@/api/endpoints';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
@@ -150,16 +150,16 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
 
   const stickyHeader = (
     <View style={[styles.stickyHeader, { backgroundColor: theme.colors.background }]}>
-      <SegmentedButtons
-        value="invoices"
-        onValueChange={(value) => {
-          if (value === 'orders') navigation.navigate('OrderList');
-        }}
-        buttons={[
-          { value: 'invoices', label: 'Invoices', icon: 'file-document' },
-          { value: 'orders', label: 'Orders', icon: 'clipboard-list-outline' }
-        ]}
-      />
+      <View style={[styles.switcher, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.12) }]}>
+        <Pressable style={[styles.switcherOption, { backgroundColor: theme.colors.primary }]} onPress={() => undefined}>
+          <MaterialCommunityIcons name="file-document" size={18} color="#FFFFFF" />
+          <Text style={[styles.switcherLabel, { color: '#FFFFFF' }]}>Invoices</Text>
+        </Pressable>
+        <Pressable style={styles.switcherOption} onPress={() => navigation.navigate('OrderList')}>
+          <MaterialCommunityIcons name="clipboard-list-outline" size={18} color={theme.colors.onSurfaceVariant} />
+          <Text style={[styles.switcherLabel, { color: theme.colors.onSurfaceVariant }]}>Orders</Text>
+        </Pressable>
+      </View>
       <View style={[styles.searchWrap, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.1) }]}>
         <Feather name="search" size={18} color={theme.colors.onSurfaceVariant} />
         <RNTextInput
@@ -408,6 +408,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4
   },
   statusText: { ...fontStyles.semiBold, fontSize: 11, letterSpacing: 0.4, textTransform: 'capitalize' },
+  switcher: { borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', padding: 4 },
+  switcherLabel: { ...fontStyles.bold, fontSize: 14 },
+  switcherOption: { alignItems: 'center', borderRadius: radii.pill, flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', minHeight: 42 },
   viewHint: { alignItems: 'center', flexDirection: 'row', gap: 2 },
   viewHintLabel: { ...fontStyles.bold, fontSize: 12 }
 });

@@ -116,6 +116,17 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
     }
     setCancelling(true);
   };
+  const requestDelete = () => {
+    if (hasPayments) {
+      showDialog({
+        title: 'Cannot delete invoice',
+        message: 'This invoice has recorded payments. Refund or reverse them first, then delete only if this was test data or an accidental duplicate.',
+        tone: 'error'
+      });
+      return;
+    }
+    setDeleting(true);
+  };
 
   const actions: { label: string; icon: keyof typeof Feather.glyphMap; onPress: () => void }[] = [
     { label: 'PDF', icon: 'file-text', onPress: () => openOrSharePdf(invoice.pdfUrl, invoice.invoiceNumber) },
@@ -262,7 +273,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
             buttonColor={theme.colors.error}
             textColor={theme.colors.onError}
             icon={({ size, color }) => <Feather name="trash-2" size={size} color={color} />}
-            onPress={() => setDeleting(true)}
+            onPress={requestDelete}
             style={styles.footerButton}
           >
             Delete invoice
@@ -295,8 +306,8 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
         onClose={() => setHistoryOpen(false)}
       />
 
-      <ConfirmDialog visible={cancelling} title="Cancel invoice?" message="This marks the invoice as cancelled. It stays on record but is excluded from active dues." confirmLabel="Cancel invoice" onCancel={() => setCancelling(false)} onConfirm={() => cancelInvoice.mutate()} />
-      <ConfirmDialog visible={deleting} title="Delete invoice?" message="This permanently removes the invoice and returns catalog stock for product items." onCancel={() => setDeleting(false)} onConfirm={() => remove.mutate()} />
+      <ConfirmDialog visible={cancelling} title="Cancel invoice?" message="This voids the invoice, restores stock for product items, and keeps the record for history." confirmLabel="Cancel invoice" onCancel={() => setCancelling(false)} onConfirm={() => cancelInvoice.mutate()} />
+      <ConfirmDialog visible={deleting} title="Delete invoice?" message="This permanently removes the invoice. Use delete only for test data or accidental duplicates with no recorded payments." onCancel={() => setDeleting(false)} onConfirm={() => remove.mutate()} />
     </Screen>
   );
 }

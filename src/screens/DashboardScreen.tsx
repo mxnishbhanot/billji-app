@@ -282,7 +282,6 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
   const quickActions: { label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; onPress: () => void }[] = [
     { label: 'Invoices', icon: 'file-document', onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList' }) },
     { label: 'Orders', icon: 'clipboard-list-outline', onPress: () => navigation.navigate('InvoicesTab', { screen: 'OrderList' }) },
-    { label: 'Payments', icon: 'cash-multiple', onPress: () => navigation.navigate('Payments') },
     { label: 'Products', icon: 'package-variant-closed', onPress: () => navigation.navigate('CatalogTab', { screen: 'Products' }) },
     { label: 'Reports', icon: 'chart-box', onPress: () => navigation.navigate('Reports') }
   ];

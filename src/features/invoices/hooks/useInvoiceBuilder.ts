@@ -12,7 +12,6 @@ import {
   addProductToItems,
   buildInvoiceDraftPayload,
   buildInvoicePayload,
-  findStockShortages,
   hasInvoiceDraftContent,
   removeInvoiceItem,
   updateItemQuantity
@@ -88,7 +87,6 @@ export const useInvoiceBuilder = ({
 
   const customers = useMemo(() => customersQuery.data?.pages.flatMap((page) => page.customers) ?? [], [customersQuery.data]);
   const products = useMemo(() => productsQuery.data?.pages.flatMap((page) => page.products) ?? [], [productsQuery.data]);
-  const productById = useMemo(() => new Map(products.map((product) => [product._id, product])), [products]);
   const activeCustomer = selectedCustomer ?? customers.find((customer) => customer._id === selectedCustomerId) ?? null;
   const draftPayload = useMemo(
     () => buildInvoiceDraftPayload({ selectedCustomerId, selectedCustomer: activeCustomer, items, taxRate, discountType, discountValue, notes }),
@@ -299,8 +297,8 @@ export const useInvoiceBuilder = ({
 
   const createInvoiceMutation = useMutation({
     mutationFn: invoicesApi.create,
-    onSuccess: async (invoice) => {
-      await clearDraft(currentDraftIdRef.current);
+    onSuccess: (invoice) => {
+      void clearDraft(currentDraftIdRef.current).catch(() => {});
       setIsDraftDirty(false);
       setDraftStatus('idle');
       setLastDraftSavedAt(null);
@@ -348,18 +346,14 @@ export const useInvoiceBuilder = ({
       return;
     }
 
-    const shortages = findStockShortages(items, productById);
-    if (shortages.length) {
-      setStockWarning({ items: shortages, payload: buildPayload(true) });
-      return;
-    }
-
-    createInvoiceMutation.mutate(buildPayload(false));
+    createInvoiceMutation.mutate(buildPayload(true));
   };
 
   const continueWithOversell = () => {
-    if (!stockWarning) return;
-    createInvoiceMutation.mutate(stockWarning.payload);
+    if (!stockWarning || createInvoiceMutation.isPending) return;
+    const payload = stockWarning.payload;
+    setStockWarning(null);
+    createInvoiceMutation.mutate(payload);
   };
 
   return {
