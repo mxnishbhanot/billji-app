@@ -14,6 +14,9 @@ import {
   InvoiceDraftPayload,
   InvoiceQuery,
   LedgerEntryRow,
+  Order,
+  OrderCreatePayload,
+  OrderQuery,
   NotificationItem,
   NotificationQuery,
   Page,
@@ -35,6 +38,7 @@ import {
 type ProductPage = Page<Product, 'products'>;
 type CustomerPage = Page<Customer, 'customers'>;
 type InvoicePage = Page<Invoice, 'invoices'>;
+type OrderPage = Page<Order, 'orders'>;
 type NotificationPage = Page<NotificationItem, 'notifications'> & { unreadCount: number };
 type InvoiceDraftDocument = DraftDocument<InvoiceDraftPayload>;
 const idempotencyKey = (scope: string) => `${scope}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -88,6 +92,20 @@ export const invoicesApi = {
   email: (id: string, email: string) => api.post(`/invoices/${id}/email`, { email }).then((res) => res.data),
   rotateShareLink: (id: string) => api.post<{ invoice: Invoice }>(`/invoices/${id}/share/rotate`).then((res) => res.data.invoice),
   revokeShareLink: (id: string) => api.post<{ invoice: Invoice }>(`/invoices/${id}/share/revoke`).then((res) => res.data.invoice)
+};
+
+export const ordersApi = {
+  list: (params?: OrderQuery) => api.get<{ orders: Order[] }>('/orders', { params }).then((res) => res.data.orders),
+  page: (params: OrderQuery) => api.get<OrderPage>('/orders', { params: { ...params, paginated: true } }).then((res) => res.data),
+  get: (id: string) => api.get<{ order: Order }>(`/orders/${id}`).then((res) => res.data.order),
+  create: (payload: OrderCreatePayload) =>
+    api.post<{ order: Order }>('/orders', payload, { headers: { 'Idempotency-Key': idempotencyKey('order') } }).then((res) => res.data.order),
+  generateInvoice: (id: string) =>
+    api
+      .post<{ invoice: Invoice }>(`/orders/${id}/generate-invoice`, {}, { headers: { 'Idempotency-Key': idempotencyKey(`order-invoice-${id}`) } })
+      .then((res) => res.data.invoice),
+  cancel: (id: string) =>
+    api.post<{ order: Order }>(`/orders/${id}/cancel`, {}, { headers: { 'Idempotency-Key': idempotencyKey(`order-cancel-${id}`) } }).then((res) => res.data.order)
 };
 
 export const paymentsApi = {

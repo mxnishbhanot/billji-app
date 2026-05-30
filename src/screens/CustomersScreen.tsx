@@ -209,6 +209,8 @@ export function CustomersScreen() {
 
   const headerCreateAction = (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Add customer"
       onPress={() => setEditing(null)}
       style={({ pressed }) => [
         styles.headerCreateBtn,

@@ -24,6 +24,11 @@ export const queryKeys = {
     list: (params?: QueryParams) => ['invoices', params ?? {}] as const,
     detail: (id: string) => ['invoices', id] as const
   },
+  orders: {
+    all: ['orders'] as const,
+    list: (params?: QueryParams) => ['orders', params ?? {}] as const,
+    detail: (id: string) => ['orders', id] as const
+  },
   notifications: {
     all: ['notifications'] as const
   },

@@ -134,6 +134,27 @@ export type Invoice = {
   total: number; paidAmount?: number; balanceDue?: number; status: InvoiceStatus; documentStatus?: string; paymentStatus?: InvoicePaymentStatus; fulfillmentStatus?: string; notes?: string; pdfUrl: string; shareToken?: string; shareExpiresAt?: string | null; shareRevokedAt?: string | null; emailedAt?: string | null; createdAt?: string; updatedAt?: string;
 };
 
+export type OrderStatus = 'draft' | 'confirmed' | 'fulfilled' | 'cancelled';
+export type OrderFulfillmentStatus = 'pending' | 'delivered' | 'returned' | 'not_applicable';
+
+export type Order = {
+  _id: string; orderNumber: string; date: string; customer?: string | null; customerSnapshot: Customer;
+  items: InvoiceItem[]; subtotal: number; tax: { rate: number; amount: number }; discount: { type: DiscountType; value: number; amount: number };
+  total: number; orderStatus: OrderStatus; fulfillmentStatus: OrderFulfillmentStatus;
+  paymentStatus: InvoicePaymentStatus; paidAmount: number; balanceDue: number; invoiceCount?: number;
+  linkedInvoice?: { id: string; invoiceNumber: string; status?: InvoiceStatus } | null;
+  notes?: string; createdAt?: string; updatedAt?: string;
+};
+
+export type OrderCreatePayload = {
+  customerId: string;
+  items: InvoiceCreateItem[];
+  taxRate: number;
+  discountType: DiscountType;
+  discountValue: number;
+  notes: string;
+};
+
 export type PaymentProviderMetadata = {
   provider?: string;
   providerPaymentId?: string;
@@ -272,6 +293,13 @@ export type InvoiceQuery = PageQuery & {
   to?: string;
   minAmount?: number | string;
   maxAmount?: number | string;
+  sort?: 'newest' | 'oldest' | 'amount-high' | 'amount-low';
+};
+
+export type OrderQuery = PageQuery & {
+  search?: string;
+  orderStatus?: '' | OrderStatus;
+  customerId?: string;
   sort?: 'newest' | 'oldest' | 'amount-high' | 'amount-low';
 };
 

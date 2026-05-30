@@ -278,6 +278,8 @@ export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
 
   const headerCreateAction = (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Add product"
       onPress={() => setEditing(null)}
       style={({ pressed }) => [
         styles.headerCreateBtn,

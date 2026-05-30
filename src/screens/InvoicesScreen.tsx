@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput as RNTextInput, View, type TextStyle } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { Text, useTheme } from 'react-native-paper';
+import { SegmentedButtons, Text, useTheme } from 'react-native-paper';
 import { draftsApi, invoicesApi } from '@/api/endpoints';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
@@ -150,6 +150,16 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
 
   const stickyHeader = (
     <View style={[styles.stickyHeader, { backgroundColor: theme.colors.background }]}>
+      <SegmentedButtons
+        value="invoices"
+        onValueChange={(value) => {
+          if (value === 'orders') navigation.navigate('OrderList');
+        }}
+        buttons={[
+          { value: 'invoices', label: 'Invoices', icon: 'file-document' },
+          { value: 'orders', label: 'Orders', icon: 'clipboard-list-outline' }
+        ]}
+      />
       <View style={[styles.searchWrap, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.1) }]}>
         <Feather name="search" size={18} color={theme.colors.onSurfaceVariant} />
         <RNTextInput

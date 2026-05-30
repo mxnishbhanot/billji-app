@@ -26,6 +26,9 @@ export type InvoiceStackParamList = {
   InvoiceCreate: undefined;
   InvoiceDetail: { id: string };
   Drafts: undefined;
+  OrderList: undefined;
+  OrderCreate: undefined;
+  OrderDetail: { id: string };
 };
 
 export type CatalogStackParamList = {
@@ -98,6 +101,9 @@ export type InvoicesScreenProps = NativeStackScreenProps<InvoiceStackParamList, 
 export type InvoiceBuilderScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'InvoiceCreate'>;
 export type InvoiceDetailScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'InvoiceDetail'>;
 export type DraftsScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'Drafts'>;
+export type OrdersScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'OrderList'>;
+export type OrderBuilderScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'OrderCreate'>;
+export type OrderDetailScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'OrderDetail'>;
 export type ProductsScreenProps = NativeStackScreenProps<CatalogStackParamList, 'Products'>;
 export type CustomersScreenProps = NativeStackScreenProps<CustomersStackParamList, 'Customers'>;
 export type CustomerDetailScreenProps = NativeStackScreenProps<CustomersStackParamList, 'CustomerDetail'>;

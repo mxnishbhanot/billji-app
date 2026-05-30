@@ -1,6 +1,6 @@
-import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 import { AuthSession, User } from '@/types';
+import { sessionStorage as SecureStore } from '@/store/sessionStorage';
 
 const SESSION_KEY = 'billji-auth-session';
 

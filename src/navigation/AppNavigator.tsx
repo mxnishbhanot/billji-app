@@ -16,6 +16,9 @@ import { InvoicesScreen } from '@/screens/InvoicesScreen';
 import { InvoiceBuilderScreen } from '@/screens/InvoiceBuilderScreen';
 import { InvoiceDetailScreen } from '@/screens/InvoiceDetailScreen';
 import { DraftsScreen } from '@/screens/DraftsScreen';
+import { OrdersScreen } from '@/screens/OrdersScreen';
+import { OrderBuilderScreen } from '@/screens/OrderBuilderScreen';
+import { OrderDetailScreen } from '@/screens/OrderDetailScreen';
 import { ReportsScreen } from '@/screens/ReportsScreen';
 import { PaymentsScreen } from '@/screens/PaymentsScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
@@ -80,6 +83,9 @@ function InvoiceNavigator() {
       <InvoiceStack.Screen name="InvoiceCreate" component={InvoiceBuilderScreen} />
       <InvoiceStack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
       <InvoiceStack.Screen name="Drafts" component={DraftsScreen} />
+      <InvoiceStack.Screen name="OrderList" component={OrdersScreen} />
+      <InvoiceStack.Screen name="OrderCreate" component={OrderBuilderScreen} />
+      <InvoiceStack.Screen name="OrderDetail" component={OrderDetailScreen} />
     </InvoiceStack.Navigator>
   );
 }
