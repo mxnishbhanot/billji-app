@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { Button, useTheme } from 'react-native-paper';
 import {
   CustomerSelectorCard,
-  DraftStatusBanner,
+  DraftSyncIndicator,
   InvoiceBuilderDialogs,
   InvoiceItemsEditor,
   ProductPickerList,
@@ -42,6 +42,9 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (event) => {
+      // Blur-triggered popToTop (tab switch) must not be blocked — the draft is already saved
+      // locally and is offered for recovery on the next visit.
+      if (!navigation.isFocused()) return;
       if (allowLeave.current || !builder.hasDraftContent || !builder.isDraftDirty || builder.createInvoiceMutation.isPending) return;
       event.preventDefault();
       pendingLeaveAction.current = event.data.action;
@@ -67,7 +70,12 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
   };
 
   return (
-    <Screen title="New Invoice">
+    <Screen
+      title="New Invoice"
+      titleAccessory={
+        <DraftSyncIndicator isDirty={builder.isDraftDirty} lastSavedAt={builder.lastDraftSavedAt} status={builder.draftStatus} />
+      }
+    >
       <CustomerSelectorCard
         customer={builder.activeCustomer}
         cardBorder={cardBorder}
@@ -76,14 +84,6 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
         onAdd={() => builder.setCustomerModal(true)}
         onChange={() => builder.setCustomerPicker(true)}
         subSurface={subSurface}
-      />
-      <DraftStatusBanner
-        cardBorder={cardBorder}
-        colors={colors}
-        isDark={isDark}
-        isDirty={builder.isDraftDirty}
-        lastSavedAt={builder.lastDraftSavedAt}
-        status={builder.draftStatus}
       />
       <ProductPickerList
         cardBorder={cardBorder}
@@ -104,6 +104,7 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
         isDark={isDark}
         items={builder.items}
         onRemove={builder.removeItem}
+        onSetQuantity={builder.setQuantity}
         onUpdateQuantity={builder.updateQuantity}
         subSurface={subSurface}
       />
@@ -142,6 +143,7 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
         customForm={customForm}
         customModal={builder.customModal}
         hasMoreCustomers={Boolean(builder.customersQuery.hasNextPage)}
+        loadingCustomers={builder.customersQuery.isLoading || (builder.customersQuery.isFetching && !builder.customersQuery.isFetchingNextPage)}
         loadingMoreCustomers={builder.customersQuery.isFetchingNextPage}
         onAddCustomItem={builder.addCustomItem}
         onCloseCustomerModal={closeCustomerModal}
@@ -150,6 +152,10 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
         onCustomerSearchChange={builder.setCustomerSearch}
         onCustomerSubmit={(values) => builder.addCustomer.mutate(values, { onSuccess: () => customerForm.reset(customerDefaults) })}
         onLoadMoreCustomers={loadMoreCustomers}
+        onQuickAddCustomer={() => {
+          builder.setCustomerPicker(false);
+          builder.setCustomerModal(true);
+        }}
         onRecoveryDiscard={builder.discardRecoveryDraft}
         onRecoveryDuplicate={builder.duplicateDraft}
         onRecoveryResume={builder.resumeDraft}
@@ -157,12 +163,13 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
         onStockWarningClose={() => builder.setStockWarning(null)}
         onStockWarningContinue={builder.continueWithOversell}
         recoveryDraft={builder.recoveryDraft}
+        selectedCustomerId={builder.activeCustomer?._id}
         stockWarning={builder.stockWarning}
       />
       <ConfirmDialog
         visible={leavePromptVisible}
         title="Leave invoice builder?"
-        message="Your draft is saved locally and can be resumed later."
+        message="Your draft is saved and can be resumed later."
         confirmLabel="Leave"
         onCancel={() => {
           pendingLeaveAction.current = null;

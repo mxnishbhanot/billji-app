@@ -1,7 +1,9 @@
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, TextInput as RNTextInput, View } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { UseFormReturn } from 'react-hook-form';
-import { Button, Dialog, List, Portal, SegmentedButtons, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, Dialog, List, Portal, SegmentedButtons, Text, TextInput, Tooltip, useTheme } from 'react-native-paper';
+import { CustomerPickerSheet } from '@/components/CustomerPickerSheet';
 import { FormTextInput } from '@/components/FormTextInput';
 import { PhoneInput } from '@/components/PhoneInput';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
@@ -18,36 +20,69 @@ const INVOICE_ITEM_ROW_HEIGHT = 112;
 type ColorSet = ReturnType<typeof appColors>;
 type DraftStatus = 'idle' | 'saved' | 'syncing' | 'synced' | 'error';
 
-export function DraftStatusBanner({
-  cardBorder,
-  colors,
-  isDark,
+// Quick syncs (<250ms) would make the spinner flash for a frame, so it only
+// appears for slow syncs and then stays up long enough to read.
+const SPINNER_DELAY_MS = 250;
+const SPINNER_MIN_VISIBLE_MS = 700;
+
+// Google-Docs-style sync state: a quiet cloud icon beside the screen title.
+// Tap (or hover on web) for the full message via tooltip.
+export function DraftSyncIndicator({
   isDirty,
   lastSavedAt,
   status
 }: {
-  cardBorder: string;
-  colors: ColorSet;
-  isDark: boolean;
   isDirty: boolean;
   lastSavedAt: string | null;
   status: DraftStatus;
 }) {
   const theme = useTheme();
-  if (status === 'idle' || !lastSavedAt) return null;
+  const [showSpinner, setShowSpinner] = useState(false);
+  const spinnerShownAtRef = useRef(0);
+  const lastStableStatusRef = useRef<DraftStatus>('idle');
+  if (status !== 'syncing') lastStableStatusRef.current = status;
 
-  const savedTime = new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const message =
-    status === 'syncing' ? 'Syncing draft...' :
-    status === 'synced' && !isDirty ? `Draft synced at ${savedTime}` :
-    status === 'error' ? `Draft saved locally at ${savedTime}. Will retry online.` :
-    `Draft saved locally at ${savedTime}`;
+  useEffect(() => {
+    if (status === 'syncing') {
+      const timeout = setTimeout(() => {
+        spinnerShownAtRef.current = Date.now();
+        setShowSpinner(true);
+      }, SPINNER_DELAY_MS);
+      return () => clearTimeout(timeout);
+    }
+
+    if (!showSpinner) return undefined;
+    const remaining = SPINNER_MIN_VISIBLE_MS - (Date.now() - spinnerShownAtRef.current);
+    if (remaining <= 0) {
+      setShowSpinner(false);
+      return undefined;
+    }
+    const timeout = setTimeout(() => setShowSpinner(false), remaining);
+    return () => clearTimeout(timeout);
+  }, [status, showSpinner]);
+
+  // While a fast sync is in flight, keep showing the last stable icon instead of flashing.
+  const displayStatus = status === 'syncing' ? lastStableStatusRef.current : status;
+  if (displayStatus === 'idle' && !showSpinner) return null;
+
+  const savedTime = lastSavedAt ? new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+  const pendingSync = displayStatus === 'saved' || (displayStatus === 'synced' && isDirty);
+  const icon = displayStatus === 'error' ? 'cloud-alert-outline' : pendingSync ? 'cloud-upload-outline' : 'cloud-check-outline';
+  const label =
+    showSpinner ? 'Saving…' :
+    displayStatus === 'error' ? 'Saved on this device — will sync when online' :
+    pendingSync ? 'Saved on this device' :
+    savedTime ? `Saved at ${savedTime}` : 'Saved';
+  const color = displayStatus === 'error' ? theme.colors.error : theme.colors.onSurfaceVariant;
 
   return (
-    <View style={[styles.draftBanner, { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.08), borderColor: cardBorder }]}>
-      <MaterialCommunityIcons name={status === 'error' ? 'cloud-alert-outline' : 'content-save-outline'} size={16} color={theme.colors.primary} />
-      <Text style={[styles.draftBannerText, { color: theme.colors.onSurface }]}>{message}</Text>
-    </View>
+    <Tooltip title={label}>
+      <View accessibilityLabel={label} style={styles.draftSyncIndicator}>
+        {showSpinner
+          ? <ActivityIndicator size={14} color={color} />
+          : <MaterialCommunityIcons name={icon} size={17} color={color} />}
+      </View>
+    </Tooltip>
   );
 }
 
@@ -194,12 +229,67 @@ export function ProductPickerList({
   );
 }
 
+function QuantityStepper({
+  cardBorder,
+  colors,
+  index,
+  onSetQuantity,
+  onUpdateQuantity,
+  quantity
+}: {
+  cardBorder: string;
+  colors: ColorSet;
+  index: number;
+  onSetQuantity: (index: number, quantity: number) => void;
+  onUpdateQuantity: (index: number, delta: number) => void;
+  quantity: number;
+}) {
+  const theme = useTheme();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  const commit = () => {
+    setEditing(false);
+    const parsed = parseInt(draft, 10);
+    if (!Number.isNaN(parsed) && parsed >= 1 && parsed !== quantity) onSetQuantity(index, parsed);
+  };
+
+  return (
+    <View style={[styles.stepper, { borderColor: cardBorder, backgroundColor: colors.card }]}>
+      <Pressable onPress={() => onUpdateQuantity(index, -1)} style={styles.stepperBtn}>
+        <Feather name="minus" size={14} color={theme.colors.onSurface} />
+      </Pressable>
+      {editing ? (
+        <RNTextInput
+          autoFocus
+          keyboardType="number-pad"
+          maxLength={5}
+          selectTextOnFocus
+          value={draft}
+          onChangeText={(value) => setDraft(value.replace(/[^0-9]/g, ''))}
+          onBlur={commit}
+          onSubmitEditing={commit}
+          style={[styles.stepperInput, { color: theme.colors.onSurface }]}
+        />
+      ) : (
+        <Pressable onPress={() => { setDraft(String(quantity)); setEditing(true); }} hitSlop={8}>
+          <Text style={[styles.stepperValue, { color: theme.colors.onSurface }]}>{quantity}</Text>
+        </Pressable>
+      )}
+      <Pressable onPress={() => onUpdateQuantity(index, 1)} style={styles.stepperBtn}>
+        <Feather name="plus" size={14} color={theme.colors.onSurface} />
+      </Pressable>
+    </View>
+  );
+}
+
 export function InvoiceItemsEditor({
   cardBorder,
   colors,
   isDark,
   items,
   onRemove,
+  onSetQuantity,
   onUpdateQuantity,
   subSurface
 }: {
@@ -208,6 +298,7 @@ export function InvoiceItemsEditor({
   isDark: boolean;
   items: InvoiceItem[];
   onRemove: (index: number) => void;
+  onSetQuantity: (index: number, quantity: number) => void;
   onUpdateQuantity: (index: number, delta: number) => void;
   subSurface: string;
 }) {
@@ -235,15 +326,7 @@ export function InvoiceItemsEditor({
                 <Text style={[styles.itemTotal, { color: theme.colors.onSurface }]}>{formatCurrency(item.quantity * item.price)}</Text>
               </View>
               <View style={styles.itemActions}>
-                <View style={[styles.stepper, { borderColor: cardBorder, backgroundColor: colors.card }]}>
-                  <Pressable onPress={() => onUpdateQuantity(index, -1)} style={styles.stepperBtn}>
-                    <Feather name="minus" size={14} color={theme.colors.onSurface} />
-                  </Pressable>
-                  <Text style={[styles.stepperValue, { color: theme.colors.onSurface }]}>{item.quantity}</Text>
-                  <Pressable onPress={() => onUpdateQuantity(index, 1)} style={styles.stepperBtn}>
-                    <Feather name="plus" size={14} color={theme.colors.onSurface} />
-                  </Pressable>
-                </View>
+                <QuantityStepper cardBorder={cardBorder} colors={colors} index={index} quantity={item.quantity} onSetQuantity={onSetQuantity} onUpdateQuantity={onUpdateQuantity} />
                 <Pressable onPress={() => onRemove(index)} style={({ pressed }) => [styles.removeBtn, { backgroundColor: alpha(colors.destructive, pressed ? 0.2 : isDark ? 0.16 : 0.1) }]}>
                   <Feather name="trash-2" size={14} color={colors.destructive} />
                   <Text style={[styles.removeBtnLabel, { color: colors.destructive }]}>Remove</Text>
@@ -337,6 +420,7 @@ export function InvoiceBuilderDialogs({
   customForm,
   customModal,
   hasMoreCustomers,
+  loadingCustomers,
   loadingMoreCustomers,
   onAddCustomItem,
   onCloseCustomerModal,
@@ -345,13 +429,16 @@ export function InvoiceBuilderDialogs({
   onCustomerSearchChange,
   onCustomerSubmit,
   onLoadMoreCustomers,
+  onQuickAddCustomer,
   onSelectCustomer,
   onStockWarningClose,
   onStockWarningContinue,
   recoveryDraft,
+  recoveryTitle = 'Recover invoice draft',
   onRecoveryDiscard,
   onRecoveryDuplicate,
   onRecoveryResume,
+  selectedCustomerId,
   stockWarning
 }: {
   addCustomerLoading: boolean;
@@ -363,6 +450,7 @@ export function InvoiceBuilderDialogs({
   customForm: UseFormReturn<CustomItemFormValues>;
   customModal: boolean;
   hasMoreCustomers: boolean;
+  loadingCustomers: boolean;
   loadingMoreCustomers: boolean;
   onAddCustomItem: (item: InvoiceItem) => void;
   onCloseCustomerModal: () => void;
@@ -371,22 +459,40 @@ export function InvoiceBuilderDialogs({
   onCustomerSearchChange: (value: string) => void;
   onCustomerSubmit: (values: CustomerFormValues) => void;
   onLoadMoreCustomers: () => void;
+  onQuickAddCustomer: () => void;
   onSelectCustomer: (customer: Customer) => void;
   onStockWarningClose: () => void;
   onStockWarningContinue: () => void;
   recoveryDraft: DraftDocument<InvoiceDraftPayload> | null;
+  recoveryTitle?: string;
   onRecoveryDiscard: () => void;
   onRecoveryDuplicate: () => void;
   onRecoveryResume: () => void;
+  selectedCustomerId?: string;
   stockWarning: { items: StockShortage[] } | null;
 }) {
   const theme = useTheme();
   const recoveryTime = recoveryDraft?.lastEditedAt ? new Date(recoveryDraft.lastEditedAt).toLocaleString() : '';
 
   return (
+    <>
+    <CustomerPickerSheet
+      visible={customerPicker}
+      customers={customers}
+      selectedCustomerId={selectedCustomerId}
+      search={customerSearch}
+      loading={loadingCustomers}
+      loadingMore={loadingMoreCustomers}
+      hasMore={hasMoreCustomers}
+      onSearchChange={onCustomerSearchChange}
+      onLoadMore={onLoadMoreCustomers}
+      onSelect={onSelectCustomer}
+      onQuickAdd={onQuickAddCustomer}
+      onClose={onCloseCustomerPicker}
+    />
     <Portal>
       <Dialog visible={Boolean(recoveryDraft)} onDismiss={onRecoveryResume}>
-        <Dialog.Title>Recover invoice draft</Dialog.Title>
+        <Dialog.Title>{recoveryTitle}</Dialog.Title>
         <Dialog.Content>
           <Text style={{ color: theme.colors.onSurfaceVariant }}>
             {recoveryTime ? `Saved ${recoveryTime}. ` : ''}Resume this draft, discard it, or duplicate it into a new draft.
@@ -397,26 +503,6 @@ export function InvoiceBuilderDialogs({
           <Button onPress={onRecoveryDuplicate}>Duplicate</Button>
           <Button onPress={onRecoveryResume}>Resume</Button>
         </Dialog.Actions>
-      </Dialog>
-
-      <Dialog visible={customerPicker} onDismiss={onCloseCustomerPicker}>
-        <Dialog.Title>Select customer</Dialog.Title>
-        <Dialog.Content>
-          <TextInput mode="outlined" placeholder="Search customers" value={customerSearch} onChangeText={onCustomerSearchChange} />
-        </Dialog.Content>
-        <Dialog.ScrollArea>
-          <FlatList
-            data={customers}
-            keyExtractor={(item) => item._id}
-            onEndReached={() => { if (hasMoreCustomers) onLoadMoreCustomers(); }}
-            onEndReachedThreshold={0.4}
-            ListFooterComponent={loadingMoreCustomers ? <ActivityIndicator color={theme.colors.primary} style={styles.inlineLoader} /> : null}
-            renderItem={({ item }) => (
-              <List.Item title={item.name} description={`${item.countryCode || '+91'} ${item.phone}`} onPress={() => onSelectCustomer(item)} />
-            )}
-          />
-        </Dialog.ScrollArea>
-        <Dialog.Actions><Button onPress={onCloseCustomerPicker}>Close</Button></Dialog.Actions>
       </Dialog>
 
       <Dialog visible={customerModal} onDismiss={onCloseCustomerModal}>
@@ -458,6 +544,7 @@ export function InvoiceBuilderDialogs({
         </Dialog.Actions>
       </Dialog>
     </Portal>
+    </>
   );
 }
 
@@ -474,8 +561,7 @@ const styles = StyleSheet.create({
   customerSelected: { alignItems: 'center', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: 12, marginTop: 4, padding: 12 },
   dashedBtn: { alignItems: 'center', borderRadius: radii.md, borderStyle: 'dashed', borderWidth: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', marginTop: 8, paddingVertical: 12 },
   dashedBtnLabel: { ...fontStyles.bold, fontSize: 13 },
-  draftBanner: { alignItems: 'center', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: 8, marginBottom: 16, paddingHorizontal: 12, paddingVertical: 10 },
-  draftBannerText: { ...fontStyles.semiBold, flex: 1, fontSize: 12 },
+  draftSyncIndicator: { alignItems: 'center', height: 20, justifyContent: 'center', width: 20 },
   emptyItemsText: { ...typeScale.caption, paddingVertical: 6 },
   emptyProductsText: { ...typeScale.caption, paddingVertical: 12, textAlign: 'center' },
   flexContent: { flex: 1, minWidth: 0 },
@@ -508,6 +594,7 @@ const styles = StyleSheet.create({
   segmented: { marginVertical: 12 },
   stepper: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row' },
   stepperBtn: { alignItems: 'center', height: 32, justifyContent: 'center', width: 36 },
+  stepperInput: { ...fontStyles.bold, fontSize: 14, minWidth: 44, paddingHorizontal: 4, paddingVertical: 0, textAlign: 'center' },
   stepperValue: { ...fontStyles.bold, fontSize: 14, minWidth: 24, textAlign: 'center' },
   totalLabel: { ...typeScale.bodyPrimary, fontSize: 14 },
   totalRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },

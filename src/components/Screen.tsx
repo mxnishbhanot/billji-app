@@ -9,10 +9,10 @@ import { AppNavigation } from '@/navigation/types';
 import { BrandMark } from './BrandMark';
 import { NotificationButton } from './NotificationButton';
 
-type Props = { title: string; children: ReactNode; scroll?: boolean; showNotifications?: boolean; headerAction?: ReactNode; contentStyle?: ViewStyle; scrollViewProps?: ScrollViewProps };
+type Props = { title: string; children: ReactNode; scroll?: boolean; showNotifications?: boolean; headerAction?: ReactNode; titleAccessory?: ReactNode; contentStyle?: ViewStyle; scrollViewProps?: ScrollViewProps };
 const CONTENT_BOTTOM_PADDING = 96;
 
-export function Screen({ title, children, scroll = true, showNotifications = true, headerAction, contentStyle, scrollViewProps }: Props) {
+export function Screen({ title, children, scroll = true, showNotifications = true, headerAction, titleAccessory, contentStyle, scrollViewProps }: Props) {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
@@ -54,7 +54,10 @@ export function Screen({ title, children, scroll = true, showNotifications = tru
           </View>
           <View style={styles.titleBlock}>
             <Text numberOfLines={1} style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>{businessName || 'Billji Business'}</Text>
-            <Text numberOfLines={1} variant="titleLarge" style={[styles.title, { color: theme.colors.onBackground }]}>{title}</Text>
+            <View style={styles.titleRow}>
+              <Text numberOfLines={1} variant="titleLarge" style={[styles.title, { color: theme.colors.onBackground }]}>{title}</Text>
+              {titleAccessory}
+            </View>
           </View>
           {headerAction ?? (showNotifications ? <NotificationButton /> : null)}
         </View>
@@ -100,6 +103,7 @@ const styles = StyleSheet.create({
     width: 48
   },
   subtitle: { ...typeScale.bodyPrimaryMedium, fontSize: 14, lineHeight: 18 },
-  title: { ...typeScale.screenTitle, fontSize: 26, lineHeight: 30, letterSpacing: -0.52 },
-  titleBlock: { flex: 1, minWidth: 0 }
+  title: { ...typeScale.screenTitle, flexShrink: 1, fontSize: 26, lineHeight: 30, letterSpacing: -0.52 },
+  titleBlock: { flex: 1, minWidth: 0 },
+  titleRow: { alignItems: 'center', flexDirection: 'row', gap: 8, minWidth: 0 }
 });

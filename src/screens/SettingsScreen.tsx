@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,6 +11,7 @@ import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-na
 import { authApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
+import { BrandLogoSheet } from '@/components/BrandLogoSheet';
 import { BrandMark } from '@/components/BrandMark';
 import { FormTextInput } from '@/components/FormTextInput';
 import { Screen } from '@/components/Screen';
@@ -23,7 +24,7 @@ import { BusinessProfileFormValues } from '@/types';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { settingsSchema } from '@/validation/schemas';
 
-type SettingsPanel = 'brand' | 'tax' | 'invoice' | 'account' | 'security' | null;
+type SettingsPanel = 'invoice' | 'account' | 'security' | null;
 type SettingsRowProps = {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   title: string;
@@ -207,6 +208,7 @@ export function SettingsScreen() {
   const canViewLedger = can(PERMISSION.reportsView);
   const canViewActivity = can(PERMISSION.settingsManage);
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
+  const [brandSheetVisible, setBrandSheetVisible] = useState(false);
   const [themeSaving, setThemeSaving] = useState(false);
   const form = useForm<BusinessProfileFormValues>({ defaultValues: { businessName: '', invoicePrefix: 'INV', theme: 'light', ...(user?.businessProfile || {}) }, resolver: zodResolver(settingsSchema) });
   const selectedTheme = useWatch({ control: form.control, name: 'theme' }) || 'light';
@@ -215,6 +217,7 @@ export function SettingsScreen() {
   const businessEmail = useWatch({ control: form.control, name: 'email' }) || '';
   const phone = useWatch({ control: form.control, name: 'phone' }) || '';
   const gstNumber = useWatch({ control: form.control, name: 'gstNumber' }) || '';
+  const taxSettings = user?.businessProfile?.taxSettings;
   const invoicePrefix = useWatch({ control: form.control, name: 'invoicePrefix' }) || 'INV';
 
   useEffect(() => {
@@ -248,8 +251,11 @@ export function SettingsScreen() {
   };
 
   const saveAndClose = form.handleSubmit((values) => save.mutate(values, { onSuccess: () => setActivePanel(null) }));
+  const saveBrand = form.handleSubmit((values) => save.mutate(values, { onSuccess: () => setBrandSheetVisible(false) }));
 
-  const pickLogo = async () => {
+  const setLogo = (dataUri: string) => form.setValue('logoUrl', dataUri, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+
+  const pickLogoWeb = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       showDialog({ title: 'Permission required', message: 'Photo library access is required to choose a business logo.', tone: 'warning' });
@@ -260,8 +266,49 @@ export function SettingsScreen() {
     if (!result.canceled) {
       const asset = result.assets[0];
       if (!asset) return;
-      const dataUri = asset.base64 ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` : asset.uri;
-      form.setValue('logoUrl', dataUri, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+      setLogo(asset.base64 ? `data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}` : asset.uri);
+    }
+  };
+
+  const pickLogo = async () => {
+    // Native crop UI (zoom / pan / rotate) is unavailable on web — fall back to the plain picker there.
+    if (Platform.OS === 'web') {
+      await pickLogoWeb();
+      return;
+    }
+
+    // Lazy require: the crop picker registers a TurboModule at import time, which crashes
+    // on dev clients built before the library was added. Fall back to the plain picker then.
+    let cropPicker: typeof import('react-native-image-crop-picker').default;
+    try {
+      cropPicker = require('react-native-image-crop-picker').default;
+    } catch {
+      await pickLogoWeb();
+      return;
+    }
+
+    try {
+      const image = await cropPicker.openPicker({
+        mediaType: 'photo',
+        cropping: true,
+        width: 512,
+        height: 512,
+        cropperCircleOverlay: true,
+        enableRotationGesture: true,
+        cropperRotateButtonsHidden: false,
+        cropperToolbarTitle: 'Adjust logo',
+        cropperActiveWidgetColor: '#4338CA',
+        cropperStatusBarColor: '#1C1A4A',
+        cropperToolbarColor: '#1C1A4A',
+        cropperToolbarWidgetColor: '#FFFFFF',
+        compressImageQuality: 0.7,
+        includeBase64: true
+      });
+      if (image.data) setLogo(`data:${image.mime};base64,${image.data}`);
+    } catch (error) {
+      // User cancelled the picker/cropper — not an error.
+      if ((error as { code?: string })?.code === 'E_PICKER_CANCELLED') return;
+      showDialog({ title: 'Could not pick image', message: apiErrorMessage(error), tone: 'error' });
     }
   };
 
@@ -323,39 +370,6 @@ export function SettingsScreen() {
       );
     }
 
-    if (activePanel === 'brand') {
-      return (
-        <>
-          <Dialog.Title>Brand & Logo</Dialog.Title>
-          <Dialog.Content>
-            <View style={styles.dialogLogoRow}>
-              <View style={[styles.dialogLogoFrame, { backgroundColor: isDark ? colors.surface : alpha(colors.primaryStrong, 0.04), borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.1) }]}>
-                <BrandMark size={72} imageUri={logoPreview} label={businessName} />
-              </View>
-              <View style={styles.dialogLogoActions}>
-                <Button mode="outlined" onPress={pickLogo}>Choose photo</Button>
-                {logoPreview ? <Button textColor={theme.colors.error} onPress={removeLogo}>Remove</Button> : null}
-              </View>
-            </View>
-            <FormTextInput control={form.control} name="businessName" label="Business name" />
-          </Dialog.Content>
-          <Dialog.Actions><Button onPress={closePanel}>Cancel</Button><Button loading={save.isPending} onPress={saveAndClose}>Save</Button></Dialog.Actions>
-        </>
-      );
-    }
-
-    if (activePanel === 'tax') {
-      return (
-        <>
-          <Dialog.Title>Tax Settings</Dialog.Title>
-          <Dialog.Content>
-            <FormTextInput control={form.control} name="gstNumber" label="GST number" />
-          </Dialog.Content>
-          <Dialog.Actions><Button onPress={closePanel}>Cancel</Button><Button loading={save.isPending} onPress={saveAndClose}>Save</Button></Dialog.Actions>
-        </>
-      );
-    }
-
     if (activePanel === 'invoice') {
       return (
         <>
@@ -398,7 +412,7 @@ export function SettingsScreen() {
             <Text style={styles.planText}>Pro Plan</Text>
           </View>
         </View>
-        <Pressable onPress={() => setActivePanel('brand')} style={({ pressed }) => [styles.profileEdit, { backgroundColor: alpha('#1C1A4A', pressed ? 0.55 : 0.36), borderColor: alpha('#C3C0FF', 0.36) }]} hitSlop={8}>
+        <Pressable onPress={() => setBrandSheetVisible(true)} style={({ pressed }) => [styles.profileEdit, { backgroundColor: alpha('#1C1A4A', pressed ? 0.55 : 0.36), borderColor: alpha('#C3C0FF', 0.36) }]} hitSlop={8}>
           <Feather name="edit-2" size={18} color="#FFFFFF" />
         </Pressable>
       </Animated.View>
@@ -406,7 +420,19 @@ export function SettingsScreen() {
       <SettingsGroup title="BUSINESS">
         <SettingsRow icon="briefcase-outline" title="Business Profile" subtitle={`${businessName || 'Name'}, ${phone ? 'phone' : 'phone missing'}, ${businessEmail ? 'email' : 'email missing'}`} tone={colors.primary} onPress={() => navigation.navigate('BusinessProfile')} />
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
-        <SettingsRow icon="tag-outline" title="Tax Settings" subtitle={gstNumber ? `GST ${gstNumber}` : 'GST number not set'} tone={colors.warning} onPress={() => setActivePanel('tax')} />
+        <SettingsRow
+          icon="tag-outline"
+          title="Tax Settings"
+          subtitle={
+            taxSettings?.defaultRate
+              ? `Default GST ${taxSettings.defaultRate}%${gstNumber ? ` · ${gstNumber}` : ''}`
+              : gstNumber
+                ? `GST ${gstNumber}`
+                : 'GST rates not configured'
+          }
+          tone={colors.warning}
+          onPress={() => navigation.navigate('TaxSettings')}
+        />
       </SettingsGroup>
 
       <SettingsGroup title="INVOICING">
@@ -465,15 +491,24 @@ export function SettingsScreen() {
           {renderPanel()}
         </Dialog>
       </Portal>
+
+      <BrandLogoSheet
+        visible={brandSheetVisible}
+        control={form.control}
+        logoPreview={logoPreview}
+        businessName={businessName}
+        saving={save.isPending}
+        onPickLogo={pickLogo}
+        onRemoveLogo={removeLogo}
+        onClose={() => setBrandSheetVisible(false)}
+        onSave={saveBrand}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   appearanceTrailing: { alignItems: 'center', flexDirection: 'row', gap: 8 },
-  dialogLogoActions: { flex: 1, gap: 8, justifyContent: 'center' },
-  dialogLogoFrame: { alignItems: 'center', borderRadius: 18, borderWidth: 1, height: 88, justifyContent: 'center', overflow: 'hidden', width: 88 },
-  dialogLogoRow: { flexDirection: 'row', gap: 14, marginBottom: 12 },
   dialogScrollContent: { paddingHorizontal: 24, paddingVertical: 8 },
   group: { marginBottom: 16 },
   groupCard: { borderRadius: radii.lg, borderWidth: 1, overflow: 'hidden' },

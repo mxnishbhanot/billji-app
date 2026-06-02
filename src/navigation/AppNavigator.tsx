@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { NavigationContainer, RouteProp, StackActions, createNavigationContainerRef } from '@react-navigation/native';
+import { BottomTabNavigationProp, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useTheme } from 'react-native-paper';
 import { BackHandler, Platform, StyleSheet, View } from 'react-native';
@@ -23,6 +23,7 @@ import { ReportsScreen } from '@/screens/ReportsScreen';
 import { PaymentsScreen } from '@/screens/PaymentsScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { BusinessProfileScreen } from '@/screens/BusinessProfileScreen';
+import { TaxSettingsScreen } from '@/screens/TaxSettingsScreen';
 import { ActivityLogScreen } from '@/screens/ActivityLogScreen';
 import { LedgerScreen } from '@/screens/LedgerScreen';
 import { useAuthStore } from '@/store/authStore';
@@ -79,11 +80,12 @@ function DashboardNavigator() {
 function InvoiceNavigator() {
   return (
     <InvoiceStack.Navigator screenOptions={{ headerShown: false }}>
-      <InvoiceStack.Screen name="InvoiceList" component={InvoicesScreen} />
+      {/* Invoice/Order lists swap in place via the segmented switcher — no push animation. */}
+      <InvoiceStack.Screen name="InvoiceList" component={InvoicesScreen} options={{ animation: 'none' }} />
       <InvoiceStack.Screen name="InvoiceCreate" component={InvoiceBuilderScreen} />
       <InvoiceStack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
       <InvoiceStack.Screen name="Drafts" component={DraftsScreen} />
-      <InvoiceStack.Screen name="OrderList" component={OrdersScreen} />
+      <InvoiceStack.Screen name="OrderList" component={OrdersScreen} options={{ animation: 'none' }} />
       <InvoiceStack.Screen name="OrderCreate" component={OrderBuilderScreen} />
       <InvoiceStack.Screen name="OrderDetail" component={OrderDetailScreen} />
     </InvoiceStack.Navigator>
@@ -114,11 +116,30 @@ function SettingsNavigator() {
     <SettingsStack.Navigator screenOptions={{ headerShown: false }}>
       <SettingsStack.Screen name="SettingsHome" component={SettingsScreen} />
       <SettingsStack.Screen name="BusinessProfile" component={BusinessProfileScreen} />
+      <SettingsStack.Screen name="TaxSettings" component={TaxSettingsScreen} />
       <SettingsStack.Screen name="ActivityLog" component={ActivityLogScreen} />
       <SettingsStack.Screen name="Ledger" component={LedgerScreen} />
     </SettingsStack.Navigator>
   );
 }
+
+// popToTopOnBlur is unreliable in @react-navigation/bottom-tabs 7.x (pops on refocus, sometimes
+// not at all — see react-navigation#12512), so reset the nested stack explicitly on tab blur.
+const popNestedStackOnBlur = ({
+  navigation,
+  route
+}: {
+  navigation: BottomTabNavigationProp<TabParamList>;
+  route: RouteProp<TabParamList, keyof TabParamList>;
+}) => ({
+  blur: () => {
+    const tabRoute = navigation.getState().routes.find((item) => item.key === route.key);
+    const nestedState = tabRoute?.state;
+    if (nestedState?.key && typeof nestedState.index === 'number' && nestedState.index > 0) {
+      navigation.dispatch({ ...StackActions.popToTop(), target: nestedState.key });
+    }
+  }
+});
 
 function AppTabs() {
   const theme = useTheme();
@@ -174,10 +195,21 @@ function AppTabs() {
           name="InvoicesTab"
           component={InvoiceNavigator}
           options={{ title: 'Invoices', popToTopOnBlur: true }}
+          listeners={popNestedStackOnBlur}
         />
         <Tabs.Screen name="CatalogTab" component={CatalogNavigator} options={{ title: 'Inventory' }} />
-        <Tabs.Screen name="CustomersTab" component={CustomersNavigator} options={{ title: 'Customers', popToTopOnBlur: true }} />
-        <Tabs.Screen name="SettingsTab" component={SettingsNavigator} options={{ title: 'Settings', popToTopOnBlur: true }} />
+        <Tabs.Screen
+          name="CustomersTab"
+          component={CustomersNavigator}
+          options={{ title: 'Customers', popToTopOnBlur: true }}
+          listeners={popNestedStackOnBlur}
+        />
+        <Tabs.Screen
+          name="SettingsTab"
+          component={SettingsNavigator}
+          options={{ title: 'Settings', popToTopOnBlur: true }}
+          listeners={popNestedStackOnBlur}
+        />
       </Tabs.Navigator>
     </View>
   );

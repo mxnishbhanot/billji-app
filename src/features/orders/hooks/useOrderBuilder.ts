@@ -1,24 +1,28 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { customersApi, ordersApi, productsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
+import { useDocumentDraft } from '@/shared/drafts/useDocumentDraft';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
-import { Customer, DiscountType, InvoiceItem, Product } from '@/types';
+import { useAuthStore } from '@/store/authStore';
+import { Customer, DiscountType, InvoiceDraftPayload, InvoiceItem, Product } from '@/types';
 import { calculateClientTotals } from '@/utils/format';
 import {
   addProductToItems,
+  buildInvoiceDraftPayload,
+  hasInvoiceDraftContent,
   removeInvoiceItem,
+  setItemQuantity,
   updateItemQuantity
 } from '@/features/invoices/services/invoiceBuilderService';
 import { buildOrderPayload } from '../services/orderBuilderService';
 
 const PICKER_PAGE_SIZE = 20;
 
-// Lightweight order builder. Reuses the invoice builder's pure item helpers and
-// the shared picker queries, but deliberately skips the invoice-draft autosave
-// machinery (orders need no local drafts in this release) and the stock-warning
-// flow (orders never block on stock — see orderBuilderService).
+// Order builder. Reuses the invoice builder's pure item helpers, the shared picker
+// queries, and the shared draft autosave (documentType 'order' — same payload shape),
+// but skips the stock-warning flow (orders never block on stock — see orderBuilderService).
 export const useOrderBuilder = ({
   onCreated,
   showDialog
@@ -35,7 +39,9 @@ export const useOrderBuilder = ({
   const [customerSearch, setCustomerSearch] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [items, setItems] = useState<InvoiceItem[]>([]);
-  const [taxRate, setTaxRate] = useState('0');
+  // Pre-fill the business default GST rate (Tax Settings); user can still edit or clear it per order.
+  const defaultTaxRate = useAuthStore((state) => state.user?.businessProfile?.taxSettings?.defaultRate) ?? 0;
+  const [taxRate, setTaxRate] = useState(() => String(defaultTaxRate));
   const [discountType, setDiscountType] = useState<DiscountType>('flat');
   const [discountValue, setDiscountValue] = useState('0');
   const [notes, setNotes] = useState('');
@@ -59,7 +65,31 @@ export const useOrderBuilder = ({
   const customers = useMemo(() => customersQuery.data?.pages.flatMap((page) => page.customers) ?? [], [customersQuery.data]);
   const products = useMemo(() => productsQuery.data?.pages.flatMap((page) => page.products) ?? [], [productsQuery.data]);
   const activeCustomer = selectedCustomer ?? customers.find((customer) => customer._id === selectedCustomerId) ?? null;
+  const draftPayload = useMemo(
+    () => buildInvoiceDraftPayload({ selectedCustomerId, selectedCustomer: activeCustomer, items, taxRate, discountType, discountValue, notes }),
+    [activeCustomer, discountType, discountValue, items, notes, selectedCustomerId, taxRate]
+  );
   const totals = calculateClientTotals({ items, taxRate: Number(taxRate || 0), discountType, discountValue: Number(discountValue || 0) });
+
+  const applyDraftPayload = useCallback((payload: InvoiceDraftPayload) => {
+    setSelectedCustomerId(payload.selectedCustomerId);
+    setSelectedCustomer(payload.selectedCustomer);
+    setItems(payload.items);
+    setTaxRate(payload.taxRate);
+    setDiscountType(payload.discountType);
+    setDiscountValue(payload.discountValue);
+    setNotes(payload.notes);
+  }, []);
+
+  // A builder holding only the pre-filled default rate has no user content — don't autosave it.
+  const hasPayloadContent = useCallback((payload: InvoiceDraftPayload) => hasInvoiceDraftContent(payload, defaultTaxRate), [defaultTaxRate]);
+
+  const draft = useDocumentDraft<InvoiceDraftPayload>({
+    documentType: 'order',
+    payload: draftPayload,
+    hasPayloadContent,
+    applyPayload: applyDraftPayload
+  });
 
   const addCustomer = useMutation({
     mutationFn: customersApi.create,
@@ -75,6 +105,7 @@ export const useOrderBuilder = ({
   const createOrderMutation = useMutation({
     mutationFn: ordersApi.create,
     onSuccess: (order) => {
+      draft.clearActiveDraft();
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
       onCreated(order._id);
     },
@@ -89,6 +120,7 @@ export const useOrderBuilder = ({
 
   const addProduct = (product: Product) => setItems((current) => addProductToItems(current, product));
   const updateQuantity = (index: number, delta: number) => setItems((current) => updateItemQuantity(current, index, delta));
+  const setQuantity = (index: number, quantity: number) => setItems((current) => setItemQuantity(current, index, quantity));
   const removeItem = (index: number) => setItems((current) => removeInvoiceItem(current, index));
   const addCustomItem = (item: InvoiceItem) => setItems((current) => [...current, item]);
 
@@ -119,14 +151,23 @@ export const useOrderBuilder = ({
     customers,
     customersQuery,
     customModal,
+    discardRecoveryDraft: draft.discardRecoveryDraft,
     discountType,
     discountValue,
+    draftHydrated: draft.draftHydrated,
+    draftStatus: draft.draftStatus,
+    duplicateDraft: draft.duplicateDraft,
+    hasDraftContent: draft.hasDraftContent,
+    isDraftDirty: draft.isDraftDirty,
     items,
+    lastDraftSavedAt: draft.lastDraftSavedAt,
     notes,
     productSearch,
     products,
     productsQuery,
+    recoveryDraft: draft.recoveryDraft,
     removeItem,
+    resumeDraft: draft.resumeDraft,
     selectCustomer,
     setCustomerModal,
     setCustomerPicker,
@@ -136,6 +177,7 @@ export const useOrderBuilder = ({
     setDiscountValue,
     setNotes,
     setProductSearch,
+    setQuantity,
     setTaxRate,
     taxRate,
     totals,

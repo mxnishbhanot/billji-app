@@ -1,12 +1,12 @@
-import NetInfo from '@react-native-community/netinfo';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { customersApi, draftsApi, invoicesApi, productsApi } from '@/api/endpoints';
+import { customersApi, invoicesApi, productsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
+import { useDocumentDraft } from '@/shared/drafts/useDocumentDraft';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { useAuthStore } from '@/store/authStore';
-import { Customer, DiscountType, DraftDocument, InvoiceCreatePayload, InvoiceDraftPayload, InvoiceItem, Product, StockShortage } from '@/types';
+import { Customer, DiscountType, InvoiceCreatePayload, InvoiceDraftPayload, InvoiceItem, Product, StockShortage } from '@/types';
 import { calculateClientTotals } from '@/utils/format';
 import {
   addProductToItems,
@@ -14,23 +14,14 @@ import {
   buildInvoicePayload,
   hasInvoiceDraftContent,
   removeInvoiceItem,
+  setItemQuantity,
   updateItemQuantity
 } from '../services/invoiceBuilderService';
-import {
-  createInvoiceDraftId,
-  deleteInvoiceDraft,
-  getLatestInvoiceDraft,
-  INVOICE_DRAFT_SCHEMA_VERSION,
-  saveInvoiceDraft
-} from '../services/invoiceDraftStore';
 
 const PICKER_PAGE_SIZE = 20;
-const SERVER_SYNC_DELAY_MS = 1500;
 
 type StockWarning = { items: StockShortage[]; payload: InvoiceCreatePayload };
 type ApiErrorWithDetails = { response?: { data?: { details?: { code?: string; items?: StockShortage[] } } } };
-type InvoiceDraftDocument = DraftDocument<InvoiceDraftPayload>;
-type DraftStatus = 'idle' | 'saved' | 'syncing' | 'synced' | 'error';
 
 const stockShortagesFromError = (error: unknown) => {
   const details = (error as ApiErrorWithDetails)?.response?.data?.details;
@@ -45,7 +36,6 @@ export const useInvoiceBuilder = ({
   showDialog: (dialog: { title: string; message?: string; tone?: 'default' | 'success' | 'error' | 'warning' }) => void;
 }) => {
   const queryClient = useQueryClient();
-  const businessId = useAuthStore((state) => state.user?.businessId || null);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerPicker, setCustomerPicker] = useState(false);
@@ -54,20 +44,13 @@ export const useInvoiceBuilder = ({
   const [customerSearch, setCustomerSearch] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [items, setItems] = useState<InvoiceItem[]>([]);
-  const [taxRate, setTaxRate] = useState('0');
+  // Pre-fill the business default GST rate (Tax Settings); user can still edit or clear it per invoice.
+  const defaultTaxRate = useAuthStore((state) => state.user?.businessProfile?.taxSettings?.defaultRate) ?? 0;
+  const [taxRate, setTaxRate] = useState(() => String(defaultTaxRate));
   const [discountType, setDiscountType] = useState<DiscountType>('flat');
   const [discountValue, setDiscountValue] = useState('0');
   const [notes, setNotes] = useState('');
   const [stockWarning, setStockWarning] = useState<StockWarning | null>(null);
-  const [currentDraftId, setCurrentDraftId] = useState(createInvoiceDraftId);
-  const [draftHydrated, setDraftHydrated] = useState(false);
-  const [recoveryDraft, setRecoveryDraft] = useState<InvoiceDraftDocument | null>(null);
-  const [draftStatus, setDraftStatus] = useState<DraftStatus>('idle');
-  const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
-  const [isDraftDirty, setIsDraftDirty] = useState(false);
-  const currentDraftIdRef = useRef(currentDraftId);
-  const lastEditedAtRef = useRef<string | null>(null);
-  const serverDraftIdRef = useRef<string | null>(null);
   const debouncedCustomerSearch = useDebouncedValue(customerSearch, 300);
   const debouncedProductSearch = useDebouncedValue(productSearch, 300);
 
@@ -92,60 +75,7 @@ export const useInvoiceBuilder = ({
     () => buildInvoiceDraftPayload({ selectedCustomerId, selectedCustomer: activeCustomer, items, taxRate, discountType, discountValue, notes }),
     [activeCustomer, discountType, discountValue, items, notes, selectedCustomerId, taxRate]
   );
-  const hasDraftContent = useMemo(() => hasInvoiceDraftContent(draftPayload), [draftPayload]);
   const totals = calculateClientTotals({ items, taxRate: Number(taxRate || 0), discountType, discountValue: Number(discountValue || 0) });
-
-  const setActiveDraftId = useCallback((draftId: string) => {
-    currentDraftIdRef.current = draftId;
-    setCurrentDraftId(draftId);
-  }, []);
-
-  const clearDraft = useCallback(async (localDraftId: string) => {
-    await deleteInvoiceDraft(localDraftId);
-    try {
-      await draftsApi.remove(localDraftId);
-    } catch {
-      // Local discard must not fail because server cleanup is temporarily offline.
-    }
-  }, []);
-
-  const syncDraft = useCallback(async (draft: InvoiceDraftDocument) => {
-    try {
-      const network = await NetInfo.fetch();
-      if (network.isConnected === false || network.isInternetReachable === false) {
-        setDraftStatus('error');
-        return;
-      }
-
-      setDraftStatus('syncing');
-      const synced = await draftsApi.upsert(draft.localDraftId, {
-        documentType: 'invoice',
-        schemaVersion: draft.schemaVersion,
-        payload: draft.payload,
-        dirty: false,
-        lastEditedAt: draft.lastEditedAt
-      });
-
-      if (lastEditedAtRef.current !== draft.lastEditedAt || currentDraftIdRef.current !== draft.localDraftId) {
-        return;
-      }
-
-      const syncedAt = synced.lastSyncedAt || new Date().toISOString();
-      serverDraftIdRef.current = synced.serverDraftId || synced._id || draft.serverDraftId || null;
-      await saveInvoiceDraft({
-        ...draft,
-        serverDraftId: serverDraftIdRef.current,
-        businessId: synced.businessId ? String(synced.businessId) : draft.businessId || businessId,
-        dirty: false,
-        lastSyncedAt: syncedAt
-      });
-      setIsDraftDirty(false);
-      setDraftStatus('synced');
-      setLastDraftSavedAt(syncedAt);
-    } catch {
-      setDraftStatus('error');
-    }
-  }, [businessId]);
 
   const applyDraftPayload = useCallback((payload: InvoiceDraftPayload) => {
     setSelectedCustomerId(payload.selectedCustomerId);
@@ -157,132 +87,15 @@ export const useInvoiceBuilder = ({
     setNotes(payload.notes);
   }, []);
 
-  useEffect(() => {
-    let mounted = true;
+  // A builder holding only the pre-filled default rate has no user content — don't autosave it.
+  const hasPayloadContent = useCallback((payload: InvoiceDraftPayload) => hasInvoiceDraftContent(payload, defaultTaxRate), [defaultTaxRate]);
 
-    const loadDraft = async () => {
-      let draft = await getLatestInvoiceDraft(businessId);
-
-      if (!draft) {
-        try {
-          const serverDraft = (await draftsApi.list('invoice'))[0];
-          if (serverDraft) {
-            draft = {
-              ...serverDraft,
-              businessId: serverDraft.businessId ? String(serverDraft.businessId) : businessId,
-              dirty: false
-            };
-            await saveInvoiceDraft(draft);
-          }
-        } catch {
-          draft = null;
-        }
-      }
-
-      if (!mounted) return;
-      if (draft && hasInvoiceDraftContent(draft.payload)) {
-        setRecoveryDraft(draft);
-        serverDraftIdRef.current = draft.serverDraftId || draft._id || null;
-        setLastDraftSavedAt(draft.lastEditedAt);
-        setDraftStatus(draft.dirty ? 'saved' : 'synced');
-      }
-      setDraftHydrated(true);
-    };
-
-    void loadDraft();
-    return () => {
-      mounted = false;
-    };
-  }, [businessId]);
-
-  useEffect(() => {
-    if (!draftHydrated || !hasDraftContent) return undefined;
-
-    const lastEditedAt = new Date().toISOString();
-    lastEditedAtRef.current = lastEditedAt;
-    const draft: InvoiceDraftDocument = {
-      localDraftId: currentDraftId,
-      serverDraftId: serverDraftIdRef.current,
-      businessId,
-      documentType: 'invoice',
-      schemaVersion: INVOICE_DRAFT_SCHEMA_VERSION,
-      payload: draftPayload,
-      dirty: true,
-      lastEditedAt,
-      lastSyncedAt: null
-    };
-
-    void saveInvoiceDraft(draft)
-      .then(() => {
-        if (lastEditedAtRef.current !== lastEditedAt) return;
-        setIsDraftDirty(true);
-        setDraftStatus('saved');
-        setLastDraftSavedAt(lastEditedAt);
-      })
-      .catch(() => setDraftStatus('error'));
-
-    const timeout = setTimeout(() => {
-      void syncDraft(draft);
-    }, SERVER_SYNC_DELAY_MS);
-
-    return () => clearTimeout(timeout);
-  }, [businessId, currentDraftId, draftHydrated, draftPayload, hasDraftContent, syncDraft]);
-
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((network) => {
-      if (!draftHydrated || !hasDraftContent || !isDraftDirty) return;
-      if (network.isConnected === false || network.isInternetReachable === false) return;
-
-      const lastEditedAt = lastEditedAtRef.current || new Date().toISOString();
-      void syncDraft({
-        localDraftId: currentDraftIdRef.current,
-        serverDraftId: serverDraftIdRef.current,
-        businessId,
-        documentType: 'invoice',
-        schemaVersion: INVOICE_DRAFT_SCHEMA_VERSION,
-        payload: draftPayload,
-        dirty: true,
-        lastEditedAt,
-        lastSyncedAt: null
-      });
-    });
-
-    return () => unsubscribe();
-  }, [businessId, draftHydrated, draftPayload, hasDraftContent, isDraftDirty, syncDraft]);
-
-  const resumeDraft = () => {
-    if (!recoveryDraft) return;
-    setActiveDraftId(recoveryDraft.localDraftId);
-    serverDraftIdRef.current = recoveryDraft.serverDraftId || recoveryDraft._id || null;
-    lastEditedAtRef.current = recoveryDraft.lastEditedAt;
-    applyDraftPayload(recoveryDraft.payload);
-    setIsDraftDirty(recoveryDraft.dirty);
-    setDraftStatus(recoveryDraft.dirty ? 'saved' : 'synced');
-    setLastDraftSavedAt(recoveryDraft.lastEditedAt);
-    setRecoveryDraft(null);
-  };
-
-  const duplicateDraft = () => {
-    if (!recoveryDraft) return;
-    setActiveDraftId(createInvoiceDraftId());
-    serverDraftIdRef.current = null;
-    lastEditedAtRef.current = null;
-    applyDraftPayload(recoveryDraft.payload);
-    setIsDraftDirty(true);
-    setDraftStatus('saved');
-    setRecoveryDraft(null);
-  };
-
-  const discardRecoveryDraft = () => {
-    if (!recoveryDraft) return;
-    const draftToDiscard = recoveryDraft;
-    setRecoveryDraft(null);
-    setDraftStatus('idle');
-    setLastDraftSavedAt(null);
-    setIsDraftDirty(false);
-    setActiveDraftId(createInvoiceDraftId());
-    void clearDraft(draftToDiscard.localDraftId);
-  };
+  const draft = useDocumentDraft<InvoiceDraftPayload>({
+    documentType: 'invoice',
+    payload: draftPayload,
+    hasPayloadContent,
+    applyPayload: applyDraftPayload
+  });
 
   const addCustomer = useMutation({
     mutationFn: customersApi.create,
@@ -298,10 +111,7 @@ export const useInvoiceBuilder = ({
   const createInvoiceMutation = useMutation({
     mutationFn: invoicesApi.create,
     onSuccess: (invoice) => {
-      void clearDraft(currentDraftIdRef.current).catch(() => {});
-      setIsDraftDirty(false);
-      setDraftStatus('idle');
-      setLastDraftSavedAt(null);
+      draft.clearActiveDraft();
       queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
@@ -329,6 +139,7 @@ export const useInvoiceBuilder = ({
 
   const addProduct = (product: Product) => setItems((current) => addProductToItems(current, product));
   const updateQuantity = (index: number, delta: number) => setItems((current) => updateItemQuantity(current, index, delta));
+  const setQuantity = (index: number, quantity: number) => setItems((current) => setItemQuantity(current, index, quantity));
   const removeItem = (index: number) => setItems((current) => removeInvoiceItem(current, index));
   const addCustomItem = (item: InvoiceItem) => setItems((current) => [...current, item]);
 
@@ -369,24 +180,24 @@ export const useInvoiceBuilder = ({
     customers,
     customersQuery,
     customModal,
-    discardRecoveryDraft,
-    draftHydrated,
-    draftStatus,
-    duplicateDraft,
+    discardRecoveryDraft: draft.discardRecoveryDraft,
+    draftHydrated: draft.draftHydrated,
+    draftStatus: draft.draftStatus,
+    duplicateDraft: draft.duplicateDraft,
     continueWithOversell,
     discountType,
     discountValue,
-    hasDraftContent,
-    isDraftDirty,
+    hasDraftContent: draft.hasDraftContent,
+    isDraftDirty: draft.isDraftDirty,
     items,
-    lastDraftSavedAt,
+    lastDraftSavedAt: draft.lastDraftSavedAt,
     notes,
     productSearch,
     products,
     productsQuery,
-    recoveryDraft,
+    recoveryDraft: draft.recoveryDraft,
     removeItem,
-    resumeDraft,
+    resumeDraft: draft.resumeDraft,
     selectCustomer,
     setCustomerModal,
     setCustomerPicker,
@@ -396,6 +207,7 @@ export const useInvoiceBuilder = ({
     setDiscountValue,
     setNotes,
     setProductSearch,
+    setQuantity,
     setStockWarning,
     setTaxRate,
     stockWarning,

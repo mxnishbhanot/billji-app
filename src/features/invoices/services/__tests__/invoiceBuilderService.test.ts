@@ -4,6 +4,7 @@ import {
   buildInvoicePayload,
   findStockShortages,
   hasInvoiceDraftContent,
+  setItemQuantity,
   updateItemQuantity
 } from '../invoiceBuilderService';
 import { Product } from '@/types';
@@ -34,6 +35,14 @@ describe('invoiceBuilderService', () => {
     const updated = updateItemQuantity([{ name: 'Notebook', quantity: 1, price: 120 }], 0, -10);
 
     expect(updated[0].quantity).toBe(1);
+  });
+
+  it('sets item quantity directly, clamping to a whole number of at least one', () => {
+    const items = [{ name: 'Notebook', quantity: 2, price: 120 }];
+
+    expect(setItemQuantity(items, 0, 25)[0].quantity).toBe(25);
+    expect(setItemQuantity(items, 0, 0)[0].quantity).toBe(1);
+    expect(setItemQuantity(items, 0, 3.7)[0].quantity).toBe(3);
   });
 
   it('builds create payload with numeric form values and oversell flag', () => {

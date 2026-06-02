@@ -18,7 +18,10 @@
       "config": {
         "usesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.billji.mobile"
+      "bundleIdentifier": "com.billji.mobile",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Billji needs photo library access so you can choose a business logo."
+      }
     },
     "android": {
       "package": "com.billji.mobile",

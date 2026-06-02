@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -15,7 +15,9 @@ import { alpha, appColors, radii } from '@/theme/theme';
 import { NotificationItem } from '@/types';
 
 const PAGE_SIZE = 10;
-export function NotificationButton() {
+// Memoized: header parents re-render on every draft/keystroke state change and the
+// inline icon render-prop would otherwise redraw (visibly blink) the bell each time.
+export const NotificationButton = memo(function NotificationButton() {
   const navigation = useNavigation<AppNavigation>();
   const queryClient = useQueryClient();
   const theme = useTheme();
@@ -73,7 +75,7 @@ export function NotificationButton() {
       />
     </>
   );
-}
+});
 
 const styles = StyleSheet.create({
   action: { margin: 0 },

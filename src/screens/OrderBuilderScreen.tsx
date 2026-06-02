@@ -1,9 +1,12 @@
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { NavigationAction } from '@react-navigation/native';
 import { useForm } from 'react-hook-form';
 import { Button, useTheme } from 'react-native-paper';
 import {
   CustomerSelectorCard,
+  DraftSyncIndicator,
   InvoiceBuilderDialogs,
   InvoiceItemsEditor,
   ProductPickerList,
@@ -12,6 +15,7 @@ import {
 import { customerDefaults, customItemDefaults } from '@/features/invoices/services/invoiceBuilderService';
 import { useOrderBuilder } from '@/features/orders/hooks/useOrderBuilder';
 import { useAppDialog } from '@/components/AppDialog';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Screen } from '@/components/Screen';
 import { OrderBuilderScreenProps } from '@/navigation/types';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
@@ -23,6 +27,9 @@ export function OrderBuilderScreen({ navigation }: OrderBuilderScreenProps) {
   const isDark = theme.dark;
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
+  const [leavePromptVisible, setLeavePromptVisible] = useState(false);
+  const pendingLeaveAction = useRef<NavigationAction | null>(null);
+  const allowLeave = useRef(false);
   const customerForm = useForm<CustomerFormValues>({ defaultValues: customerDefaults, resolver: zodResolver(customerSchema) });
   const customForm = useForm<CustomItemFormValues>({ defaultValues: customItemDefaults, resolver: zodResolver(customItemSchema) });
   const builder = useOrderBuilder({
@@ -32,6 +39,20 @@ export function OrderBuilderScreen({ navigation }: OrderBuilderScreenProps) {
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.08);
   const subSurface = isDark ? colors.surface : alpha(colors.primary, 0.04);
   const inputBackground = isDark ? colors.surface : '#FFFFFF';
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
+      // Blur-triggered popToTop (tab switch) must not be blocked — the draft is already saved
+      // locally and is offered for recovery on the next visit.
+      if (!navigation.isFocused()) return;
+      if (allowLeave.current || !builder.hasDraftContent || !builder.isDraftDirty || builder.createOrderMutation.isPending) return;
+      event.preventDefault();
+      pendingLeaveAction.current = event.data.action;
+      setLeavePromptVisible(true);
+    });
+
+    return unsubscribe;
+  }, [builder.createOrderMutation.isPending, builder.hasDraftContent, builder.isDraftDirty, navigation]);
 
   const loadMoreProducts = () => {
     if (builder.productsQuery.hasNextPage && !builder.productsQuery.isFetchingNextPage) void builder.productsQuery.fetchNextPage();
@@ -49,7 +70,12 @@ export function OrderBuilderScreen({ navigation }: OrderBuilderScreenProps) {
   };
 
   return (
-    <Screen title="New Order">
+    <Screen
+      title="New Order"
+      titleAccessory={
+        <DraftSyncIndicator isDirty={builder.isDraftDirty} lastSavedAt={builder.lastDraftSavedAt} status={builder.draftStatus} />
+      }
+    >
       <CustomerSelectorCard
         customer={builder.activeCustomer}
         cardBorder={cardBorder}
@@ -78,6 +104,7 @@ export function OrderBuilderScreen({ navigation }: OrderBuilderScreenProps) {
         isDark={isDark}
         items={builder.items}
         onRemove={builder.removeItem}
+        onSetQuantity={builder.setQuantity}
         onUpdateQuantity={builder.updateQuantity}
         subSurface={subSurface}
       />
@@ -116,6 +143,7 @@ export function OrderBuilderScreen({ navigation }: OrderBuilderScreenProps) {
         customForm={customForm}
         customModal={builder.customModal}
         hasMoreCustomers={Boolean(builder.customersQuery.hasNextPage)}
+        loadingCustomers={builder.customersQuery.isLoading || (builder.customersQuery.isFetching && !builder.customersQuery.isFetchingNextPage)}
         loadingMoreCustomers={builder.customersQuery.isFetchingNextPage}
         onAddCustomItem={builder.addCustomItem}
         onCloseCustomerModal={closeCustomerModal}
@@ -124,14 +152,37 @@ export function OrderBuilderScreen({ navigation }: OrderBuilderScreenProps) {
         onCustomerSearchChange={builder.setCustomerSearch}
         onCustomerSubmit={(values) => builder.addCustomer.mutate(values, { onSuccess: () => customerForm.reset(customerDefaults) })}
         onLoadMoreCustomers={loadMoreCustomers}
+        onQuickAddCustomer={() => {
+          builder.setCustomerPicker(false);
+          builder.setCustomerModal(true);
+        }}
+        onRecoveryDiscard={builder.discardRecoveryDraft}
+        onRecoveryDuplicate={builder.duplicateDraft}
+        onRecoveryResume={builder.resumeDraft}
         onSelectCustomer={builder.selectCustomer}
         onStockWarningClose={() => undefined}
         onStockWarningContinue={() => undefined}
-        recoveryDraft={null}
-        onRecoveryDiscard={() => undefined}
-        onRecoveryDuplicate={() => undefined}
-        onRecoveryResume={() => undefined}
+        recoveryDraft={builder.recoveryDraft}
+        recoveryTitle="Recover order draft"
+        selectedCustomerId={builder.activeCustomer?._id}
         stockWarning={null}
+      />
+      <ConfirmDialog
+        visible={leavePromptVisible}
+        title="Leave order builder?"
+        message="Your draft is saved and can be resumed later."
+        confirmLabel="Leave"
+        onCancel={() => {
+          pendingLeaveAction.current = null;
+          setLeavePromptVisible(false);
+        }}
+        onConfirm={() => {
+          const action = pendingLeaveAction.current;
+          pendingLeaveAction.current = null;
+          setLeavePromptVisible(false);
+          allowLeave.current = true;
+          if (action) navigation.dispatch(action);
+        }}
       />
     </Screen>
   );

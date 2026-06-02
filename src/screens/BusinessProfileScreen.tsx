@@ -15,6 +15,7 @@ import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
 import { BusinessProfile, BusinessProfileFormValues } from '@/types';
+import { GSTIN_LENGTH, isValidGstin } from '@/utils/gstin';
 import { settingsSchema } from '@/validation/schemas';
 
 const profileDefaults = (profile?: BusinessProfile): BusinessProfileFormValues => ({
@@ -61,6 +62,7 @@ export function BusinessProfileScreen() {
     resolver: zodResolver(settingsSchema)
   });
   const gstNumber = useWatch({ control: form.control, name: 'gstNumber' }) || '';
+  const gstinValid = isValidGstin(gstNumber);
 
   useEffect(() => {
     form.reset(profileDefaults(user?.businessProfile));
@@ -129,13 +131,21 @@ export function BusinessProfileScreen() {
           name="gstNumber"
           label="GSTIN"
           autoCapitalize="characters"
+          maxLength={GSTIN_LENGTH}
           style={{ backgroundColor: inputBackground }}
         />
         {gstNumber ? (
-          <View style={[styles.verifiedPill, { backgroundColor: alpha(colors.accent, isDark ? 0.22 : 0.1), borderColor: alpha(colors.accent, isDark ? 0.36 : 0.22) }]}>
-            <MaterialCommunityIcons name="check-circle-outline" size={13} color={colors.accent} />
-            <Text style={[styles.verifiedText, { color: colors.accent }]}>Verified</Text>
-          </View>
+          gstinValid ? (
+            <View style={[styles.verifiedPill, { backgroundColor: alpha(colors.accent, isDark ? 0.22 : 0.1), borderColor: alpha(colors.accent, isDark ? 0.36 : 0.22) }]}>
+              <MaterialCommunityIcons name="check-circle-outline" size={13} color={colors.accent} />
+              <Text style={[styles.verifiedText, { color: colors.accent }]}>Valid GSTIN</Text>
+            </View>
+          ) : (
+            <View style={[styles.verifiedPill, { backgroundColor: alpha(colors.warning, isDark ? 0.22 : 0.1), borderColor: alpha(colors.warning, isDark ? 0.36 : 0.22) }]}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={13} color={colors.warning} />
+              <Text style={[styles.verifiedText, { color: colors.warning }]}>Invalid GSTIN</Text>
+            </View>
+          )
         ) : null}
         <FormTextInput
           control={form.control}
