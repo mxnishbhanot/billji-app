@@ -76,7 +76,7 @@ export const customersApi = {
 
 export const draftsApi = {
   list: (documentType: DocumentType = 'invoice') => api.get<{ drafts: InvoiceDraftDocument[] }>('/drafts', { params: { documentType } }).then((res) => res.data.drafts),
-  upsert: (localDraftId: string, payload: DraftUpsertPayload<InvoiceDraftPayload>) => api.put<{ draft: InvoiceDraftDocument }>(`/drafts/${localDraftId}`, payload).then((res) => res.data.draft),
+  upsert: (localDraftId: string, payload: DraftUpsertPayload) => api.put<{ draft: InvoiceDraftDocument }>(`/drafts/${localDraftId}`, payload).then((res) => res.data.draft),
   remove: (localDraftId: string) => api.delete(`/drafts/${localDraftId}`).then((res) => res.data)
 };
 

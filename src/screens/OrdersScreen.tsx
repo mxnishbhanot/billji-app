@@ -152,7 +152,15 @@ export function OrdersScreen({ navigation }: OrdersScreenProps) {
   const stickyHeader = (
     <View style={[styles.stickyHeader, { backgroundColor: theme.colors.background }]}>
       <View style={[styles.switcher, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.12) }]}>
-        <Pressable style={styles.switcherOption} onPress={() => navigation.navigate('InvoiceList')}>
+        <Pressable
+          style={styles.switcherOption}
+          onPress={() => {
+            // Swap in place when this list is the stack root; pop back when pushed on top of
+            // InvoiceList (e.g. via the dashboard quick link) so the stack never stacks lists.
+            if (navigation.getState().index > 0) navigation.popToTop();
+            else navigation.replace('InvoiceList');
+          }}
+        >
           <MaterialCommunityIcons name="file-document" size={18} color={theme.colors.onSurfaceVariant} />
           <Text style={[styles.switcherLabel, { color: theme.colors.onSurfaceVariant }]}>Invoices</Text>
         </Pressable>
@@ -262,6 +270,8 @@ export function OrdersScreen({ navigation }: OrdersScreenProps) {
 
   const headerCreateAction = (
     <Pressable
+      accessibilityLabel="Create order"
+      accessibilityRole="button"
       onPress={() => navigation.navigate('OrderCreate')}
       style={({ pressed }) => [styles.headerCreateBtn, { backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary, shadowColor: isDark ? '#000000' : colors.primaryStrong }]}
     >

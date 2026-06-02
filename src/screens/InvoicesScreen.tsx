@@ -155,7 +155,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
           <MaterialCommunityIcons name="file-document" size={18} color="#FFFFFF" />
           <Text style={[styles.switcherLabel, { color: '#FFFFFF' }]}>Invoices</Text>
         </Pressable>
-        <Pressable style={styles.switcherOption} onPress={() => navigation.navigate('OrderList')}>
+        <Pressable style={styles.switcherOption} onPress={() => navigation.replace('OrderList')}>
           <MaterialCommunityIcons name="clipboard-list-outline" size={18} color={theme.colors.onSurfaceVariant} />
           <Text style={[styles.switcherLabel, { color: theme.colors.onSurfaceVariant }]}>Orders</Text>
         </Pressable>

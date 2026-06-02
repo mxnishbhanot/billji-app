@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidGstin } from '@/utils/gstin';
 
 export const loginSchema = z.object({ email: z.email('Enter a valid email'), password: z.string().min(1, 'Password is required') });
 export const registerSchema = z.object({ name: z.string().trim().min(1, 'Name is required').max(80), email: z.email('Enter a valid email'), password: z.string().min(8, 'Use 8+ characters') });
@@ -10,7 +11,7 @@ export const settingsSchema = z.object({
   businessName: z.string().trim().min(1, 'Business name is required').max(120),
   phone: z.union([z.literal(''), z.string().regex(/^\d{10}$/, 'Phone must be exactly 10 digits')]).optional(),
   countryCode: z.string().default('+91'),
-  gstNumber: z.string().max(32).optional(),
+  gstNumber: z.union([z.literal(''), z.string().trim().refine(isValidGstin, 'Enter a valid 15-character GSTIN')]).optional(),
   panNumber: z.union([z.literal(''), z.string().trim().regex(/^[A-Z]{5}[0-9]{4}[A-Z]$/i, 'Enter a valid PAN')]).optional(),
   email: z.union([z.literal(''), z.email('Enter a valid email')]).optional(),
   website: z.union([z.literal(''), z.string().trim().max(180).regex(/^(https?:\/\/)?([\w-]+\.)+[\w-]{2,}(\/\S*)?$/i, 'Enter a valid website')]).optional(),

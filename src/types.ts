@@ -8,6 +8,12 @@ export type PaymentType = 'receipt' | 'refund';
 export type ApiParamValue = string | number | boolean | null | undefined;
 export type ApiParams = Record<string, ApiParamValue>;
 
+export type TaxSettings = {
+  defaultRate: number;
+  pricesIncludeTax: boolean;
+  compoundTax: boolean;
+};
+
 export type BusinessProfile = {
   businessName?: string;
   logoUrl?: string;
@@ -22,6 +28,7 @@ export type BusinessProfile = {
   state?: string;
   invoicePrefix?: string;
   panNumber?: string;
+  taxSettings?: TaxSettings;
   theme?: 'light' | 'dark';
 };
 

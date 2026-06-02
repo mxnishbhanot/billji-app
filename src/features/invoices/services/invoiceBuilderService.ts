@@ -29,6 +29,9 @@ export const addProductToItems = (items: InvoiceItem[], product: Product) => {
 export const updateItemQuantity = (items: InvoiceItem[], index: number, delta: number) =>
   items.map((item, itemIndex) => (itemIndex === index ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item));
 
+export const setItemQuantity = (items: InvoiceItem[], index: number, quantity: number) =>
+  items.map((item, itemIndex) => (itemIndex === index ? { ...item, quantity: Math.max(1, Math.floor(quantity)) } : item));
+
 export const removeInvoiceItem = (items: InvoiceItem[], index: number) => items.filter((_, itemIndex) => itemIndex !== index);
 
 export const customItemFromForm = (values: CustomItemFormValues): InvoiceItem => ({
@@ -119,13 +122,15 @@ export const buildInvoiceDraftPayload = ({
   notes
 });
 
-export const hasInvoiceDraftContent = (payload: InvoiceDraftPayload) =>
+// defaultTaxRate: the business default pre-filled into a fresh builder — a builder holding
+// only that pre-fill has no user content, so it must not trigger draft autosave.
+export const hasInvoiceDraftContent = (payload: InvoiceDraftPayload, defaultTaxRate = 0) =>
   Boolean(
     payload.selectedCustomerId ||
     payload.selectedCustomer ||
     payload.items.length ||
     payload.notes.trim() ||
-    Number(payload.taxRate || 0) !== 0 ||
+    Number(payload.taxRate || 0) !== defaultTaxRate ||
     payload.discountType !== 'flat' ||
     Number(payload.discountValue || 0) !== 0
   );
