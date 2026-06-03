@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput as RNTextInput, View, type TextStyle } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
@@ -63,11 +63,89 @@ const reportRangeLabel = (range: { from?: string; to?: string }) => {
   if (!range.from && !range.to) return 'Any time';
   return `${range.from ? formatDate(range.from) : 'Start'} - ${range.to ? formatDate(range.to) : 'Today'}`;
 };
+const STATUS_ICONS: Record<InvoiceStatus, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  paid: 'check-decagram',
+  pending: 'clock-outline',
+  cancelled: 'close-circle'
+};
+
+// Memoized row: unchanged invoices skip re-rendering on screen re-renders
+// (search keystrokes, filter changes, refetches). Theme styles memoized per theme.
+const InvoiceCard = memo(function InvoiceCard({
+  item,
+  isDark,
+  colors,
+  onSurface,
+  onSurfaceVariant,
+  primary,
+  onPress
+}: {
+  item: Invoice;
+  isDark: boolean;
+  colors: ReturnType<typeof appColors>;
+  onSurface: string;
+  onSurfaceVariant: string;
+  primary: string;
+  onPress: (id: string) => void;
+}) {
+  const themed = useMemo(() => ({
+    card: { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), shadowColor: isDark ? '#000000' : colors.primaryStrong },
+    divider: { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) },
+    paidAvatar: { backgroundColor: alpha(colors.accent, isDark ? 0.22 : 0.14) },
+    pendingAvatar: { backgroundColor: alpha(colors.primary, isDark ? 0.22 : 0.14) }
+  }), [colors, isDark]);
+
+  const tone = statusTone(item.status, isDark);
+  const avatarFg = item.status === 'paid' ? colors.accent : colors.primary;
+  const paymentMeta = item.paymentStatus !== 'paid' ? paymentStatusMeta(item.paymentStatus) : null;
+  const hasBalance = typeof item.balanceDue === 'number' && item.balanceDue > 0;
+
+  return (
+    <Pressable
+      onPress={() => onPress(item._id)}
+      style={({ pressed }) => [styles.invoiceCard, themed.card, { opacity: pressed ? 0.94 : 1 }]}
+    >
+      <View style={styles.cardTop}>
+        <View style={[styles.avatar, item.status === 'paid' ? themed.paidAvatar : themed.pendingAvatar]}>
+          <Text style={[styles.avatarText, { color: avatarFg }]}>{initials(item.customerSnapshot.name)}</Text>
+        </View>
+        <View style={styles.cardTitleBlock}>
+          <Text numberOfLines={1} style={[styles.invoiceTitle, { color: onSurface }]}>{item.customerSnapshot.name}</Text>
+          <Text numberOfLines={1} style={[styles.invoiceMeta, { color: onSurfaceVariant }]}>
+            <Text style={{ ...fontStyles.semiBold, color: onSurfaceVariant }}>{item.invoiceNumber}</Text>
+            {`  ·  ${formatDate(item.date)}`}
+          </Text>
+        </View>
+        <View style={styles.amountBlock}>
+          <Text style={[styles.invoiceAmount, { color: onSurface }]}>{formatCurrency(item.total)}</Text>
+          {hasBalance ? (
+            <Text style={[styles.balanceDue, { color: colors.warning }]}>Due {formatCurrency(item.balanceDue)}</Text>
+          ) : null}
+        </View>
+      </View>
+      <View style={[styles.cardDivider, themed.divider]} />
+      <View style={styles.cardBottom}>
+        <View style={styles.pillRow}>
+          <View style={[styles.statusPill, { backgroundColor: tone.background, borderColor: tone.border }]}>
+            <MaterialCommunityIcons name={STATUS_ICONS[item.status]} size={13} color={tone.foreground} />
+            <Text style={[styles.statusText, { color: tone.foreground }]}>{item.status}</Text>
+          </View>
+          {paymentMeta ? <StatusPill label={paymentMeta.label} tone={paymentMeta.tone} /> : null}
+        </View>
+        <View style={styles.viewHint}>
+          <Text style={[styles.viewHintLabel, { color: primary }]}>View</Text>
+          <Feather name="chevron-right" size={15} color={primary} />
+        </View>
+      </View>
+    </Pressable>
+  );
+});
 
 export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
   const theme = useTheme();
   const isDark = theme.dark;
-  const colors = appColors(isDark);
+  // Stable reference so the memoized row's theme styles only recompute on theme change.
+  const colors = useMemo(() => appColors(isDark), [isDark]);
   const { can } = usePermissions();
   const canCreate = can(PERMISSION.invoicesCreate);
   const routeFrom = route?.params?.from || '';
@@ -126,11 +204,6 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
     ((activeSort || filterValues.sort) !== 'newest' ? 1 : 0);
   const totalCount = query.data?.pages[0]?.pagination.total ?? 0;
   const visibleCount = invoices.length;
-  const statusIcon: Record<InvoiceStatus, keyof typeof MaterialCommunityIcons.glyphMap> = {
-    paid: 'check-decagram',
-    pending: 'clock-outline',
-    cancelled: 'close-circle'
-  };
 
   const activeFilterTags: { key: string; label: string; onClear: () => void }[] = [
     filterValues.status ? { key: 'status', label: STATUS_LABELS[filterValues.status], onClear: () => setFilterValues((v) => ({ ...v, status: '' })) } : null,
@@ -220,60 +293,18 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
     return null;
   };
 
-  const renderInvoiceCard = ({ item }: { item: Invoice }) => {
-    const tone = statusTone(item.status, isDark);
-    const avatarBg = item.status === 'paid' ? alpha(colors.accent, isDark ? 0.22 : 0.14) : alpha(colors.primary, isDark ? 0.22 : 0.14);
-    const avatarFg = item.status === 'paid' ? colors.accent : colors.primary;
-    const paymentMeta = item.paymentStatus !== 'paid' ? paymentStatusMeta(item.paymentStatus) : null;
-    const hasBalance = typeof item.balanceDue === 'number' && item.balanceDue > 0;
-    return (
-      <Pressable
-        onPress={() => navigation.navigate('InvoiceDetail', { id: item._id })}
-        style={({ pressed }) => [
-          styles.invoiceCard,
-          {
-            backgroundColor: colors.card,
-            borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08),
-            shadowColor: isDark ? '#000000' : colors.primaryStrong,
-            opacity: pressed ? 0.94 : 1
-          }
-        ]}
-      >
-        <View style={styles.cardTop}>
-          <View style={[styles.avatar, { backgroundColor: avatarBg }]}>
-            <Text style={[styles.avatarText, { color: avatarFg }]}>{initials(item.customerSnapshot.name)}</Text>
-          </View>
-          <View style={styles.cardTitleBlock}>
-            <Text numberOfLines={1} style={[styles.invoiceTitle, { color: theme.colors.onSurface }]}>{item.customerSnapshot.name}</Text>
-            <Text numberOfLines={1} style={[styles.invoiceMeta, { color: theme.colors.onSurfaceVariant }]}>
-              <Text style={{ ...fontStyles.semiBold, color: theme.colors.onSurfaceVariant }}>{item.invoiceNumber}</Text>
-              {`  ·  ${formatDate(item.date)}`}
-            </Text>
-          </View>
-          <View style={styles.amountBlock}>
-            <Text style={[styles.invoiceAmount, { color: theme.colors.onSurface }]}>{formatCurrency(item.total)}</Text>
-            {hasBalance ? (
-              <Text style={[styles.balanceDue, { color: colors.warning }]}>Due {formatCurrency(item.balanceDue)}</Text>
-            ) : null}
-          </View>
-        </View>
-        <View style={[styles.cardDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) }]} />
-        <View style={styles.cardBottom}>
-          <View style={styles.pillRow}>
-            <View style={[styles.statusPill, { backgroundColor: tone.background, borderColor: tone.border }]}>
-              <MaterialCommunityIcons name={statusIcon[item.status]} size={13} color={tone.foreground} />
-              <Text style={[styles.statusText, { color: tone.foreground }]}>{item.status}</Text>
-            </View>
-            {paymentMeta ? <StatusPill label={paymentMeta.label} tone={paymentMeta.tone} /> : null}
-          </View>
-          <View style={styles.viewHint}>
-            <Text style={[styles.viewHintLabel, { color: theme.colors.primary }]}>View</Text>
-            <Feather name="chevron-right" size={15} color={theme.colors.primary} />
-          </View>
-        </View>
-      </Pressable>
-    );
-  };
+  const openInvoice = useCallback((id: string) => navigation.navigate('InvoiceDetail', { id }), [navigation]);
+  const renderInvoiceCard = useCallback(({ item }: { item: Invoice }) => (
+    <InvoiceCard
+      item={item}
+      isDark={isDark}
+      colors={colors}
+      onSurface={theme.colors.onSurface}
+      onSurfaceVariant={theme.colors.onSurfaceVariant}
+      primary={theme.colors.primary}
+      onPress={openInvoice}
+    />
+  ), [isDark, colors, theme.colors.onSurface, theme.colors.onSurfaceVariant, theme.colors.primary, openInvoice]);
 
   const headerCreateAction = (
     <Pressable

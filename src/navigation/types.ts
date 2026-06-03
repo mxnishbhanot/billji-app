@@ -52,6 +52,7 @@ export type SettingsStackParamList = {
   SettingsHome: undefined;
   BusinessProfile: undefined;
   TaxSettings: undefined;
+  NotificationSettings: undefined;
   ActivityLog: undefined;
   Ledger: undefined;
 };

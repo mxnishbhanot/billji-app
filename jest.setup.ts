@@ -7,5 +7,3 @@ jest.mock('expo-secure-store', () => ({
 jest.mock('expo-sqlite', () => ({
   openDatabaseAsync: jest.fn()
 }));
-
-jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));

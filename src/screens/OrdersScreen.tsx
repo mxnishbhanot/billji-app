@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput as RNTextInput, View, type TextStyle } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -73,11 +73,86 @@ const initials = (name: string) => {
   return parts.map((part) => part.charAt(0).toUpperCase()).join('') || '?';
 };
 const webSearchInputStyle = { outlineStyle: 'none', outlineWidth: 0 } as unknown as TextStyle;
+const ORDER_STATUS_ICONS: Record<OrderStatus, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  draft: 'file-document-edit-outline',
+  confirmed: 'check-decagram',
+  fulfilled: 'truck-check-outline',
+  cancelled: 'close-circle'
+};
+
+// Memoized row: unchanged orders skip re-rendering on screen re-renders
+// (search keystrokes, filter changes, refetches). Theme styles memoized per theme.
+const OrderCard = memo(function OrderCard({
+  item,
+  isDark,
+  colors,
+  onSurface,
+  onSurfaceVariant,
+  primary,
+  onPress
+}: {
+  item: Order;
+  isDark: boolean;
+  colors: ReturnType<typeof appColors>;
+  onSurface: string;
+  onSurfaceVariant: string;
+  primary: string;
+  onPress: (id: string) => void;
+}) {
+  const themed = useMemo(() => ({
+    card: { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), shadowColor: isDark ? '#000000' : colors.primaryStrong },
+    divider: { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) },
+    avatar: { backgroundColor: alpha(colors.primary, isDark ? 0.22 : 0.14) }
+  }), [colors, isDark]);
+
+  const tone = statusTone(item.orderStatus, isDark);
+  const paymentMeta = item.paymentStatus !== 'paid' ? paymentStatusMeta(item.paymentStatus) : paymentStatusMeta('paid');
+  const hasBalance = typeof item.balanceDue === 'number' && item.balanceDue > 0;
+
+  return (
+    <Pressable
+      onPress={() => onPress(item._id)}
+      style={({ pressed }) => [styles.orderCard, themed.card, { opacity: pressed ? 0.94 : 1 }]}
+    >
+      <View style={styles.cardTop}>
+        <View style={[styles.avatar, themed.avatar]}>
+          <Text style={[styles.avatarText, { color: colors.primary }]}>{initials(item.customerSnapshot.name)}</Text>
+        </View>
+        <View style={styles.cardTitleBlock}>
+          <Text numberOfLines={1} style={[styles.orderTitle, { color: onSurface }]}>{item.customerSnapshot.name}</Text>
+          <Text numberOfLines={1} style={[styles.orderMeta, { color: onSurfaceVariant }]}>
+            <Text style={{ ...fontStyles.semiBold, color: onSurfaceVariant }}>{item.orderNumber}</Text>
+            {`  ·  ${formatDate(item.date)}`}
+          </Text>
+        </View>
+        <View style={styles.amountBlock}>
+          <Text style={[styles.orderAmount, { color: onSurface }]}>{formatCurrency(item.total)}</Text>
+          {hasBalance ? <Text style={[styles.balanceDue, { color: colors.warning }]}>Due {formatCurrency(item.balanceDue)}</Text> : null}
+        </View>
+      </View>
+      <View style={[styles.cardDivider, themed.divider]} />
+      <View style={styles.cardBottom}>
+        <View style={styles.pillRow}>
+          <View style={[styles.statusPill, { backgroundColor: tone.background, borderColor: tone.border }]}>
+            <MaterialCommunityIcons name={ORDER_STATUS_ICONS[item.orderStatus]} size={13} color={tone.foreground} />
+            <Text style={[styles.statusText, { color: tone.foreground }]}>{item.orderStatus}</Text>
+          </View>
+          {paymentMeta ? <StatusPill label={paymentMeta.label} tone={paymentMeta.tone} /> : null}
+        </View>
+        <View style={styles.viewHint}>
+          <Text style={[styles.viewHintLabel, { color: primary }]}>View</Text>
+          <Feather name="chevron-right" size={15} color={primary} />
+        </View>
+      </View>
+    </Pressable>
+  );
+});
 
 export function OrdersScreen({ navigation }: OrdersScreenProps) {
   const theme = useTheme();
   const isDark = theme.dark;
-  const colors = appColors(isDark);
+  // Stable reference so the memoized row's theme styles only recompute on theme change.
+  const colors = useMemo(() => appColors(isDark), [isDark]);
   const { can } = usePermissions();
   const canCreate = can(PERMISSION.ordersCreate);
   const [search, setSearch] = useState('');
@@ -134,12 +209,6 @@ export function OrdersScreen({ navigation }: OrdersScreenProps) {
     void query.fetchNextPage();
   };
 
-  const orderStatusIcon: Record<OrderStatus, keyof typeof MaterialCommunityIcons.glyphMap> = {
-    draft: 'file-document-edit-outline',
-    confirmed: 'check-decagram',
-    fulfilled: 'truck-check-outline',
-    cancelled: 'close-circle'
-  };
   const activeFilterTags: { key: string; label: string; onClear: () => void }[] = [
     filterValues.orderStatus ? { key: 'orderStatus', label: STATUS_LABELS[filterValues.orderStatus], onClear: () => setFilterValues((v) => ({ ...v, orderStatus: '' })) } : null,
     filterValues.paymentStatus ? { key: 'paymentStatus', label: PAYMENT_LABELS[filterValues.paymentStatus], onClear: () => setFilterValues((v) => ({ ...v, paymentStatus: '' })) } : null,
@@ -217,56 +286,18 @@ export function OrdersScreen({ navigation }: OrdersScreenProps) {
     return null;
   };
 
-  const renderOrderCard = ({ item }: { item: Order }) => {
-    const tone = statusTone(item.orderStatus, isDark);
-    const paymentMeta = item.paymentStatus !== 'paid' ? paymentStatusMeta(item.paymentStatus) : paymentStatusMeta('paid');
-    const hasBalance = typeof item.balanceDue === 'number' && item.balanceDue > 0;
-    return (
-      <Pressable
-        onPress={() => navigation.navigate('OrderDetail', { id: item._id })}
-        style={({ pressed }) => [
-          styles.orderCard,
-          {
-            backgroundColor: colors.card,
-            borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08),
-            shadowColor: isDark ? '#000000' : colors.primaryStrong,
-            opacity: pressed ? 0.94 : 1
-          }
-        ]}
-      >
-        <View style={styles.cardTop}>
-          <View style={[styles.avatar, { backgroundColor: alpha(colors.primary, isDark ? 0.22 : 0.14) }]}>
-            <Text style={[styles.avatarText, { color: colors.primary }]}>{initials(item.customerSnapshot.name)}</Text>
-          </View>
-          <View style={styles.cardTitleBlock}>
-            <Text numberOfLines={1} style={[styles.orderTitle, { color: theme.colors.onSurface }]}>{item.customerSnapshot.name}</Text>
-            <Text numberOfLines={1} style={[styles.orderMeta, { color: theme.colors.onSurfaceVariant }]}>
-              <Text style={{ ...fontStyles.semiBold, color: theme.colors.onSurfaceVariant }}>{item.orderNumber}</Text>
-              {`  ·  ${formatDate(item.date)}`}
-            </Text>
-          </View>
-          <View style={styles.amountBlock}>
-            <Text style={[styles.orderAmount, { color: theme.colors.onSurface }]}>{formatCurrency(item.total)}</Text>
-            {hasBalance ? <Text style={[styles.balanceDue, { color: colors.warning }]}>Due {formatCurrency(item.balanceDue)}</Text> : null}
-          </View>
-        </View>
-        <View style={[styles.cardDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) }]} />
-        <View style={styles.cardBottom}>
-          <View style={styles.pillRow}>
-            <View style={[styles.statusPill, { backgroundColor: tone.background, borderColor: tone.border }]}>
-              <MaterialCommunityIcons name={orderStatusIcon[item.orderStatus]} size={13} color={tone.foreground} />
-              <Text style={[styles.statusText, { color: tone.foreground }]}>{item.orderStatus}</Text>
-            </View>
-            {paymentMeta ? <StatusPill label={paymentMeta.label} tone={paymentMeta.tone} /> : null}
-          </View>
-          <View style={styles.viewHint}>
-            <Text style={[styles.viewHintLabel, { color: theme.colors.primary }]}>View</Text>
-            <Feather name="chevron-right" size={15} color={theme.colors.primary} />
-          </View>
-        </View>
-      </Pressable>
-    );
-  };
+  const openOrder = useCallback((id: string) => navigation.navigate('OrderDetail', { id }), [navigation]);
+  const renderOrderCard = useCallback(({ item }: { item: Order }) => (
+    <OrderCard
+      item={item}
+      isDark={isDark}
+      colors={colors}
+      onSurface={theme.colors.onSurface}
+      onSurfaceVariant={theme.colors.onSurfaceVariant}
+      primary={theme.colors.primary}
+      onPress={openOrder}
+    />
+  ), [isDark, colors, theme.colors.onSurface, theme.colors.onSurfaceVariant, theme.colors.primary, openOrder]);
 
   const headerCreateAction = (
     <Pressable

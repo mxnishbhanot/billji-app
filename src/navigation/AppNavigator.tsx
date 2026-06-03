@@ -28,6 +28,7 @@ const PaymentsScreen = lazy(() => import('@/screens/PaymentsScreen').then((m) =>
 const SettingsScreen = lazy(() => import('@/screens/SettingsScreen').then((m) => ({ default: m.SettingsScreen })));
 const BusinessProfileScreen = lazy(() => import('@/screens/BusinessProfileScreen').then((m) => ({ default: m.BusinessProfileScreen })));
 const TaxSettingsScreen = lazy(() => import('@/screens/TaxSettingsScreen').then((m) => ({ default: m.TaxSettingsScreen })));
+const NotificationSettingsScreen = lazy(() => import('@/screens/NotificationSettingsScreen').then((m) => ({ default: m.NotificationSettingsScreen })));
 const ActivityLogScreen = lazy(() => import('@/screens/ActivityLogScreen').then((m) => ({ default: m.ActivityLogScreen })));
 const LedgerScreen = lazy(() => import('@/screens/LedgerScreen').then((m) => ({ default: m.LedgerScreen })));
 import { useAuthStore } from '@/store/authStore';
@@ -139,6 +140,7 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="SettingsHome" component={SettingsScreen} />
       <SettingsStack.Screen name="BusinessProfile" component={BusinessProfileScreen} />
       <SettingsStack.Screen name="TaxSettings" component={TaxSettingsScreen} />
+      <SettingsStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
       <SettingsStack.Screen name="ActivityLog" component={ActivityLogScreen} />
       <SettingsStack.Screen name="Ledger" component={LedgerScreen} />
     </SettingsStack.Navigator>

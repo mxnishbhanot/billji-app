@@ -273,8 +273,8 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
   const report = query.data;
 
   const stats: { label: string; value: string | number; hint: string; tone?: 'primary' | 'success' | 'warning' | 'danger'; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [
-    { label: 'TODAY', value: formatCurrency(report?.todaySales), hint: 'Paid sales', icon: 'credit-card' },
-    { label: 'THIS MONTH', value: formatCurrency(report?.monthlySales), hint: 'Paid sales', icon: 'calendar-month' },
+    { label: 'TODAY', value: formatCurrency(report?.todaySales), hint: 'Collected', icon: 'credit-card' },
+    { label: 'THIS MONTH', value: formatCurrency(report?.monthlySales), hint: 'Collected', icon: 'calendar-month' },
     { label: 'INVOICES', value: report?.totalInvoices || 0, hint: 'All time', icon: 'file-document' },
     { label: 'PENDING', value: report?.pendingInvoices || 0, hint: 'Need follow-up', tone: 'warning', icon: 'clock' }
   ];

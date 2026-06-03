@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput as RNTextInput, View, type TextStyle } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { Button, Dialog, Portal, Text, useTheme } from 'react-native-paper';
 import { productsApi } from '@/api/endpoints';
@@ -27,7 +27,7 @@ import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
-import { Product, ProductFormValues } from '@/types';
+import { Page, Product, ProductFormValues } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/format';
 import { productSchema } from '@/validation/schemas';
 
@@ -62,12 +62,110 @@ const reportRangeLabel = (range: { from?: string; to?: string }) => {
   return `${range.from ? formatDate(range.from) : 'Start'} - ${range.to ? formatDate(range.to) : 'Today'}`;
 };
 const isProductSortOption = (value?: string): value is ProductSortOption => Boolean(value && value in SORT_LABELS);
+type ProductPageData = InfiniteData<Page<Product, 'products'>>;
+
+// Memoized row: unchanged products skip re-rendering on screen re-renders
+// (search keystrokes, filter changes, refetches). Theme styles memoized per theme.
+const ProductCard = memo(function ProductCard({
+  item,
+  isDark,
+  colors,
+  primary,
+  onSurface,
+  onSurfaceVariant,
+  error,
+  canManage,
+  highlighted,
+  showSales,
+  onEdit,
+  onHistory,
+  onDelete
+}: {
+  item: Product;
+  isDark: boolean;
+  colors: ReturnType<typeof appColors>;
+  primary: string;
+  onSurface: string;
+  onSurfaceVariant: string;
+  error: string;
+  canManage: boolean;
+  highlighted?: string;
+  showSales: boolean;
+  onEdit: (product: Product) => void;
+  onHistory: (product: Product) => void;
+  onDelete: (product: Product) => void;
+}) {
+  const themed = useMemo(() => ({
+    card: { backgroundColor: colors.card, shadowColor: isDark ? '#000000' : colors.primaryStrong },
+    cardBorder: isDark ? colors.border : alpha(colors.primaryStrong, 0.08),
+    divider: { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) },
+    lowAvatar: { backgroundColor: alpha(colors.destructive, isDark ? 0.2 : 0.12) },
+    okAvatar: { backgroundColor: alpha(colors.accent, isDark ? 0.2 : 0.12) },
+    lowPill: { backgroundColor: alpha(colors.destructive, isDark ? 0.18 : 0.1), borderColor: alpha(colors.destructive, isDark ? 0.32 : 0.24) },
+    okPill: { backgroundColor: alpha(colors.accent, isDark ? 0.18 : 0.1), borderColor: alpha(colors.accent, isDark ? 0.32 : 0.24) },
+    editAction: { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.08) },
+    historyAction: { backgroundColor: isDark ? colors.surface : alpha(colors.primaryStrong, 0.05) },
+    deleteAction: { backgroundColor: alpha(colors.destructive, isDark ? 0.16 : 0.08) }
+  }), [colors, isDark]);
+
+  const isLowStock = Boolean(item.isLowStock || item.stockQuantity <= item.lowStockThreshold);
+  const stockTone = isLowStock ? colors.destructive : colors.accent;
+  const highlightedCard = item._id === highlighted;
+  const productMeta = [item.sku || 'No SKU', item.category].filter(Boolean).join('  ·  ');
+
+  return (
+    <View style={[styles.productCard, themed.card, { borderColor: highlightedCard ? primary : themed.cardBorder }]}>
+      <View style={styles.cardTop}>
+        <View style={[styles.avatar, isLowStock ? themed.lowAvatar : themed.okAvatar]}>
+          <Feather name={isLowStock ? 'alert-triangle' : 'package'} size={21} color={stockTone} />
+        </View>
+        <View style={styles.cardTitleBlock}>
+          <Text numberOfLines={1} style={[styles.cardTitle, { color: onSurface }]}>{item.name}</Text>
+          <Text numberOfLines={1} style={[styles.productMeta, { color: onSurfaceVariant }]}>{productMeta}</Text>
+        </View>
+        <View style={styles.amountBlock}>
+          <Text numberOfLines={1} style={[styles.priceText, { color: onSurface }]}>{formatCurrency(item.price)}</Text>
+          {showSales ? (
+            <Text numberOfLines={1} style={[styles.salesMeta, { color: colors.accent }]}>
+              {formatCurrency(item.totalSales)} sold
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      <View style={[styles.cardDivider, themed.divider]} />
+      <View style={styles.cardBottom}>
+        <View style={[styles.stockPill, isLowStock ? themed.lowPill : themed.okPill]}>
+          <Feather name={isLowStock ? 'alert-circle' : 'check-circle'} size={13} color={stockTone} />
+          <Text style={[styles.stockPillText, { color: stockTone }]}>
+            {item.stockQuantity} in stock{isLowStock ? ' · Low' : ''}
+          </Text>
+        </View>
+        <View style={styles.iconActions}>
+          {canManage ? (
+            <Pressable onPress={() => onEdit(item)} hitSlop={8} style={[styles.iconAction, themed.editAction]}>
+              <Feather name="edit-2" size={14} color={primary} />
+            </Pressable>
+          ) : null}
+          <Pressable onPress={() => onHistory(item)} hitSlop={8} style={[styles.iconAction, themed.historyAction]}>
+            <Feather name="clock" size={14} color={onSurfaceVariant} />
+          </Pressable>
+          {canManage ? (
+            <Pressable onPress={() => onDelete(item)} hitSlop={8} style={[styles.iconAction, themed.deleteAction]}>
+              <Feather name="trash-2" size={14} color={error} />
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    </View>
+  );
+});
 
 export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
   const queryClient = useQueryClient();
   const theme = useTheme();
   const isDark = theme.dark;
-  const colors = appColors(isDark);
+  // Stable reference so the memoized row's theme styles only recompute on theme change.
+  const colors = useMemo(() => appColors(isDark), [isDark]);
   const { showDialog } = useAppDialog();
   const { can } = usePermissions();
   const canManage = can(PERMISSION.productsManage);
@@ -109,11 +207,55 @@ export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
     ((activeSort || filters.sort) !== 'updated' ? 1 : 0);
   const totalCount = query.data?.pages[0]?.pagination.total ?? 0;
   const visibleCount = products.length;
-  const save = useMutation({ mutationFn: (values: ProductFormValues) => {
-    const payload = { ...values, price: Number(values.price), stockQuantity: Number(values.stockQuantity), lowStockThreshold: values.lowStockThreshold === '' ? 5 : Number(values.lowStockThreshold) };
-    return editing?._id ? productsApi.update(editing._id, payload) : productsApi.create(payload);
-  }, onSuccess: () => { setEditing(undefined); queryClient.invalidateQueries({ queryKey: queryKeys.products.all }); }, onError: (error) => showDialog({ title: 'Could not save product', message: apiErrorMessage(error), tone: 'error' }) });
-  const remove = useMutation({ mutationFn: (id: string) => productsApi.remove(id), onSuccess: () => { setDeleting(null); queryClient.invalidateQueries({ queryKey: queryKeys.products.all }); }, onError: (error) => showDialog({ title: 'Could not delete product', message: apiErrorMessage(error), tone: 'error' }) });
+  const activeListKey = queryKeys.products.list(queryParams);
+  const toProductPayload = (values: ProductFormValues) => ({ ...values, price: Number(values.price), stockQuantity: Number(values.stockQuantity), lowStockThreshold: values.lowStockThreshold === '' ? 5 : Number(values.lowStockThreshold) });
+  const save = useMutation({
+    mutationFn: (values: ProductFormValues) => {
+      const payload = toProductPayload(values);
+      return editing?._id ? productsApi.update(editing._id, payload) : productsApi.create(payload);
+    },
+    // Optimistic on edit: patch the visible list immediately; creates wait for the server id.
+    onMutate: async (values) => {
+      if (!editing?._id) return undefined;
+      await queryClient.cancelQueries({ queryKey: activeListKey });
+      const previous = queryClient.getQueryData<ProductPageData>(activeListKey);
+      if (previous) {
+        const payload = toProductPayload(values);
+        queryClient.setQueryData<ProductPageData>(activeListKey, {
+          ...previous,
+          pages: previous.pages.map((page) => ({ ...page, products: page.products.map((product) => product._id === editing._id ? { ...product, ...payload } : product) }))
+        });
+      }
+      return { previous };
+    },
+    onSuccess: () => setEditing(undefined),
+    onError: (error, _values, context) => {
+      if (context?.previous) queryClient.setQueryData(activeListKey, context.previous);
+      showDialog({ title: 'Could not save product', message: apiErrorMessage(error), tone: 'error' });
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.products.all })
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => productsApi.remove(id),
+    // Optimistic: drop the row immediately, restore on failure.
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: activeListKey });
+      const previous = queryClient.getQueryData<ProductPageData>(activeListKey);
+      if (previous) {
+        queryClient.setQueryData<ProductPageData>(activeListKey, {
+          ...previous,
+          pages: previous.pages.map((page) => ({ ...page, products: page.products.filter((product) => product._id !== id) }))
+        });
+      }
+      return { previous };
+    },
+    onSuccess: () => setDeleting(null),
+    onError: (error, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(activeListKey, context.previous);
+      showDialog({ title: 'Could not delete product', message: apiErrorMessage(error), tone: 'error' });
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.products.all })
+  });
   const history = useQuery({ queryKey: queryKeys.products.stockMovements(historyProduct?._id), enabled: Boolean(historyProduct), queryFn: () => productsApi.stockMovementsPage(historyProduct!._id, { page: 1, limit: 30 }) });
 
   useEffect(() => {
@@ -214,67 +356,27 @@ export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
     return null;
   };
 
-  const renderProductCard = ({ item }: { item: Product }) => {
-    const isLowStock = Boolean(item.isLowStock || item.stockQuantity <= item.lowStockThreshold);
-    const stockTone = isLowStock ? colors.destructive : colors.accent;
-    const highlightedCard = item._id === highlighted;
-    const productMeta = [item.sku || 'No SKU', item.category].filter(Boolean).join('  ·  ');
-
-    return (
-      <View
-        style={[
-          styles.productCard,
-          {
-            backgroundColor: colors.card,
-            borderColor: highlightedCard ? theme.colors.primary : isDark ? colors.border : alpha(colors.primaryStrong, 0.08),
-            shadowColor: isDark ? '#000000' : colors.primaryStrong
-          }
-        ]}
-      >
-        <View style={styles.cardTop}>
-          <View style={[styles.avatar, { backgroundColor: alpha(stockTone, isDark ? 0.2 : 0.12) }]}>
-            <Feather name={isLowStock ? 'alert-triangle' : 'package'} size={21} color={stockTone} />
-          </View>
-          <View style={styles.cardTitleBlock}>
-            <Text numberOfLines={1} style={[styles.cardTitle, { color: theme.colors.onSurface }]}>{item.name}</Text>
-            <Text numberOfLines={1} style={[styles.productMeta, { color: theme.colors.onSurfaceVariant }]}>{productMeta}</Text>
-          </View>
-          <View style={styles.amountBlock}>
-            <Text numberOfLines={1} style={[styles.priceText, { color: theme.colors.onSurface }]}>{formatCurrency(item.price)}</Text>
-            {(activeSort || filters.sort) === 'top-sales' ? (
-              <Text numberOfLines={1} style={[styles.salesMeta, { color: colors.accent }]}>
-                {formatCurrency(item.totalSales)} sold
-              </Text>
-            ) : null}
-          </View>
-        </View>
-        <View style={[styles.cardDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) }]} />
-        <View style={styles.cardBottom}>
-          <View style={[styles.stockPill, { backgroundColor: alpha(stockTone, isDark ? 0.18 : 0.1), borderColor: alpha(stockTone, isDark ? 0.32 : 0.24) }]}>
-            <Feather name={isLowStock ? 'alert-circle' : 'check-circle'} size={13} color={stockTone} />
-            <Text style={[styles.stockPillText, { color: stockTone }]}>
-              {item.stockQuantity} in stock{isLowStock ? ' · Low' : ''}
-            </Text>
-          </View>
-          <View style={styles.iconActions}>
-            {canManage ? (
-              <Pressable onPress={() => setEditing(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.08) }]}>
-                <Feather name="edit-2" size={14} color={theme.colors.primary} />
-              </Pressable>
-            ) : null}
-            <Pressable onPress={() => setHistoryProduct(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: isDark ? colors.surface : alpha(colors.primaryStrong, 0.05) }]}>
-              <Feather name="clock" size={14} color={theme.colors.onSurfaceVariant} />
-            </Pressable>
-            {canManage ? (
-              <Pressable onPress={() => setDeleting(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: alpha(colors.destructive, isDark ? 0.16 : 0.08) }]}>
-                <Feather name="trash-2" size={14} color={theme.colors.error} />
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      </View>
-    );
-  };
+  const startEdit = useCallback((product: Product) => setEditing(product), []);
+  const openHistory = useCallback((product: Product) => setHistoryProduct(product), []);
+  const startDelete = useCallback((product: Product) => setDeleting(product), []);
+  const showSales = (activeSort || filters.sort) === 'top-sales';
+  const renderProductCard = useCallback(({ item }: { item: Product }) => (
+    <ProductCard
+      item={item}
+      isDark={isDark}
+      colors={colors}
+      primary={theme.colors.primary}
+      onSurface={theme.colors.onSurface}
+      onSurfaceVariant={theme.colors.onSurfaceVariant}
+      error={theme.colors.error}
+      canManage={canManage}
+      highlighted={highlighted}
+      showSales={showSales}
+      onEdit={startEdit}
+      onHistory={openHistory}
+      onDelete={startDelete}
+    />
+  ), [isDark, colors, theme.colors.primary, theme.colors.onSurface, theme.colors.onSurfaceVariant, theme.colors.error, canManage, highlighted, showSales, startEdit, openHistory, startDelete]);
 
   const headerCreateAction = (
     <Pressable

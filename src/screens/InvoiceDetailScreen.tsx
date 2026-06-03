@@ -18,7 +18,7 @@ import { openOrSharePdf } from '@/services/pdf';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, statusTone, typeScale } from '@/theme/theme';
-import { InvoicePaymentStatus, InvoiceStatus, RecordPaymentPayload } from '@/types';
+import { Invoice, InvoicePaymentStatus, InvoiceStatus, RecordPaymentPayload } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/format';
 import { emailSchema } from '@/validation/schemas';
 import { useState } from 'react';
@@ -73,25 +73,53 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   const query = useQuery({ queryKey: queryKeys.invoices.detail(id), queryFn: () => invoicesApi.get(id) });
   const paymentsQuery = useQuery({ queryKey: queryKeys.payments.invoice(id), queryFn: () => paymentsApi.list({ invoiceId: id }) });
   const invoice = query.data;
-  const invalidate = () => {
+  // Targeted invalidation sets per action — only the query families the action actually affects.
+  // Cancel/delete restore stock (products) and reduce customer dues, but never touch payments
+  // (both are blocked when payments exist). Recording a payment never changes stock.
+  const invalidateStatusChange = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
+  };
+  const invalidatePayment = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.payments.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
   };
-  const cancelInvoice = useMutation({ mutationFn: () => invoicesApi.status(id, 'cancelled'), onSuccess: () => { setCancelling(false); invalidate(); query.refetch(); }, onError: (error) => { setCancelling(false); showDialog({ title: 'Could not cancel invoice', message: apiErrorMessage(error), tone: 'error' }); } });
-  const remove = useMutation({ mutationFn: () => invoicesApi.remove(id), onSuccess: () => { setDeleting(false); invalidate(); navigation.navigate('InvoiceList'); }, onError: (error) => showDialog({ title: 'Could not delete invoice', message: apiErrorMessage(error), tone: 'error' }) });
+  const cancelInvoice = useMutation({ mutationFn: () => invoicesApi.status(id, 'cancelled'), onSuccess: () => { setCancelling(false); invalidateStatusChange(); query.refetch(); }, onError: (error) => { setCancelling(false); showDialog({ title: 'Could not cancel invoice', message: apiErrorMessage(error), tone: 'error' }); } });
+  const remove = useMutation({ mutationFn: () => invoicesApi.remove(id), onSuccess: () => { setDeleting(false); invalidateStatusChange(); navigation.navigate('InvoiceList'); }, onError: (error) => showDialog({ title: 'Could not delete invoice', message: apiErrorMessage(error), tone: 'error' }) });
   const sendEmail = useMutation({ mutationFn: (email: string) => invoicesApi.email(id, email), onSuccess: () => { setEmailOpen(false); query.refetch(); }, onError: (error) => showDialog({ title: 'Could not send email', message: apiErrorMessage(error), tone: 'error' }) });
   const recordPayment = useMutation({
     mutationFn: (payload: RecordPaymentPayload) => paymentsApi.recordInvoicePayment(id, payload),
+    // Optimistic: patch the cached invoice detail so paid/balance/status flip instantly.
+    onMutate: async (payload) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.invoices.detail(id) });
+      const previous = queryClient.getQueryData<Invoice>(queryKeys.invoices.detail(id));
+      if (previous) {
+        const paid = (previous.paidAmount ?? 0) + payload.amount;
+        const balance = Math.max(previous.total - paid, 0);
+        queryClient.setQueryData<Invoice>(queryKeys.invoices.detail(id), {
+          ...previous,
+          paidAmount: paid,
+          balanceDue: balance,
+          paymentStatus: balance <= 0 ? 'paid' : 'partial',
+          status: balance <= 0 ? 'paid' : previous.status
+        });
+      }
+      return { previous };
+    },
+    onError: (error, _payload, context) => {
+      if (context?.previous) queryClient.setQueryData(queryKeys.invoices.detail(id), context.previous);
+      showDialog({ title: 'Could not record payment', message: apiErrorMessage(error), tone: 'error' });
+    },
     onSuccess: () => {
       setPaymentOpen(false);
-      invalidate();
+      invalidatePayment();
       query.refetch();
       paymentsQuery.refetch();
-    },
-    onError: (error) => showDialog({ title: 'Could not record payment', message: apiErrorMessage(error), tone: 'error' })
+    }
   });
   const shareWhatsApp = async () => { try { const result = await invoicesApi.whatsapp(id); await Linking.openURL(result.link); } catch (error) { showDialog({ title: 'Could not prepare WhatsApp link', message: apiErrorMessage(error), tone: 'error' }); } };
 
