@@ -256,6 +256,9 @@ export type NotificationItem = {
   title: string; description: string; to: string; read: boolean; sortDate?: string;
 };
 
+export type NotificationChannelPrefs = { inApp?: boolean; push?: boolean };
+export type NotificationPreferences = Record<string, NotificationChannelPrefs>;
+
 export type StockShortage = {
   productId: string;
   name: string;

@@ -30,7 +30,8 @@ export const queryKeys = {
     detail: (id: string) => ['orders', id] as const
   },
   notifications: {
-    all: ['notifications'] as const
+    all: ['notifications'] as const,
+    preferences: ['notifications', 'preferences'] as const
   },
   drafts: {
     all: ['drafts'] as const

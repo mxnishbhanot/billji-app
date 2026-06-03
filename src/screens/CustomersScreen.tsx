@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput as RNTextInput, View, type TextStyle } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { Button, Dialog, Portal, Text, useTheme } from 'react-native-paper';
 import { customersApi } from '@/api/endpoints';
@@ -27,7 +27,7 @@ import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
-import { Customer, CustomerFormValues } from '@/types';
+import { Customer, CustomerFormValues, Page } from '@/types';
 import { formatCurrency } from '@/utils/format';
 import { customerSchema } from '@/validation/schemas';
 
@@ -50,13 +50,111 @@ const SORT_LABELS: Record<CustomerSortOption, string> = {
 };
 const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || '?';
 const webSearchInputStyle = { outlineStyle: 'none', outlineWidth: 0 } as unknown as TextStyle;
+type CustomerPageData = InfiniteData<Page<Customer, 'customers'>>;
+
+// Memoized row: unchanged customers skip re-rendering when the screen re-renders
+// (search keystrokes, filter toggles, refetches). Theme-derived style fragments are
+// memoized per theme so style props keep stable references.
+const CustomerCard = memo(function CustomerCard({
+  item,
+  isDark,
+  colors,
+  primary,
+  onSurface,
+  onSurfaceVariant,
+  error,
+  canManage,
+  onPress,
+  onEdit,
+  onDelete
+}: {
+  item: Customer;
+  isDark: boolean;
+  colors: ReturnType<typeof appColors>;
+  primary: string;
+  onSurface: string;
+  onSurfaceVariant: string;
+  error: string;
+  canManage: boolean;
+  onPress: (customer: Customer) => void;
+  onEdit: (customer: Customer) => void;
+  onDelete: (customer: Customer) => void;
+}) {
+  const themed = useMemo(() => ({
+    card: { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), shadowColor: isDark ? '#000000' : colors.primaryStrong },
+    avatar: { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.12) },
+    divider: { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) },
+    duesPill: { backgroundColor: alpha(colors.destructive, isDark ? 0.18 : 0.1), borderColor: alpha(colors.destructive, isDark ? 0.32 : 0.24) },
+    creditPill: { backgroundColor: alpha(colors.accent, isDark ? 0.18 : 0.1), borderColor: alpha(colors.accent, isDark ? 0.32 : 0.24) },
+    emailPill: { backgroundColor: alpha(colors.accent, isDark ? 0.18 : 0.1), borderColor: alpha(colors.accent, isDark ? 0.32 : 0.24) },
+    noEmailPill: { backgroundColor: alpha(colors.warning, isDark ? 0.18 : 0.1), borderColor: alpha(colors.warning, isDark ? 0.32 : 0.24) },
+    addressPill: { backgroundColor: alpha(colors.primary, isDark ? 0.18 : 0.08), borderColor: alpha(colors.primary, isDark ? 0.3 : 0.18) },
+    editAction: { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.08) },
+    deleteAction: { backgroundColor: alpha(colors.destructive, isDark ? 0.16 : 0.08) }
+  }), [colors, isDark]);
+
+  return (
+    <Pressable
+      onPress={() => onPress(item)}
+      style={({ pressed }) => [styles.customerCard, themed.card, { opacity: pressed ? 0.94 : 1 }]}
+    >
+      <View style={styles.cardTop}>
+        <View style={[styles.avatar, themed.avatar]}>
+          <Text style={[styles.avatarText, { color: primary }]}>{initials(item.name)}</Text>
+        </View>
+        <View style={styles.cardTitleBlock}>
+          <Text numberOfLines={1} style={[styles.cardTitle, { color: onSurface }]}>{item.name}</Text>
+          <Text numberOfLines={1} style={[styles.cardSubtitle, { color: onSurfaceVariant }]}>{item.countryCode || '+91'} {item.phone}</Text>
+        </View>
+      </View>
+      <View style={[styles.cardDivider, themed.divider]} />
+      <View style={styles.cardBottom}>
+        <View style={styles.contactChips}>
+          {typeof item.outstandingDues === 'number' && item.outstandingDues > 0 ? (
+            <View style={[styles.contactPill, themed.duesPill]}>
+              <Feather name="alert-circle" size={13} color={colors.destructive} />
+              <Text numberOfLines={1} style={[styles.contactPillText, { color: colors.destructive }]}>Due {formatCurrency(item.outstandingDues)}</Text>
+            </View>
+          ) : null}
+          {typeof item.creditBalance === 'number' && item.creditBalance > 0 ? (
+            <View style={[styles.contactPill, themed.creditPill]}>
+              <Feather name="arrow-down-circle" size={13} color={colors.accent} />
+              <Text numberOfLines={1} style={[styles.contactPillText, { color: colors.accent }]}>Credit {formatCurrency(item.creditBalance)}</Text>
+            </View>
+          ) : null}
+          <View style={[styles.contactPill, item.email ? themed.emailPill : themed.noEmailPill]}>
+            <Feather name={item.email ? 'mail' : 'mail'} size={13} color={item.email ? colors.accent : colors.warning} />
+            <Text numberOfLines={1} style={[styles.contactPillText, { color: item.email ? colors.accent : colors.warning }]}>{item.email || 'No email'}</Text>
+          </View>
+          {item.address ? (
+            <View style={[styles.contactPill, themed.addressPill]}>
+              <Feather name="map-pin" size={13} color={primary} />
+              <Text numberOfLines={1} style={[styles.contactPillText, { color: primary }]}>{item.address}</Text>
+            </View>
+          ) : null}
+        </View>
+        {canManage ? (
+          <View style={styles.iconActions}>
+            <Pressable onPress={() => onEdit(item)} hitSlop={8} style={[styles.iconAction, themed.editAction]}>
+              <Feather name="edit-2" size={14} color={primary} />
+            </Pressable>
+            <Pressable onPress={() => onDelete(item)} hitSlop={8} style={[styles.iconAction, themed.deleteAction]}>
+              <Feather name="trash-2" size={14} color={error} />
+            </Pressable>
+          </View>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+});
 
 export function CustomersScreen() {
   const queryClient = useQueryClient();
   const navigation = useNavigation<NativeStackNavigationProp<CustomersStackParamList>>();
   const theme = useTheme();
   const isDark = theme.dark;
-  const colors = appColors(isDark);
+  // Stable reference so the memoized row's theme styles only recompute on theme change.
+  const colors = useMemo(() => appColors(isDark), [isDark]);
   const { showDialog } = useAppDialog();
   const { can } = usePermissions();
   const canManage = can(PERMISSION.customersManage);
@@ -75,8 +173,50 @@ export function CustomersScreen() {
   const activeFilterCount = (filters.billingStatus !== 'all' ? 1 : 0) + (filters.sort !== 'updated' ? 1 : 0);
   const totalCount = query.data?.pages[0]?.pagination.total ?? 0;
   const visibleCount = customers.length;
-  const save = useMutation({ mutationFn: (values: CustomerFormValues) => editing?._id ? customersApi.update(editing._id, values) : customersApi.create(values), onSuccess: () => { setEditing(undefined); queryClient.invalidateQueries({ queryKey: queryKeys.customers.all }); }, onError: (error) => showDialog({ title: 'Could not save customer', message: apiErrorMessage(error), tone: 'error' }) });
-  const remove = useMutation({ mutationFn: (id: string) => customersApi.remove(id), onSuccess: () => { setDeleting(null); queryClient.invalidateQueries({ queryKey: queryKeys.customers.all }); }, onError: (error) => showDialog({ title: 'Could not delete customer', message: apiErrorMessage(error), tone: 'error' }) });
+  const activeListKey = queryKeys.customers.list(queryFilters);
+  const save = useMutation({
+    mutationFn: (values: CustomerFormValues) => editing?._id ? customersApi.update(editing._id, values) : customersApi.create(values),
+    // Optimistic on edit: patch the visible list immediately; creates wait for the server id.
+    onMutate: async (values) => {
+      if (!editing?._id) return undefined;
+      await queryClient.cancelQueries({ queryKey: activeListKey });
+      const previous = queryClient.getQueryData<CustomerPageData>(activeListKey);
+      if (previous) {
+        queryClient.setQueryData<CustomerPageData>(activeListKey, {
+          ...previous,
+          pages: previous.pages.map((page) => ({ ...page, customers: page.customers.map((customer) => customer._id === editing._id ? { ...customer, ...values } : customer) }))
+        });
+      }
+      return { previous };
+    },
+    onSuccess: () => setEditing(undefined),
+    onError: (error, _values, context) => {
+      if (context?.previous) queryClient.setQueryData(activeListKey, context.previous);
+      showDialog({ title: 'Could not save customer', message: apiErrorMessage(error), tone: 'error' });
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.customers.all })
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => customersApi.remove(id),
+    // Optimistic: drop the row immediately, restore on failure.
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: activeListKey });
+      const previous = queryClient.getQueryData<CustomerPageData>(activeListKey);
+      if (previous) {
+        queryClient.setQueryData<CustomerPageData>(activeListKey, {
+          ...previous,
+          pages: previous.pages.map((page) => ({ ...page, customers: page.customers.filter((customer) => customer._id !== id) }))
+        });
+      }
+      return { previous };
+    },
+    onSuccess: () => setDeleting(null),
+    onError: (error, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(activeListKey, context.previous);
+      showDialog({ title: 'Could not delete customer', message: apiErrorMessage(error), tone: 'error' });
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.customers.all })
+  });
   useEffect(() => { if (editing !== undefined) form.reset(editing || blankCustomer); }, [editing, form]);
 
   const loadMoreCustomers = () => {
@@ -153,59 +293,24 @@ export function CustomersScreen() {
     return null;
   };
 
-  const renderCustomerCard = ({ item }: { item: Customer }) => (
-    <Pressable
-      onPress={() => navigation.navigate('CustomerDetail', { customer: item })}
-      style={({ pressed }) => [styles.customerCard, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), shadowColor: isDark ? '#000000' : colors.primaryStrong, opacity: pressed ? 0.94 : 1 }]}
-    >
-      <View style={styles.cardTop}>
-        <View style={[styles.avatar, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.12) }]}>
-          <Text style={[styles.avatarText, { color: theme.colors.primary }]}>{initials(item.name)}</Text>
-        </View>
-        <View style={styles.cardTitleBlock}>
-          <Text numberOfLines={1} style={[styles.cardTitle, { color: theme.colors.onSurface }]}>{item.name}</Text>
-          <Text numberOfLines={1} style={[styles.cardSubtitle, { color: theme.colors.onSurfaceVariant }]}>{item.countryCode || '+91'} {item.phone}</Text>
-        </View>
-      </View>
-      <View style={[styles.cardDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) }]} />
-      <View style={styles.cardBottom}>
-        <View style={styles.contactChips}>
-          {typeof item.outstandingDues === 'number' && item.outstandingDues > 0 ? (
-            <View style={[styles.contactPill, { backgroundColor: alpha(colors.destructive, isDark ? 0.18 : 0.1), borderColor: alpha(colors.destructive, isDark ? 0.32 : 0.24) }]}>
-              <Feather name="alert-circle" size={13} color={colors.destructive} />
-              <Text numberOfLines={1} style={[styles.contactPillText, { color: colors.destructive }]}>Due {formatCurrency(item.outstandingDues)}</Text>
-            </View>
-          ) : null}
-          {typeof item.creditBalance === 'number' && item.creditBalance > 0 ? (
-            <View style={[styles.contactPill, { backgroundColor: alpha(colors.accent, isDark ? 0.18 : 0.1), borderColor: alpha(colors.accent, isDark ? 0.32 : 0.24) }]}>
-              <Feather name="arrow-down-circle" size={13} color={colors.accent} />
-              <Text numberOfLines={1} style={[styles.contactPillText, { color: colors.accent }]}>Credit {formatCurrency(item.creditBalance)}</Text>
-            </View>
-          ) : null}
-          <View style={[styles.contactPill, { backgroundColor: item.email ? alpha(colors.accent, isDark ? 0.18 : 0.1) : alpha(colors.warning, isDark ? 0.18 : 0.1), borderColor: item.email ? alpha(colors.accent, isDark ? 0.32 : 0.24) : alpha(colors.warning, isDark ? 0.32 : 0.24) }]}>
-            <Feather name={item.email ? 'mail' : 'mail'} size={13} color={item.email ? colors.accent : colors.warning} />
-            <Text numberOfLines={1} style={[styles.contactPillText, { color: item.email ? colors.accent : colors.warning }]}>{item.email || 'No email'}</Text>
-          </View>
-          {item.address ? (
-            <View style={[styles.contactPill, { backgroundColor: alpha(colors.primary, isDark ? 0.18 : 0.08), borderColor: alpha(colors.primary, isDark ? 0.3 : 0.18) }]}>
-              <Feather name="map-pin" size={13} color={theme.colors.primary} />
-              <Text numberOfLines={1} style={[styles.contactPillText, { color: theme.colors.primary }]}>{item.address}</Text>
-            </View>
-          ) : null}
-        </View>
-        {canManage ? (
-          <View style={styles.iconActions}>
-            <Pressable onPress={() => setEditing(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.08) }]}>
-              <Feather name="edit-2" size={14} color={theme.colors.primary} />
-            </Pressable>
-            <Pressable onPress={() => setDeleting(item)} hitSlop={8} style={[styles.iconAction, { backgroundColor: alpha(colors.destructive, isDark ? 0.16 : 0.08) }]}>
-              <Feather name="trash-2" size={14} color={theme.colors.error} />
-            </Pressable>
-          </View>
-        ) : null}
-      </View>
-    </Pressable>
-  );
+  const openCustomer = useCallback((customer: Customer) => navigation.navigate('CustomerDetail', { customer }), [navigation]);
+  const startEdit = useCallback((customer: Customer) => setEditing(customer), []);
+  const startDelete = useCallback((customer: Customer) => setDeleting(customer), []);
+  const renderCustomerCard = useCallback(({ item }: { item: Customer }) => (
+    <CustomerCard
+      item={item}
+      isDark={isDark}
+      colors={colors}
+      primary={theme.colors.primary}
+      onSurface={theme.colors.onSurface}
+      onSurfaceVariant={theme.colors.onSurfaceVariant}
+      error={theme.colors.error}
+      canManage={canManage}
+      onPress={openCustomer}
+      onEdit={startEdit}
+      onDelete={startDelete}
+    />
+  ), [isDark, colors, theme.colors.primary, theme.colors.onSurface, theme.colors.onSurfaceVariant, theme.colors.error, canManage, openCustomer, startEdit, startDelete]);
 
   const headerCreateAction = (
     <Pressable

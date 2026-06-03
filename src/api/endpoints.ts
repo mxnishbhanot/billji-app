@@ -18,6 +18,7 @@ import {
   OrderCreatePayload,
   OrderQuery,
   NotificationItem,
+  NotificationPreferences,
   NotificationQuery,
   Page,
   PageQuery,
@@ -134,5 +135,8 @@ export const ledgerApi = {
 export const notificationsApi = {
   page: (params: NotificationQuery) => api.get<NotificationPage>('/notifications', { params }).then((res) => res.data),
   markSeen: (notificationIds: string[], all = false) => api.patch('/notifications/seen', { notificationIds, all }).then((res) => res.data),
-  dismiss: (notificationIds: string[]) => api.patch('/notifications/dismiss', { notificationIds }).then((res) => res.data)
+  dismiss: (notificationIds: string[]) => api.patch('/notifications/dismiss', { notificationIds }).then((res) => res.data),
+  getPreferences: () => api.get<{ preferences: NotificationPreferences }>('/notifications/preferences').then((res) => res.data.preferences),
+  updatePreferences: (preferences: NotificationPreferences) =>
+    api.put<{ preferences: NotificationPreferences }>('/notifications/preferences', { preferences }).then((res) => res.data.preferences)
 };

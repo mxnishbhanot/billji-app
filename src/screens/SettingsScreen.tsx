@@ -470,6 +470,14 @@ export function SettingsScreen() {
       ) : null}
 
       <SettingsGroup title="ACCOUNT">
+        <SettingsRow
+          icon="bell-outline"
+          title="Notifications"
+          subtitle="Choose which alerts you see"
+          tone={colors.violet}
+          onPress={() => navigation.navigate('NotificationSettings')}
+        />
+        <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow icon="account-circle-outline" title="Login Account" subtitle={user?.email || 'Signed in'} tone={colors.primary} onPress={() => setActivePanel('account')} />
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow icon="shield-key-outline" title="Security & Sessions" subtitle="Manage active sessions" tone={colors.warning} onPress={() => setActivePanel('security')} />

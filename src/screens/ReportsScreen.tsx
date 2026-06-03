@@ -154,9 +154,9 @@ export function ReportsScreen({ navigation }: ReportsScreenProps) {
   };
 
   const reportStats = [
-    { label: 'Today', value: formatCurrency(report?.todaySales), hint: 'Paid sales', tone: 'success' as const, icon: 'credit-card-outline' as const },
-    { label: 'Weekly', value: formatCurrency(report?.weeklySales), hint: 'Paid sales', icon: 'calendar-week' as const },
-    { label: 'Monthly', value: formatCurrency(report?.monthlySales), hint: 'Paid sales', icon: 'calendar-month-outline' as const },
+    { label: 'Today', value: formatCurrency(report?.todaySales), hint: 'Collected', tone: 'success' as const, icon: 'credit-card-outline' as const },
+    { label: 'Weekly', value: formatCurrency(report?.weeklySales), hint: 'Collected', icon: 'calendar-week' as const },
+    { label: 'Monthly', value: formatCurrency(report?.monthlySales), hint: 'Collected', icon: 'calendar-month-outline' as const },
     { label: 'Avg invoice', value: formatCurrency(report?.averageInvoiceValue), hint: 'Per invoice', icon: 'calculator-variant-outline' as const }
   ];
 

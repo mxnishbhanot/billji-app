@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, TextInput as RNTextInput, View } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { UseFormReturn } from 'react-hook-form';
-import { Button, Dialog, List, Portal, SegmentedButtons, Text, TextInput, Tooltip, useTheme } from 'react-native-paper';
+import { Button, Dialog, List, Portal, Text, TextInput, Tooltip, useTheme } from 'react-native-paper';
 import { CustomerPickerSheet } from '@/components/CustomerPickerSheet';
 import { FormTextInput } from '@/components/FormTextInput';
 import { PhoneInput } from '@/components/PhoneInput';
@@ -340,6 +340,46 @@ export function InvoiceItemsEditor({
   );
 }
 
+// Compact two-segment pill (₹ | %) that sits beside the Discount field so the
+// flat/percent choice reads as part of the discount input, not a separate control.
+function DiscountTypeToggle({
+  cardBorder,
+  onChange,
+  subSurface,
+  value
+}: {
+  cardBorder: string;
+  onChange: (value: DiscountType) => void;
+  subSurface: string;
+  value: DiscountType;
+}) {
+  const theme = useTheme();
+  const options: { type: DiscountType; label: string }[] = [
+    { type: 'flat', label: '₹' },
+    { type: 'percentage', label: '%' }
+  ];
+
+  return (
+    <View style={[styles.discountToggle, { backgroundColor: subSurface, borderColor: cardBorder }]}>
+      {options.map(({ type, label }) => {
+        const active = value === type;
+        return (
+          <Pressable
+            key={type}
+            onPress={() => onChange(type)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={type === 'flat' ? 'Flat discount' : 'Percentage discount'}
+            style={[styles.discountToggleBtn, active && { backgroundColor: theme.colors.primary }]}
+          >
+            <Text style={[styles.discountToggleLabel, { color: active ? theme.colors.onPrimary : theme.colors.onSurfaceVariant }]}>{label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export function TotalsExtrasCard({
   cardBorder,
   colors,
@@ -375,8 +415,10 @@ export function TotalsExtrasCard({
     <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
       <Text style={[styles.sectionTitle, { color: theme.colors.onSurface, marginBottom: 12 }]}>Totals & extras</Text>
       <MoneyInput cardBorder={cardBorder} inputBackground={inputBackground} label="Tax rate %" value={taxRate} onChangeText={onTaxRateChange} activeOutlineColor={theme.colors.primary} />
-      <SegmentedButtons value={discountType} onValueChange={(value) => onDiscountTypeChange(value as DiscountType)} buttons={[{ value: 'flat', label: 'Flat' }, { value: 'percentage', label: 'Percent %' }]} style={styles.segmented} />
-      <MoneyInput cardBorder={cardBorder} inputBackground={inputBackground} label="Discount" value={discountValue} onChangeText={onDiscountValueChange} activeOutlineColor={theme.colors.primary} />
+      <View style={styles.discountRow}>
+        <MoneyInput cardBorder={cardBorder} inputBackground={inputBackground} label="Discount" value={discountValue} onChangeText={onDiscountValueChange} activeOutlineColor={theme.colors.primary} style={styles.discountInput} />
+        <DiscountTypeToggle cardBorder={cardBorder} value={discountType} onChange={onDiscountTypeChange} subSurface={subSurface} />
+      </View>
       <TextInput
         mode="outlined"
         label="Notes"
@@ -591,7 +633,11 @@ const styles = StyleSheet.create({
   sectionCard: { borderRadius: radii.lg, borderWidth: 1, marginBottom: 16, padding: 16 },
   sectionHead: { alignItems: 'center', flexDirection: 'row', gap: 10, justifyContent: 'space-between', marginBottom: 8 },
   sectionTitle: { ...fontStyles.bold, fontSize: 16 },
-  segmented: { marginVertical: 12 },
+  discountInput: { flex: 1 },
+  discountRow: { alignItems: 'center', flexDirection: 'row', gap: 10, marginTop: 10 },
+  discountToggle: { borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', overflow: 'hidden', padding: 3 },
+  discountToggleBtn: { alignItems: 'center', borderRadius: radii.pill, height: 36, justifyContent: 'center', width: 44 },
+  discountToggleLabel: { ...fontStyles.bold, fontSize: 15 },
   stepper: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row' },
   stepperBtn: { alignItems: 'center', height: 32, justifyContent: 'center', width: 36 },
   stepperInput: { ...fontStyles.bold, fontSize: 14, minWidth: 44, paddingHorizontal: 4, paddingVertical: 0, textAlign: 'center' },

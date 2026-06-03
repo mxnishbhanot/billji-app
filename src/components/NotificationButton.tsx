@@ -28,12 +28,15 @@ export const NotificationButton = memo(function NotificationButton() {
 
   useEffect(() => {
     if (!token) return undefined;
+    // Map each socket event to its own query family only; report totals only move with invoices.
     return connectSocket(token, (event) => {
-      if (event.includes('notifications')) void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
-      if (event.includes('products')) void queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
-      if (event.includes('customers')) void queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
-      if (event.includes('invoices')) void queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
+      if (event === 'notifications:changed') void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+      if (event === 'products:changed') void queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+      if (event === 'customers:changed') void queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      if (event === 'invoices:changed') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
+      }
     });
   }, [queryClient, token]);
 
