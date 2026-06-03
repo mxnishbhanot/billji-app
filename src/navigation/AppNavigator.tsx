@@ -2,30 +2,34 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { NavigationContainer, RouteProp, StackActions, createNavigationContainerRef } from '@react-navigation/native';
 import { BottomTabNavigationProp, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useTheme } from 'react-native-paper';
+import { ActivityIndicator, useTheme } from 'react-native-paper';
 import { BackHandler, Platform, StyleSheet, View } from 'react-native';
-import { useEffect } from 'react';
+import { ReactNode, Suspense, lazy, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+// Dashboard and Login stay static — they are the first screens painted after splash.
 import { DashboardScreen } from '@/screens/DashboardScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
-import { RegisterScreen } from '@/screens/RegisterScreen';
-import { ProductsScreen } from '@/screens/ProductsScreen';
-import { CustomersScreen } from '@/screens/CustomersScreen';
-import { CustomerDetailScreen } from '@/screens/CustomerDetailScreen';
-import { InvoicesScreen } from '@/screens/InvoicesScreen';
-import { InvoiceBuilderScreen } from '@/screens/InvoiceBuilderScreen';
-import { InvoiceDetailScreen } from '@/screens/InvoiceDetailScreen';
-import { DraftsScreen } from '@/screens/DraftsScreen';
-import { OrdersScreen } from '@/screens/OrdersScreen';
-import { OrderBuilderScreen } from '@/screens/OrderBuilderScreen';
-import { OrderDetailScreen } from '@/screens/OrderDetailScreen';
-import { ReportsScreen } from '@/screens/ReportsScreen';
-import { PaymentsScreen } from '@/screens/PaymentsScreen';
-import { SettingsScreen } from '@/screens/SettingsScreen';
-import { BusinessProfileScreen } from '@/screens/BusinessProfileScreen';
-import { TaxSettingsScreen } from '@/screens/TaxSettingsScreen';
-import { ActivityLogScreen } from '@/screens/ActivityLogScreen';
-import { LedgerScreen } from '@/screens/LedgerScreen';
+// Everything else lazy-loads on first navigation so the initial frame doesn't pay
+// the require() cost of all 20 screen modules (bottom-tabs lazy-mounts, but static
+// imports still execute every screen module as soon as the tab bar renders).
+const RegisterScreen = lazy(() => import('@/screens/RegisterScreen').then((m) => ({ default: m.RegisterScreen })));
+const ProductsScreen = lazy(() => import('@/screens/ProductsScreen').then((m) => ({ default: m.ProductsScreen })));
+const CustomersScreen = lazy(() => import('@/screens/CustomersScreen').then((m) => ({ default: m.CustomersScreen })));
+const CustomerDetailScreen = lazy(() => import('@/screens/CustomerDetailScreen').then((m) => ({ default: m.CustomerDetailScreen })));
+const InvoicesScreen = lazy(() => import('@/screens/InvoicesScreen').then((m) => ({ default: m.InvoicesScreen })));
+const InvoiceBuilderScreen = lazy(() => import('@/screens/InvoiceBuilderScreen').then((m) => ({ default: m.InvoiceBuilderScreen })));
+const InvoiceDetailScreen = lazy(() => import('@/screens/InvoiceDetailScreen').then((m) => ({ default: m.InvoiceDetailScreen })));
+const DraftsScreen = lazy(() => import('@/screens/DraftsScreen').then((m) => ({ default: m.DraftsScreen })));
+const OrdersScreen = lazy(() => import('@/screens/OrdersScreen').then((m) => ({ default: m.OrdersScreen })));
+const OrderBuilderScreen = lazy(() => import('@/screens/OrderBuilderScreen').then((m) => ({ default: m.OrderBuilderScreen })));
+const OrderDetailScreen = lazy(() => import('@/screens/OrderDetailScreen').then((m) => ({ default: m.OrderDetailScreen })));
+const ReportsScreen = lazy(() => import('@/screens/ReportsScreen').then((m) => ({ default: m.ReportsScreen })));
+const PaymentsScreen = lazy(() => import('@/screens/PaymentsScreen').then((m) => ({ default: m.PaymentsScreen })));
+const SettingsScreen = lazy(() => import('@/screens/SettingsScreen').then((m) => ({ default: m.SettingsScreen })));
+const BusinessProfileScreen = lazy(() => import('@/screens/BusinessProfileScreen').then((m) => ({ default: m.BusinessProfileScreen })));
+const TaxSettingsScreen = lazy(() => import('@/screens/TaxSettingsScreen').then((m) => ({ default: m.TaxSettingsScreen })));
+const ActivityLogScreen = lazy(() => import('@/screens/ActivityLogScreen').then((m) => ({ default: m.ActivityLogScreen })));
+const LedgerScreen = lazy(() => import('@/screens/LedgerScreen').then((m) => ({ default: m.LedgerScreen })));
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import {
@@ -58,9 +62,27 @@ const tabIcons: Record<keyof TabParamList, { active: keyof typeof MaterialCommun
   SettingsTab: { active: 'cog', inactive: 'cog' }
 };
 
+// Suspense boundary for lazy screens — shows a spinner for the brief moment a
+// screen module loads on first navigation.
+function LazyScreenBoundary({ children }: { children: ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <View style={styles.lazyFallback}>
+          <ActivityIndicator />
+        </View>
+      }
+    >
+      {children}
+    </Suspense>
+  );
+}
+
+const renderWithSuspense = ({ children }: { children: ReactNode }) => <LazyScreenBoundary>{children}</LazyScreenBoundary>;
+
 function AuthNavigator() {
   return (
-    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+    <AuthStack.Navigator screenOptions={{ headerShown: false }} screenLayout={renderWithSuspense}>
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
     </AuthStack.Navigator>
@@ -69,7 +91,7 @@ function AuthNavigator() {
 
 function DashboardNavigator() {
   return (
-    <DashboardStack.Navigator screenOptions={{ headerShown: false }}>
+    <DashboardStack.Navigator screenOptions={{ headerShown: false }} screenLayout={renderWithSuspense}>
       <DashboardStack.Screen name="DashboardHome" component={DashboardScreen} />
       <DashboardStack.Screen name="Reports" component={ReportsScreen} />
       <DashboardStack.Screen name="Payments" component={PaymentsScreen} />
@@ -79,7 +101,7 @@ function DashboardNavigator() {
 
 function InvoiceNavigator() {
   return (
-    <InvoiceStack.Navigator screenOptions={{ headerShown: false }}>
+    <InvoiceStack.Navigator screenOptions={{ headerShown: false }} screenLayout={renderWithSuspense}>
       {/* Invoice/Order lists swap in place via the segmented switcher — no push animation. */}
       <InvoiceStack.Screen name="InvoiceList" component={InvoicesScreen} options={{ animation: 'none' }} />
       <InvoiceStack.Screen name="InvoiceCreate" component={InvoiceBuilderScreen} />
@@ -94,7 +116,7 @@ function InvoiceNavigator() {
 
 function CatalogNavigator() {
   return (
-    <CatalogStack.Navigator screenOptions={{ headerShown: false }}>
+    <CatalogStack.Navigator screenOptions={{ headerShown: false }} screenLayout={renderWithSuspense}>
       <CatalogStack.Screen name="Products" component={ProductsScreen} />
       <CatalogStack.Screen name="Customers" component={CustomersScreen} />
       <CatalogStack.Screen name="CustomerDetail" component={CustomerDetailScreen} />
@@ -104,7 +126,7 @@ function CatalogNavigator() {
 
 function CustomersNavigator() {
   return (
-    <CustomersStack.Navigator screenOptions={{ headerShown: false }}>
+    <CustomersStack.Navigator screenOptions={{ headerShown: false }} screenLayout={renderWithSuspense}>
       <CustomersStack.Screen name="Customers" component={CustomersScreen} />
       <CustomersStack.Screen name="CustomerDetail" component={CustomerDetailScreen} />
     </CustomersStack.Navigator>
@@ -113,7 +135,7 @@ function CustomersNavigator() {
 
 function SettingsNavigator() {
   return (
-    <SettingsStack.Navigator screenOptions={{ headerShown: false }}>
+    <SettingsStack.Navigator screenOptions={{ headerShown: false }} screenLayout={renderWithSuspense}>
       <SettingsStack.Screen name="SettingsHome" component={SettingsScreen} />
       <SettingsStack.Screen name="BusinessProfile" component={BusinessProfileScreen} />
       <SettingsStack.Screen name="TaxSettings" component={TaxSettingsScreen} />
@@ -252,6 +274,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     width: 56
   },
+  lazyFallback: { alignItems: 'center', flex: 1, justifyContent: 'center' },
   tabItem: { flex: 1, paddingTop: 0 },
   tabLabel: { ...typeScale.smallCaption, ...fontStyles.medium, fontSize: 11, lineHeight: 14, marginTop: 2 }
 });
