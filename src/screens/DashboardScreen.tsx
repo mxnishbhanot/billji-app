@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import Reanimated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Text, useTheme } from 'react-native-paper';
@@ -256,14 +257,15 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
   const canCreateInvoice = can(PERMISSION.invoicesCreate);
   const isDark = theme.dark;
   const colors = appColors(isDark);
-  const scrollY = useMemo(() => new Animated.Value(0), []);
-  const heroParallaxStyle = {
-    opacity: scrollY.interpolate({ inputRange: [0, 190], outputRange: [1, 0.94], extrapolate: 'clamp' }),
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((event) => { scrollY.value = event.contentOffset.y; });
+  const heroParallaxStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, 190], [1, 0.94], Extrapolation.CLAMP),
     transform: [
-      { translateY: scrollY.interpolate({ inputRange: [0, 190], outputRange: [0, 26], extrapolate: 'clamp' }) },
-      { scale: scrollY.interpolate({ inputRange: [0, 190], outputRange: [1, 0.975], extrapolate: 'clamp' }) }
+      { translateY: interpolate(scrollY.value, [0, 190], [0, 26], Extrapolation.CLAMP) },
+      { scale: interpolate(scrollY.value, [0, 190], [1, 0.975], Extrapolation.CLAMP) }
     ]
-  };
+  }));
   const query = useQuery({ queryKey: queryKeys.report.all, queryFn: () => reportsApi.summary() });
 
   useEffect(() => {
@@ -272,11 +274,18 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
 
   const report = query.data;
 
-  const stats: { label: string; value: string | number; hint: string; tone?: 'primary' | 'success' | 'warning' | 'danger'; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [
+  const stats: { label: string; value: string | number; hint: string; tone?: 'primary' | 'success' | 'warning' | 'danger'; icon: keyof typeof MaterialCommunityIcons.glyphMap; onPress?: () => void }[] = [
     { label: 'TODAY', value: formatCurrency(report?.todaySales), hint: 'Collected', icon: 'credit-card' },
     { label: 'THIS MONTH', value: formatCurrency(report?.monthlySales), hint: 'Collected', icon: 'calendar-month' },
     { label: 'INVOICES', value: report?.totalInvoices || 0, hint: 'All time', icon: 'file-document' },
-    { label: 'PENDING', value: report?.pendingInvoices || 0, hint: 'Need follow-up', tone: 'warning', icon: 'clock' }
+    {
+      label: 'PENDING',
+      value: report?.pendingInvoices || 0,
+      hint: 'Need follow-up',
+      tone: 'warning',
+      icon: 'clock',
+      onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList', params: { status: 'pending' } })
+    }
   ];
 
   const quickActions: { label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; onPress: () => void }[] = [
@@ -314,10 +323,10 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
       contentStyle={styles.screenContent}
       scrollViewProps={{
         scrollEventThrottle: 16,
-        onScroll: Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })
+        onScroll: scrollHandler
       }}
     >
-      <Animated.View style={[styles.heroCard, { borderColor: alpha('#C3C0FF', 0.3) }, heroParallaxStyle]}>
+      <Reanimated.View style={[styles.heroCard, { borderColor: alpha('#C3C0FF', 0.3) }, heroParallaxStyle]}>
         <HeroPattern />
         <FloatingHeroBubbles />
         <View style={styles.heroInner}>
@@ -349,7 +358,7 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
             </Pressable>
           </View>
         </View>
-      </Animated.View>
+      </Reanimated.View>
 
       <View style={styles.statRow}>{stats.slice(0, 2).map((item) => <StatCard key={item.label} {...item} />)}</View>
       <View style={styles.statRow}>{stats.slice(2).map((item) => <StatCard key={item.label} {...item} />)}</View>

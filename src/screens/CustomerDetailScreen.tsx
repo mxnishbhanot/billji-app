@@ -1,17 +1,21 @@
-import { useMemo } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Text, useTheme } from 'react-native-paper';
 import { paymentsApi } from '@/api/endpoints';
+import { apiErrorMessage } from '@/api/client';
+import { useAppDialog } from '@/components/AppDialog';
+import { CollectDuesSheet } from '@/components/CollectDuesSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
 import { StatCard } from '@/components/StatCard';
 import { StatusPill } from '@/components/StatusPill';
 import { CustomerDetailScreenProps } from '@/navigation/types';
+import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
-import { Payment, PaymentMethod, PaymentRecordStatus } from '@/types';
+import { CustomerOutstanding, Payment, PaymentMethod, PaymentRecordStatus } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/format';
 
 const METHOD_LABELS: Record<PaymentMethod, string> = {
@@ -35,11 +39,40 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
+  const queryClient = useQueryClient();
+  const { showDialog } = useAppDialog();
+  const { can } = usePermissions();
+  const canRecordPayment = can(PERMISSION.paymentsRecord);
+  const [collectVisible, setCollectVisible] = useState(false);
   const query = useQuery({
     queryKey: queryKeys.payments.customer(customer._id),
     queryFn: () => paymentsApi.list({ customerId: customer._id })
   });
   const payments = useMemo(() => query.data ?? [], [query.data]);
+
+  const outstandingQuery = useQuery({
+    queryKey: queryKeys.payments.customerOutstanding(customer._id),
+    queryFn: () => paymentsApi.customerOutstanding(customer._id),
+    enabled: canRecordPayment
+  });
+  const outstanding: CustomerOutstanding = outstandingQuery.data ?? { invoices: [], totalOutstanding: 0 };
+
+  const collectDues = useMutation({
+    mutationFn: (payload: { amount: number; method: PaymentMethod; invoiceIds: string[]; allowCredit: boolean; reference?: string; notes?: string }) =>
+      paymentsApi.recordCustomerPayment(customer._id, payload),
+    onSuccess: () => {
+      setCollectVisible(false);
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.customer(customer._id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.customerOutstanding(customer._id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
+    },
+    onError: (error) => showDialog({ title: 'Could not record payment', message: apiErrorMessage(error), tone: 'error' })
+  });
+
+  const canCollect = canRecordPayment && outstanding.totalOutstanding > 0;
 
   const contactRows = [
     { icon: 'phone' as const, value: `${customer.countryCode || '+91'} ${customer.phone}` },
@@ -67,6 +100,16 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
         <StatCard label="Credit" value={formatCurrency(customer.creditBalance)} hint="Advance balance" tone="success" icon="wallet-outline" />
       </View>
 
+      {canCollect ? (
+        <Pressable
+          onPress={() => setCollectVisible(true)}
+          style={({ pressed }) => [styles.collectBtn, { backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary }]}
+        >
+          <Feather name="download" size={16} color="#FFFFFF" />
+          <Text style={styles.collectBtnLabel}>Collect dues</Text>
+        </Pressable>
+      ) : null}
+
       <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Payments</Text>
       {query.isLoading ? (
         <ActivityIndicator color={theme.colors.primary} style={styles.loader} />
@@ -93,12 +136,22 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
       ) : (
         <EmptyState title="No payments" message="Payments recorded against this customer will show here." />
       )}
+
+      <CollectDuesSheet
+        visible={collectVisible}
+        outstanding={outstanding}
+        loading={collectDues.isPending}
+        onClose={() => setCollectVisible(false)}
+        onSubmit={(payload) => collectDues.mutate(payload)}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   amount: { ...fontStyles.bold, fontSize: 15 },
+  collectBtn: { alignItems: 'center', borderRadius: radii.input, flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 16, paddingVertical: 13 },
+  collectBtnLabel: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 14, letterSpacing: 0.2 },
   contactList: { gap: 8, marginTop: 12 },
   contactRow: { alignItems: 'center', flexDirection: 'row', gap: 8 },
   contactText: { ...typeScale.caption, flex: 1, fontSize: 13 },

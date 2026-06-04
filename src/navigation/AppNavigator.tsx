@@ -103,7 +103,7 @@ function DashboardNavigator() {
 function InvoiceNavigator() {
   return (
     <InvoiceStack.Navigator screenOptions={{ headerShown: false }} screenLayout={renderWithSuspense}>
-      {/* Invoice/Order lists swap in place via the segmented switcher — no push animation. */}
+      {/* OrderList reached only from the dashboard Orders button; no in-place list swap, no push animation. */}
       <InvoiceStack.Screen name="InvoiceList" component={InvoicesScreen} options={{ animation: 'none' }} />
       <InvoiceStack.Screen name="InvoiceCreate" component={InvoiceBuilderScreen} />
       <InvoiceStack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />

@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
-import { Animated, KeyboardAvoidingView, Platform, ScrollViewProps, StyleSheet, View, ViewStyle } from 'react-native';
+import { ScrollViewProps, StyleSheet, View, ViewStyle } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Appbar, Text, useTheme } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
@@ -30,12 +31,6 @@ export function Screen({ title, children, scroll = true, showNotifications = tru
     </View>
   );
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
-      enabled={Platform.OS !== 'web'}
-    >
       <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right']}>
         <View
           style={[
@@ -62,17 +57,17 @@ export function Screen({ title, children, scroll = true, showNotifications = tru
           {headerAction ?? (showNotifications ? <NotificationButton /> : null)}
         </View>
         {scroll ? (
-          <Animated.ScrollView
-            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          <KeyboardAwareScrollView
+            bottomOffset={24}
+            keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             {...scrollViewProps}
           >
             {content}
-          </Animated.ScrollView>
+          </KeyboardAwareScrollView>
         ) : content}
       </SafeAreaView>
-    </KeyboardAvoidingView>
   );
 }
 const styles = StyleSheet.create({

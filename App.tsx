@@ -9,6 +9,7 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider, Text } from 'react-native-paper';
@@ -75,6 +76,7 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
       <PersistQueryClientProvider client={queryClient} persistOptions={queryPersistOptions} onSuccess={handleCacheRestored}>
         <PaperProvider theme={theme}>
           <AppDialogProvider>
@@ -91,6 +93,7 @@ export default function App() {
           </AppDialogProvider>
         </PaperProvider>
       </PersistQueryClientProvider>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

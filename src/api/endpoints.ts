@@ -5,6 +5,9 @@ import {
   BusinessProfile,
   Customer,
   CustomerFormValues,
+  CustomerOutstanding,
+  CustomerPaymentPayload,
+  CustomerPaymentResponse,
   CustomerQuery,
   DocumentType,
   DraftDocument,
@@ -116,6 +119,14 @@ export const paymentsApi = {
     api
       .post<RecordPaymentResponse>(`/payments/invoices/${invoiceId}/record`, payload, {
         headers: { 'Idempotency-Key': idempotencyKey(`payment-${invoiceId}`) }
+      })
+      .then((res) => res.data),
+  customerOutstanding: (customerId: string) =>
+    api.get<CustomerOutstanding>(`/payments/customers/${customerId}/outstanding`).then((res) => res.data),
+  recordCustomerPayment: (customerId: string, payload: CustomerPaymentPayload) =>
+    api
+      .post<CustomerPaymentResponse>(`/payments/customers/${customerId}/record`, payload, {
+        headers: { 'Idempotency-Key': idempotencyKey(`cust-payment-${customerId}`) }
       })
       .then((res) => res.data)
 };

@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput as RNTextInput, View, type TextStyle } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
@@ -153,11 +153,20 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
   const routeSort = safeInvoiceSortParam(route?.params?.sort) as InvoiceSortOption | undefined;
   const reportRange = useMemo(() => route?.params?.fromReports && (routeFrom || routeTo) ? { from: routeFrom, to: routeTo } : null, [route?.params?.fromReports, routeFrom, routeTo]);
   const activeSort = route?.params?.fromReports && routeSort ? routeSort : undefined;
+  const routeStatus = route?.params?.status;
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
-  const [filterValues, setFilterValues] = useState<InvoiceFilterValues>(defaultInvoiceFilterValues);
+  const [filterValues, setFilterValues] = useState<InvoiceFilterValues>(
+    routeStatus ? { ...defaultInvoiceFilterValues, status: routeStatus } : defaultInvoiceFilterValues
+  );
   const [draftFilterValues, setDraftFilterValues] = useState<InvoiceFilterValues>(defaultInvoiceFilterValues);
   const [filtersOpen, setFiltersOpen] = useState(false);
+
+  useEffect(() => {
+    if (!routeStatus) return;
+    setFilterValues((v) => ({ ...v, status: routeStatus }));
+    navigation.setParams({ status: undefined });
+  }, [routeStatus, navigation]);
 
   const openFilters = () => {
     setDraftFilterValues(filterValues);
@@ -223,16 +232,6 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
 
   const stickyHeader = (
     <View style={[styles.stickyHeader, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.switcher, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.12) }]}>
-        <Pressable style={[styles.switcherOption, { backgroundColor: theme.colors.primary }]} onPress={() => undefined}>
-          <MaterialCommunityIcons name="file-document" size={18} color="#FFFFFF" />
-          <Text style={[styles.switcherLabel, { color: '#FFFFFF' }]}>Invoices</Text>
-        </Pressable>
-        <Pressable style={styles.switcherOption} onPress={() => navigation.replace('OrderList')}>
-          <MaterialCommunityIcons name="clipboard-list-outline" size={18} color={theme.colors.onSurfaceVariant} />
-          <Text style={[styles.switcherLabel, { color: theme.colors.onSurfaceVariant }]}>Orders</Text>
-        </Pressable>
-      </View>
       <View style={[styles.searchWrap, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.1) }]}>
         <Feather name="search" size={18} color={theme.colors.onSurfaceVariant} />
         <RNTextInput
@@ -439,9 +438,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4
   },
   statusText: { ...fontStyles.semiBold, fontSize: 11, letterSpacing: 0.4, textTransform: 'capitalize' },
-  switcher: { borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', padding: 4 },
-  switcherLabel: { ...fontStyles.bold, fontSize: 14 },
-  switcherOption: { alignItems: 'center', borderRadius: radii.pill, flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', minHeight: 42 },
   viewHint: { alignItems: 'center', flexDirection: 'row', gap: 2 },
   viewHintLabel: { ...fontStyles.bold, fontSize: 12 }
 });

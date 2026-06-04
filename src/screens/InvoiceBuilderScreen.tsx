@@ -9,6 +9,7 @@ import {
   DraftSyncIndicator,
   InvoiceBuilderDialogs,
   InvoiceItemsEditor,
+  PreviousDuesCard,
   ProductPickerList,
   TotalsExtrasCard
 } from '@/features/invoices/components/InvoiceBuilderParts';
@@ -123,9 +124,23 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
         taxRate={builder.taxRate}
         totals={builder.totals}
       />
+      <PreviousDuesCard
+        amount={builder.duesPaymentAmount}
+        cardBorder={cardBorder}
+        collectDues={builder.collectDues}
+        colors={colors}
+        inputBackground={inputBackground}
+        invoiceTotal={builder.totals.total}
+        method={builder.duesPaymentMethod}
+        onAmountChange={builder.setDuesPaymentAmount}
+        onMethodChange={builder.setDuesPaymentMethod}
+        onToggle={builder.toggleCollectDues}
+        outstanding={builder.outstanding}
+        subSurface={subSurface}
+      />
       <Button
         mode="contained"
-        loading={builder.createInvoiceMutation.isPending}
+        loading={builder.isGenerating}
         onPress={builder.createInvoice}
         style={styles.generateButton}
         contentStyle={styles.generateButtonContent}

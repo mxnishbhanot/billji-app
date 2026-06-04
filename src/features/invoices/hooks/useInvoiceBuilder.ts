@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { customersApi, invoicesApi, productsApi } from '@/api/endpoints';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { customersApi, invoicesApi, paymentsApi, productsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useDocumentDraft } from '@/shared/drafts/useDocumentDraft';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { useAuthStore } from '@/store/authStore';
-import { Customer, DiscountType, InvoiceCreatePayload, InvoiceDraftPayload, InvoiceItem, Product, StockShortage } from '@/types';
+import { Customer, CustomerOutstanding, DiscountType, InvoiceCreatePayload, InvoiceDraftPayload, InvoiceItem, PaymentMethod, Product, StockShortage } from '@/types';
 import { calculateClientTotals } from '@/utils/format';
 import {
   addProductToItems,
@@ -51,6 +51,9 @@ export const useInvoiceBuilder = ({
   const [discountValue, setDiscountValue] = useState('0');
   const [notes, setNotes] = useState('');
   const [stockWarning, setStockWarning] = useState<StockWarning | null>(null);
+  const [collectDues, setCollectDues] = useState(false);
+  const [duesPaymentAmount, setDuesPaymentAmount] = useState('');
+  const [duesPaymentMethod, setDuesPaymentMethod] = useState<PaymentMethod>('cash');
   const debouncedCustomerSearch = useDebouncedValue(customerSearch, 300);
   const debouncedProductSearch = useDebouncedValue(productSearch, 300);
 
@@ -76,6 +79,13 @@ export const useInvoiceBuilder = ({
     [activeCustomer, discountType, discountValue, items, notes, selectedCustomerId, taxRate]
   );
   const totals = calculateClientTotals({ items, taxRate: Number(taxRate || 0), discountType, discountValue: Number(discountValue || 0) });
+
+  const outstandingQuery = useQuery({
+    queryKey: queryKeys.payments.customerOutstanding(selectedCustomerId),
+    queryFn: () => paymentsApi.customerOutstanding(selectedCustomerId),
+    enabled: Boolean(selectedCustomerId)
+  });
+  const outstanding: CustomerOutstanding = outstandingQuery.data ?? { invoices: [], totalOutstanding: 0 };
 
   const applyDraftPayload = useCallback((payload: InvoiceDraftPayload) => {
     setSelectedCustomerId(payload.selectedCustomerId);
@@ -108,14 +118,18 @@ export const useInvoiceBuilder = ({
     onError: (error) => showDialog({ title: 'Could not add customer', message: apiErrorMessage(error), tone: 'error' })
   });
 
+  const recordDuesMutation = useMutation({
+    mutationFn: ({ customerId, payload }: { customerId: string; payload: Parameters<typeof paymentsApi.recordCustomerPayment>[1] }) =>
+      paymentsApi.recordCustomerPayment(customerId, payload)
+  });
+
   const createInvoiceMutation = useMutation({
     mutationFn: invoicesApi.create,
-    onSuccess: (invoice) => {
+    onSuccess: () => {
       draft.clearActiveDraft();
       queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
-      onCreated(invoice._id);
     },
     onError: (error) => {
       const shortages = stockShortagesFromError(error);
@@ -135,6 +149,38 @@ export const useInvoiceBuilder = ({
     setSelectedCustomerId(customer._id);
     setSelectedCustomer(customer);
     setCustomerPicker(false);
+    // New customer context — reset the dues-collection toggle/amount.
+    setCollectDues(false);
+    setDuesPaymentAmount('');
+  };
+
+  // Default the collected amount to "settle everything": previous dues + this invoice's total.
+  const toggleCollectDues = (value: boolean) => {
+    setCollectDues(value);
+    if (value) {
+      const prefill = Math.round((outstanding.totalOutstanding + totals.total) * 100) / 100;
+      setDuesPaymentAmount(prefill > 0 ? String(prefill) : '');
+    }
+  };
+
+  // After the invoice exists, record ONE payment allocating to previous dues (oldest-first) then the new invoice.
+  const collectDuesForInvoice = async (newInvoiceId: string) => {
+    if (!collectDues || !selectedCustomerId) return;
+    const amount = Number(duesPaymentAmount || 0);
+    if (amount <= 0) return;
+    const invoiceIds = [...outstanding.invoices.map((invoice) => invoice.id), newInvoiceId];
+    try {
+      await recordDuesMutation.mutateAsync({ customerId: selectedCustomerId, payload: { amount, invoiceIds, method: duesPaymentMethod } });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(newInvoiceId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.customerOutstanding(selectedCustomerId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
+    } catch (error) {
+      // The invoice was created successfully; surface the payment failure but still continue.
+      showDialog({ title: 'Invoice created, but payment failed', message: apiErrorMessage(error), tone: 'error' });
+    }
   };
 
   const addProduct = (product: Product) => setItems((current) => addProductToItems(current, product));
@@ -146,7 +192,7 @@ export const useInvoiceBuilder = ({
   const buildPayload = (allowOversell = false) =>
     buildInvoicePayload({ selectedCustomerId, items, taxRate, discountType, discountValue, notes, allowOversell });
 
-  const createInvoice = () => {
+  const createInvoice = async () => {
     if (!selectedCustomerId) {
       showDialog({ title: 'Select or add a customer', message: 'Choose a saved customer or quick add a new one before generating the invoice.', tone: 'warning' });
       return;
@@ -157,15 +203,29 @@ export const useInvoiceBuilder = ({
       return;
     }
 
-    createInvoiceMutation.mutate(buildPayload(true));
+    try {
+      const invoice = await createInvoiceMutation.mutateAsync(buildPayload(true));
+      await collectDuesForInvoice(invoice._id);
+      onCreated(invoice._id);
+    } catch {
+      // Stock warning / error already surfaced in createInvoiceMutation.onError.
+    }
   };
 
-  const continueWithOversell = () => {
+  const continueWithOversell = async () => {
     if (!stockWarning || createInvoiceMutation.isPending) return;
     const payload = stockWarning.payload;
     setStockWarning(null);
-    createInvoiceMutation.mutate(payload);
+    try {
+      const invoice = await createInvoiceMutation.mutateAsync(payload);
+      await collectDuesForInvoice(invoice._id);
+      onCreated(invoice._id);
+    } catch {
+      // Error already surfaced in createInvoiceMutation.onError.
+    }
   };
+
+  const isGenerating = createInvoiceMutation.isPending || recordDuesMutation.isPending;
 
   return {
     activeCustomer,
@@ -185,11 +245,21 @@ export const useInvoiceBuilder = ({
     draftStatus: draft.draftStatus,
     duplicateDraft: draft.duplicateDraft,
     continueWithOversell,
+    collectDues,
     discountType,
     discountValue,
+    duesPaymentAmount,
+    duesPaymentMethod,
     hasDraftContent: draft.hasDraftContent,
     isDraftDirty: draft.isDraftDirty,
+    isGenerating,
     items,
+    outstanding,
+    outstandingLoading: outstandingQuery.isLoading,
+    recordDuesMutation,
+    setDuesPaymentAmount,
+    setDuesPaymentMethod,
+    toggleCollectDues,
     lastDraftSavedAt: draft.lastDraftSavedAt,
     notes,
     productSearch,

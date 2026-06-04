@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, StyleSheet, View } from 'react-native';
+import Reanimated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -195,14 +196,15 @@ export function SettingsScreen() {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
-  const scrollY = useMemo(() => new Animated.Value(0), []);
-  const heroParallaxStyle = {
-    opacity: scrollY.interpolate({ inputRange: [0, 150], outputRange: [1, 0.94], extrapolate: 'clamp' }),
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((event) => { scrollY.value = event.contentOffset.y; });
+  const heroParallaxStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, 150], [1, 0.94], Extrapolation.CLAMP),
     transform: [
-      { translateY: scrollY.interpolate({ inputRange: [0, 150], outputRange: [0, 22], extrapolate: 'clamp' }) },
-      { scale: scrollY.interpolate({ inputRange: [0, 150], outputRange: [1, 0.975], extrapolate: 'clamp' }) }
+      { translateY: interpolate(scrollY.value, [0, 150], [0, 22], Extrapolation.CLAMP) },
+      { scale: interpolate(scrollY.value, [0, 150], [1, 0.975], Extrapolation.CLAMP) }
     ]
-  };
+  }));
   const { showDialog } = useAppDialog();
   const { can } = usePermissions();
   const canViewLedger = can(PERMISSION.reportsView);
@@ -262,7 +264,7 @@ export function SettingsScreen() {
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.6, base64: true });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.95, base64: true });
     if (!result.canceled) {
       const asset = result.assets[0];
       if (!asset) return;
@@ -291,8 +293,8 @@ export function SettingsScreen() {
       const image = await cropPicker.openPicker({
         mediaType: 'photo',
         cropping: true,
-        width: 512,
-        height: 512,
+        width: 1024,
+        height: 1024,
         cropperCircleOverlay: true,
         enableRotationGesture: true,
         cropperRotateButtonsHidden: false,
@@ -301,7 +303,7 @@ export function SettingsScreen() {
         cropperStatusBarColor: '#1C1A4A',
         cropperToolbarColor: '#1C1A4A',
         cropperToolbarWidgetColor: '#FFFFFF',
-        compressImageQuality: 0.7,
+        compressImageQuality: 0.95,
         includeBase64: true
       });
       if (image.data) setLogo(`data:${image.mime};base64,${image.data}`);
@@ -395,10 +397,10 @@ export function SettingsScreen() {
       contentStyle={styles.screenContent}
       scrollViewProps={{
         scrollEventThrottle: 16,
-        onScroll: Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })
+        onScroll: scrollHandler
       }}
     >
-      <Animated.View style={[styles.profileCard, { borderColor: alpha('#C3C0FF', 0.3) }, heroParallaxStyle]}>
+      <Reanimated.View style={[styles.profileCard, { borderColor: alpha('#C3C0FF', 0.3) }, heroParallaxStyle]}>
         <SettingsHeroPattern />
         <FloatingHeroBubbles />
         <View style={[styles.profileLogo, { backgroundColor: alpha('#FFFFFF', 0.16), borderColor: alpha('#FFFFFF', 0.24) }]}>
@@ -415,7 +417,7 @@ export function SettingsScreen() {
         <Pressable onPress={() => setBrandSheetVisible(true)} style={({ pressed }) => [styles.profileEdit, { backgroundColor: alpha('#1C1A4A', pressed ? 0.55 : 0.36), borderColor: alpha('#C3C0FF', 0.36) }]} hitSlop={8}>
           <Feather name="edit-2" size={18} color="#FFFFFF" />
         </Pressable>
-      </Animated.View>
+      </Reanimated.View>
 
       <SettingsGroup title="BUSINESS">
         <SettingsRow icon="briefcase-outline" title="Business Profile" subtitle={`${businessName || 'Name'}, ${phone ? 'phone' : 'phone missing'}, ${businessEmail ? 'email' : 'email missing'}`} tone={colors.primary} onPress={() => navigation.navigate('BusinessProfile')} />

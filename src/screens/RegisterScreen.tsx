@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, Image, StyleSheet, View } from 'react-native';
+import Reanimated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
@@ -146,28 +148,30 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
   const { showDialog } = useAppDialog();
   const setSession = useAuthStore((state) => state.setSession);
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const scrollY = useMemo(() => new Animated.Value(0), []);
-  const heroParallaxStyle = {
-    opacity: scrollY.interpolate({ inputRange: [0, 180], outputRange: [1, 0.94], extrapolate: 'clamp' }),
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((event) => { scrollY.value = event.contentOffset.y; });
+  const heroParallaxStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, 180], [1, 0.94], Extrapolation.CLAMP),
     transform: [
-      { translateY: scrollY.interpolate({ inputRange: [0, 180], outputRange: [0, 24], extrapolate: 'clamp' }) },
-      { scale: scrollY.interpolate({ inputRange: [0, 180], outputRange: [1, 0.97], extrapolate: 'clamp' }) }
+      { translateY: interpolate(scrollY.value, [0, 180], [0, 24], Extrapolation.CLAMP) },
+      { scale: interpolate(scrollY.value, [0, 180], [1, 0.97], Extrapolation.CLAMP) }
     ]
-  };
+  }));
   const form = useForm<{ name: string; email: string; password: string }>({ defaultValues: { name: '', email: '', password: '' }, resolver: zodResolver(registerSchema) });
   const mutation = useMutation({ mutationFn: authApi.register, onSuccess: setSession, onError: (error) => showDialog({ title: 'Registration failed', message: apiErrorMessage(error, 'Registration failed'), tone: 'error' }) });
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right']}>
-      <Animated.ScrollView
+      <KeyboardAwareScrollView
+        bottomOffset={24}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         scrollEventThrottle={16}
-        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+        onScroll={scrollHandler}
       >
         <View style={styles.shell}>
-          <Animated.View style={[styles.heroPanel, { borderColor: alpha('#C3C0FF', 0.3) }, heroParallaxStyle]}>
+          <Reanimated.View style={[styles.heroPanel, { borderColor: alpha('#C3C0FF', 0.3) }, heroParallaxStyle]}>
             <AuthHeroPattern />
             <FloatingBubbles />
             <View style={styles.brandRow}>
@@ -182,7 +186,7 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
                 <Text style={styles.tagline}>Hisaab Apka, Growth Apki</Text>
               </View>
             </View>
-          </Animated.View>
+          </Reanimated.View>
 
           <AppCard style={[styles.formCard, { borderColor: isDark ? alpha(colors.primary, 0.18) : alpha(colors.primaryStrong, 0.08) }]}>
             <View style={styles.formHeader}>
@@ -244,7 +248,7 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
             </View>
           </AppCard>
         </View>
-      </Animated.ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { Feather } from '@expo/vector-icons';
 import { Control } from 'react-hook-form';
 import { Text, useTheme } from 'react-native-paper';
@@ -47,7 +48,7 @@ export function BrandLogoSheet({ visible, control, logoPreview, businessName, sa
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
-      <View style={styles.fill}>
+      <KeyboardAvoidingView behavior="padding" style={styles.fill}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(8, 9, 18, 0.55)', opacity: backdropOpacity }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         </Animated.View>
@@ -124,7 +125,7 @@ export function BrandLogoSheet({ visible, control, logoPreview, businessName, sa
             </Text>
           </Pressable>
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

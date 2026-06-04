@@ -1,4 +1,4 @@
-import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -121,7 +121,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
       paymentsQuery.refetch();
     }
   });
-  const shareWhatsApp = async () => { try { const result = await invoicesApi.whatsapp(id); await Linking.openURL(result.link); } catch (error) { showDialog({ title: 'Could not prepare WhatsApp link', message: apiErrorMessage(error), tone: 'error' }); } };
+  const shareWhatsApp = async () => { if (!invoice) return; try { await openOrSharePdf(invoice.pdfUrl, invoice.invoiceNumber); } catch (error) { showDialog({ title: 'Could not share invoice', message: apiErrorMessage(error), tone: 'error' }); } };
 
   if (!invoice) return <Screen title="Invoice"><Text>Loading invoice...</Text></Screen>;
 

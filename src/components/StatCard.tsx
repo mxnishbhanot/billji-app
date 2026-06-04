@@ -5,9 +5,9 @@ import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { AppCard } from './AppCard';
 
 type StatTone = 'primary' | 'success' | 'warning' | 'danger';
-type Props = { label: string; value: string | number; hint?: string; tone?: StatTone; icon?: keyof typeof MaterialCommunityIcons.glyphMap };
+type Props = { label: string; value: string | number; hint?: string; tone?: StatTone; icon?: keyof typeof MaterialCommunityIcons.glyphMap; onPress?: () => void };
 
-export function StatCard({ label, value, hint, tone = 'primary', icon }: Props) {
+export function StatCard({ label, value, hint, tone = 'primary', icon, onPress }: Props) {
   const theme = useTheme();
   const colors = appColors(theme.dark);
   const accent =
@@ -17,7 +17,7 @@ export function StatCard({ label, value, hint, tone = 'primary', icon }: Props) 
     colors.primary;
   const tileColor = theme.dark ? alpha(accent, 0.18) : alpha(accent, 0.1);
   return (
-    <AppCard style={styles.card}>
+    <AppCard style={styles.card} onPress={onPress}>
       <View style={styles.shell}>
         <View style={styles.topRow}>
           <Text style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>{label}</Text>

@@ -1,6 +1,6 @@
 import { CompositeNavigationProp, NavigationProp, NavigatorScreenParams, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Customer } from '@/types';
+import { Customer, InvoiceStatus } from '@/types';
 
 export type InvoiceSortParam = 'newest' | 'oldest' | 'amount-high' | 'amount-low';
 export type ProductSortParam = 'updated' | 'top-sales' | 'name-asc' | 'price-high' | 'price-low' | 'stock-low';
@@ -22,6 +22,7 @@ export type InvoiceStackParamList = {
     from?: string;
     to?: string;
     sort?: InvoiceSortParam;
+    status?: InvoiceStatus;
   } | undefined;
   InvoiceCreate: undefined;
   InvoiceDetail: { id: string };

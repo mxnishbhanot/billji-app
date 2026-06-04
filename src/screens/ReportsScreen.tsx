@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Text, useTheme } from 'react-native-paper';
+import { Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { reportsApi } from '@/api/endpoints';
 import { AppCard } from '@/components/AppCard';
@@ -13,18 +13,40 @@ import { Screen } from '@/components/Screen';
 import { StatCard } from '@/components/StatCard';
 import { ReportsScreenProps } from '@/navigation/types';
 import { queryKeys } from '@/shared/query/queryKeys';
-import { alpha, appColors, fontStyles, radii, statusTone, typeScale } from '@/theme/theme';
+import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
+import { PaymentMethod } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/format';
 
-const REPORT_STATUSES: { key: 'pending' | 'paid' | 'cancelled'; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [
-  { key: 'pending', label: 'Pending', icon: 'clock-outline' },
-  { key: 'paid', label: 'Paid', icon: 'check-decagram' },
-  { key: 'cancelled', label: 'Cancelled', icon: 'close-circle-outline' }
-];
+const METHOD_META: Record<PaymentMethod, { label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = {
+  cash: { label: 'Cash', icon: 'cash' },
+  upi: { label: 'UPI', icon: 'cellphone' },
+  bank_transfer: { label: 'Bank transfer', icon: 'bank-outline' },
+  card: { label: 'Card', icon: 'credit-card-outline' },
+  cheque: { label: 'Cheque', icon: 'checkbook' },
+  wallet: { label: 'Wallet', icon: 'wallet-outline' },
+  other: { label: 'Other', icon: 'dots-horizontal' }
+};
 
 const displayRange = (range: DateRange) => {
-  if (!range.from && !range.to) return 'Any time';
+  if (!range.from && !range.to) return 'All time';
   return `${range.from ? formatDate(range.from) : 'Start'} - ${range.to ? formatDate(range.to) : 'Today'}`;
+};
+
+type Preset = 'today' | 'week' | 'month' | 'custom';
+const PRESETS: { key: Exclude<Preset, 'custom'>; label: string }[] = [
+  { key: 'today', label: 'Today' },
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' }
+];
+const PRESET_LABEL: Record<Preset, string> = { today: 'Today', week: 'This week', month: 'This month', custom: 'Custom range' };
+
+const toIso = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const rangeForPreset = (key: Exclude<Preset, 'custom'>): DateRange => {
+  const now = new Date();
+  const today = toIso(now);
+  if (key === 'today') return { from: today, to: today };
+  if (key === 'week') return { from: toIso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6)), to: today };
+  return { from: toIso(new Date(now.getFullYear(), now.getMonth(), 1)), to: today };
 };
 
 function ReportRangeSheet({
@@ -98,7 +120,7 @@ function ReportRangeSheet({
             <DateRangePicker
               value={value}
               onChange={onChange}
-              helperText="Charts, counts, top products, and activity follow this range."
+              helperText="Sales, collections, products, and customers follow this range. Outstanding dues always show the live total."
             />
           </View>
 
@@ -121,200 +143,257 @@ function ReportRangeSheet({
   );
 }
 
+// Section wrapper: title + hint + optional "View all" action, then children.
+function SectionCard({
+  icon,
+  title,
+  hint,
+  actionLabel,
+  onAction,
+  children,
+  style
+}: {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  title: string;
+  hint: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  children: React.ReactNode;
+  style?: object;
+}) {
+  const theme = useTheme();
+  const isDark = theme.dark;
+  const colors = appColors(isDark);
+  return (
+    <AppCard style={[styles.sectionCard, style] as object}>
+      <View style={styles.sectionHeader}>
+        <View style={[styles.sectionIcon, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.1) }]}>
+          <MaterialCommunityIcons name={icon} size={19} color={theme.colors.primary} />
+        </View>
+        <View style={styles.rowContent}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>{title}</Text>
+          <Text style={[styles.sectionHint, { color: theme.colors.onSurfaceVariant }]}>{hint}</Text>
+        </View>
+        {actionLabel && onAction ? (
+          <Pressable onPress={onAction} hitSlop={8} style={styles.linkBtn}>
+            <Text style={[styles.linkLabel, { color: theme.colors.primary }]}>{actionLabel}</Text>
+            <Feather name="chevron-right" size={15} color={theme.colors.primary} />
+          </Pressable>
+        ) : null}
+      </View>
+      {children}
+    </AppCard>
+  );
+}
+
+// Hero number + caption inside a section.
+function Hero({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  const theme = useTheme();
+  return (
+    <View style={styles.hero}>
+      <Text style={[styles.heroLabel, { color: theme.colors.onSurfaceVariant }]}>{label}</Text>
+      <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.heroValue, { color: accent || theme.colors.onSurface }]}>{value}</Text>
+    </View>
+  );
+}
+
+// Horizontal share bar used for collected-vs-invoiced and method breakdown.
+function ShareBar({ ratio, color }: { ratio: number; color: string }) {
+  const theme = useTheme();
+  const isDark = theme.dark;
+  const colors = appColors(isDark);
+  const pct = Math.max(0, Math.min(1, ratio || 0));
+  return (
+    <View style={[styles.shareTrack, { backgroundColor: isDark ? alpha(colors.border, 0.6) : alpha(colors.primaryStrong, 0.08) }]}>
+      <View style={[styles.shareFill, { width: `${pct * 100}%`, backgroundColor: color }]} />
+    </View>
+  );
+}
+
 export function ReportsScreen({ navigation }: ReportsScreenProps) {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(theme.dark);
-  const [range, setRange] = useState<DateRange>({ from: '', to: '' });
+  const [preset, setPreset] = useState<Preset>('month');
+  const [range, setRange] = useState<DateRange>(() => rangeForPreset('month'));
   const [draftRange, setDraftRange] = useState<DateRange>(range);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const { data: report, isFetching, refetch } = useQuery({ queryKey: queryKeys.report.summary(range), queryFn: () => reportsApi.summary(range) });
 
+  const selectPreset = (key: Exclude<Preset, 'custom'>) => {
+    setPreset(key);
+    setRange(rangeForPreset(key));
+  };
   const openFilters = () => {
     setDraftRange(range);
     setFiltersOpen(true);
   };
   const applyFilters = () => {
+    setPreset('custom');
     setRange(draftRange);
     setFiltersOpen(false);
   };
-  const resetFilters = () => setDraftRange({ from: '', to: '' });
-  const reportRangeParams = { from: range.from, to: range.to };
-  const viewAllProducts = () => {
-    navigation.navigate('CatalogTab', {
-      screen: 'Products',
-      params: { ...reportRangeParams, sort: 'top-sales', fromReports: true }
-    });
-  };
-  const viewAllInvoices = () => {
-    navigation.navigate('InvoicesTab', {
-      screen: 'InvoiceList',
-      params: { ...reportRangeParams, sort: 'newest', fromReports: true }
-    });
-  };
+  const resetFilters = () => setDraftRange(rangeForPreset('month'));
+  const rangeParams = { from: range.from, to: range.to };
 
-  const reportStats = [
-    { label: 'Today', value: formatCurrency(report?.todaySales), hint: 'Collected', tone: 'success' as const, icon: 'credit-card-outline' as const },
-    { label: 'Weekly', value: formatCurrency(report?.weeklySales), hint: 'Collected', icon: 'calendar-week' as const },
-    { label: 'Monthly', value: formatCurrency(report?.monthlySales), hint: 'Collected', icon: 'calendar-month-outline' as const },
-    { label: 'Avg invoice', value: formatCurrency(report?.averageInvoiceValue), hint: 'Per invoice', icon: 'calculator-variant-outline' as const }
-  ];
+  const viewInvoices = () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList', params: { ...rangeParams, sort: 'newest', fromReports: true } });
+  const viewUnpaidInvoices = () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList', params: { status: 'pending', fromReports: true } });
+  const viewProducts = () => navigation.navigate('CatalogTab', { screen: 'Products', params: { ...rangeParams, sort: 'top-sales', fromReports: true } });
+  const viewCustomers = () => navigation.navigate('CustomersTab', { screen: 'Customers' });
+
+  const sales = report?.sales;
+  const collected = report?.collected;
+  const dues = report?.dues;
+  const performance = report?.performance;
+
+  const collectRatio = collected && collected.invoicedInRange > 0 ? collected.range / collected.invoicedInRange : 0;
+  const methodTotal = collected?.methodBreakdown.reduce((sum, m) => sum + m.amount, 0) || 0;
 
   return (
     <Screen title="Reports" contentStyle={styles.screenContent}>
-      <AppCard style={styles.summaryCard}>
-        <View style={styles.summaryHeader}>
-          <View style={[styles.summaryIconTile, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.1) }]}>
-            <MaterialCommunityIcons name="chart-box-outline" size={21} color={theme.colors.primary} />
+      {/* Period selector — one control that every card below obeys */}
+      <View style={styles.rangeBar}>
+        <View style={[styles.segment, { backgroundColor: isDark ? alpha(colors.border, 0.5) : alpha(colors.primaryStrong, 0.06) }]}>
+          {PRESETS.map((p) => {
+            const active = preset === p.key;
+            return (
+              <Pressable key={p.key} onPress={() => selectPreset(p.key)} style={[styles.segChip, active && { backgroundColor: theme.colors.primary }]}>
+                <Text style={[styles.segText, { color: active ? '#FFFFFF' : theme.colors.onSurfaceVariant }]}>{p.label}</Text>
+              </Pressable>
+            );
+          })}
+          <Pressable onPress={openFilters} style={[styles.segChip, styles.segChipCustom, preset === 'custom' && { backgroundColor: theme.colors.primary }]}>
+            <Feather name="calendar" size={12} color={preset === 'custom' ? '#FFFFFF' : theme.colors.onSurfaceVariant} />
+            <Text style={[styles.segText, { color: preset === 'custom' ? '#FFFFFF' : theme.colors.onSurfaceVariant }]}>Custom</Text>
+          </Pressable>
+        </View>
+        <Pressable onPress={() => void refetch()} style={({ pressed }) => [styles.iconAction, { backgroundColor: alpha(colors.primary, pressed ? 0.22 : 0.12) }]}>
+          <Feather name="refresh-cw" size={16} color={theme.colors.primary} />
+        </Pressable>
+      </View>
+      <Text style={[styles.rangeCaption, { color: theme.colors.onSurfaceVariant }]}>
+        {isFetching ? 'Refreshing...' : `${displayRange(range)}  ·  ${sales?.invoiceCount ?? 0} invoices`}
+      </Text>
+
+      {/* Q1 — How much did I sell? (invoiced) */}
+      <SectionCard icon="cart-outline" title="How much did I sell?" hint="Invoiced amount you billed" actionLabel="Invoices" onAction={viewInvoices}>
+        <Hero label={`Invoiced · ${PRESET_LABEL[preset]}`} value={formatCurrency(sales?.range)} />
+      </SectionCard>
+
+      <ChartCard title="Sales trend" data={sales?.trend || []} />
+
+      {/* Q2 — How much did I collect? (payments) */}
+      <SectionCard icon="cash-multiple" title="How much did I collect?" hint="Actual payments received">
+        <View style={styles.splitRow}>
+          <View style={styles.splitCell}>
+            <Text style={[styles.splitLabel, { color: theme.colors.onSurfaceVariant }]}>Collected</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.splitValue, { color: colors.accent }]}>{formatCurrency(collected?.range)}</Text>
           </View>
-          <View style={styles.rowContent}>
-            <Text style={[styles.summaryTitle, { color: theme.colors.onSurface }]}>Reports overview</Text>
-            <Text style={[styles.summarySubtitle, { color: theme.colors.onSurfaceVariant }]}>{displayRange(range)}</Text>
+          <View style={styles.splitCell}>
+            <Text style={[styles.splitLabel, { color: theme.colors.onSurfaceVariant }]}>Not yet collected</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.splitValue, { color: theme.colors.onSurface }]}>{formatCurrency(collected?.uncollectedInRange)}</Text>
           </View>
-          <Pressable
-            onPress={() => void refetch()}
-            style={({ pressed }) => [styles.iconAction, { backgroundColor: alpha(colors.primary, pressed ? 0.18 : 0.1) }]}
-          >
-            <Feather name="refresh-cw" size={17} color={theme.colors.primary} />
+        </View>
+        <ShareBar ratio={collectRatio} color={colors.accent} />
+        <Text style={[styles.shareCaption, { color: theme.colors.onSurfaceVariant }]}>
+          {Math.round(collectRatio * 100)}% of {formatCurrency(collected?.invoicedInRange)} invoiced collected · {PRESET_LABEL[preset]}
+        </Text>
+
+        <Text style={[styles.subHead, { color: theme.colors.onSurface }]}>By payment method</Text>
+        {collected?.methodBreakdown.length ? collected.methodBreakdown.map((m) => {
+          const meta = METHOD_META[m.method] || METHOD_META.other;
+          return (
+            <View key={m.method} style={styles.methodRow}>
+              <View style={[styles.methodIcon, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.1) }]}>
+                <MaterialCommunityIcons name={meta.icon} size={16} color={theme.colors.primary} />
+              </View>
+              <View style={styles.rowContent}>
+                <View style={styles.methodTop}>
+                  <Text style={[styles.methodLabel, { color: theme.colors.onSurface }]}>{meta.label}</Text>
+                  <Text style={[styles.methodAmount, { color: theme.colors.onSurface }]}>{formatCurrency(m.amount)}</Text>
+                </View>
+                <ShareBar ratio={methodTotal ? m.amount / methodTotal : 0} color={colors.primary} />
+              </View>
+            </View>
+          );
+        }) : <EmptyState title="No payments yet" message="Record a payment on an invoice to see collections here." />}
+      </SectionCard>
+
+      {/* Q3 — Who owes me money? (live snapshot) */}
+      <SectionCard icon="account-clock-outline" title="Who owes me money?" hint="Live outstanding balance" actionLabel="Unpaid" onAction={viewUnpaidInvoices}>
+        <Hero label="Total outstanding" value={formatCurrency(dues?.totalOutstanding)} accent={colors.warning} />
+        <View style={styles.dueChips}>
+          <Pressable onPress={viewUnpaidInvoices} style={[styles.dueChip, { backgroundColor: alpha(colors.destructive, isDark ? 0.16 : 0.08), borderColor: alpha(colors.destructive, 0.2) }]}>
+            <Text style={[styles.dueChipValue, { color: colors.destructive }]}>{formatCurrency(dues?.unpaidAmount)}</Text>
+            <Text style={[styles.dueChipLabel, { color: colors.destructive }]}>{dues?.unpaidCount ?? 0} unpaid</Text>
+          </Pressable>
+          <Pressable onPress={viewUnpaidInvoices} style={[styles.dueChip, { backgroundColor: alpha(colors.warning, isDark ? 0.16 : 0.08), borderColor: alpha(colors.warning, 0.2) }]}>
+            <Text style={[styles.dueChipValue, { color: colors.warning }]}>{formatCurrency(dues?.partialAmount)}</Text>
+            <Text style={[styles.dueChipLabel, { color: colors.warning }]}>{dues?.partialCount ?? 0} partial</Text>
           </Pressable>
         </View>
 
-        <View style={styles.summaryBody}>
-          <View style={styles.summaryMetric}>
-            <Text style={[styles.summaryLabel, { color: theme.colors.onSurfaceVariant }]}>{report?.rangeLabel || 'Selected range'}</Text>
-            <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.summaryValue, { color: theme.colors.onSurface }]}>{formatCurrency(report?.rangeSales)}</Text>
-          </View>
-          <View style={styles.summarySide}>
-            <View style={[styles.invoiceMiniChip, { backgroundColor: alpha(colors.primary, isDark ? 0.18 : 0.1), borderColor: alpha(colors.primary, isDark ? 0.3 : 0.18) }]}>
-              <MaterialCommunityIcons name="file-document-multiple-outline" size={15} color={theme.colors.primary} />
-              <Text style={[styles.invoiceMiniText, { color: theme.colors.primary }]}>{report?.totalInvoices || 0} invoices</Text>
+        <Text style={[styles.subHead, { color: theme.colors.onSurface }]}>Top customers by dues</Text>
+        {dues?.topDebtors.length ? dues.topDebtors.map((d, index) => (
+          <View key={`${d.customerId ?? d.name}-${index}`} style={[styles.listRow, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]}>
+            <View style={[styles.rankBadge, { backgroundColor: alpha(colors.warning, isDark ? 0.22 : 0.14) }]}>
+              <Text style={[styles.rankText, { color: colors.warning }]}>#{index + 1}</Text>
             </View>
-            {isFetching ? <Text style={[styles.syncText, { color: theme.colors.onSurfaceVariant }]}>Refreshing...</Text> : null}
+            <View style={styles.rowContent}>
+              <Text numberOfLines={1} style={[styles.rowTitle, { color: theme.colors.onSurface }]}>{d.name}</Text>
+              <Text style={[styles.rowMeta, { color: theme.colors.onSurfaceVariant }]}>{d.invoices} open invoice{d.invoices === 1 ? '' : 's'}</Text>
+            </View>
+            <Text style={[styles.amountText, { color: colors.warning }]}>{formatCurrency(d.balance)}</Text>
           </View>
+        )) : <EmptyState title="All settled" message="No outstanding dues right now." />}
+      </SectionCard>
+
+      {/* Q4 — What is performing well? */}
+      <SectionCard icon="trophy-outline" title="What is performing well?" hint="Top products, customers & invoice value">
+        <View style={styles.avgRow}>
+          <StatCard label="Avg invoice" value={formatCurrency(performance?.averageInvoiceValue)} hint="Per invoice" icon="calculator-variant-outline" />
         </View>
 
-        <Pressable
-          onPress={openFilters}
-          style={({ pressed }) => [
-            styles.filterButton,
-            {
-              backgroundColor: pressed ? alpha(colors.primary, isDark ? 0.24 : 0.14) : alpha(colors.primary, isDark ? 0.16 : 0.08),
-              borderColor: alpha(colors.primary, isDark ? 0.28 : 0.16)
-            }
-          ]}
-        >
-          <Feather name="sliders" size={15} color={theme.colors.primary} />
-          <Text style={[styles.filterButtonText, { color: theme.colors.primary }]}>Filter</Text>
-          <Feather name="chevron-up" size={14} color={theme.colors.primary} />
-        </Pressable>
-      </AppCard>
-
-      <View style={styles.statRow}>{reportStats.slice(0, 2).map((item) => <StatCard key={item.label} {...item} />)}</View>
-      <View style={styles.statRow}>{reportStats.slice(2).map((item) => <StatCard key={item.label} {...item} />)}</View>
-
-      <ChartCard title="Sales trend" data={report?.salesTrend || []} />
-
-      <AppCard style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Invoice counts</Text>
-            <Text style={[styles.sectionHint, { color: theme.colors.onSurfaceVariant }]}>Status mix for selected range</Text>
-          </View>
+        <View style={styles.subHeadRow}>
+          <Text style={[styles.subHead, styles.subHeadInline, { color: theme.colors.onSurface }]}>Top products</Text>
+          <Pressable onPress={viewProducts} hitSlop={8} style={styles.linkBtn}>
+            <Text style={[styles.linkLabel, { color: theme.colors.primary }]}>All</Text>
+            <Feather name="chevron-right" size={15} color={theme.colors.primary} />
+          </Pressable>
         </View>
-        <View style={styles.countGrid}>
-          {REPORT_STATUSES.map((status) => {
-            const tone = statusTone(status.key, theme.dark);
-            return (
-              <View key={status.key} style={[styles.countBox, { backgroundColor: tone.background, borderColor: tone.border }]}>
-                <View style={[styles.countIconTile, { backgroundColor: alpha(tone.foreground, isDark ? 0.22 : 0.12) }]}>
-                  <MaterialCommunityIcons name={status.icon} size={16} color={tone.foreground} />
-                </View>
-                <Text variant="headlineSmall" style={[styles.countValue, { color: tone.foreground }]}>{report?.invoiceCounts?.[status.key] || 0}</Text>
-                <Text style={[styles.countLabel, { color: tone.foreground }]}>{status.label}</Text>
-              </View>
-            );
-          })}
-        </View>
-      </AppCard>
-
-      <AppCard style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Top products</Text>
-            <Text style={[styles.sectionHint, { color: theme.colors.onSurfaceVariant }]}>Ranked by sales in selected range</Text>
-          </View>
-          <Button compact onPress={viewAllProducts}>View all</Button>
-        </View>
-        {report?.topProducts?.length ? report.topProducts.slice(0, 5).map((product, index) => (
-          <View key={`${product.name}-${index}`} style={[styles.productRow, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), shadowColor: isDark ? '#000000' : colors.primaryStrong }]}>
+        {performance?.topProducts.length ? performance.topProducts.map((product, index) => (
+          <View key={`${product.name}-${index}`} style={[styles.listRow, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]}>
             <View style={[styles.rankBadge, { backgroundColor: index === 0 ? alpha(colors.accent, isDark ? 0.22 : 0.14) : alpha(colors.primary, isDark ? 0.22 : 0.14) }]}>
               <Text style={[styles.rankText, { color: index === 0 ? colors.accent : colors.primary }]}>#{index + 1}</Text>
             </View>
             <View style={styles.rowContent}>
               <Text numberOfLines={1} style={[styles.rowTitle, { color: theme.colors.onSurface }]}>{product.name}</Text>
-              <View style={styles.soldChip}>
-                <Feather name="shopping-cart" size={14} color={theme.colors.onSurfaceVariant} />
-                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{product.quantity} units sold</Text>
-              </View>
+              <Text style={[styles.rowMeta, { color: theme.colors.onSurfaceVariant }]}>{product.quantity} units sold</Text>
             </View>
-            <View style={styles.salesBlock}>
-              <View style={[styles.trendChip, { backgroundColor: alpha(colors.accent, isDark ? 0.2 : 0.12) }]}>
-                <Feather name="trending-up" size={13} color={colors.accent} />
-              </View>
-              <Text style={[styles.amountText, { color: theme.colors.onSurface }]}>{formatCurrency(product.sales)}</Text>
-            </View>
+            <Text style={[styles.amountText, { color: theme.colors.onSurface }]}>{formatCurrency(product.sales)}</Text>
           </View>
         )) : <EmptyState title="No product data" message="Top products appear after invoices are created." />}
-      </AppCard>
 
-      <AppCard style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text variant="titleMedium" style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Recent activity</Text>
-            <Text style={[styles.sectionHint, { color: theme.colors.onSurfaceVariant }]}>Latest invoices in this view</Text>
-          </View>
-          <Button compact onPress={viewAllInvoices}>View all</Button>
+        <View style={styles.subHeadRow}>
+          <Text style={[styles.subHead, styles.subHeadInline, { color: theme.colors.onSurface }]}>Top customers</Text>
+          <Pressable onPress={viewCustomers} hitSlop={8} style={styles.linkBtn}>
+            <Text style={[styles.linkLabel, { color: theme.colors.primary }]}>All</Text>
+            <Feather name="chevron-right" size={15} color={theme.colors.primary} />
+          </Pressable>
         </View>
-        {report?.recentInvoices?.length ? report.recentInvoices.slice(0, 5).map((invoice) => {
-          const tone = statusTone(invoice.status, theme.dark);
-          return (
-            <Pressable
-              key={invoice._id}
-              onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceDetail', params: { id: invoice._id } })}
-              style={({ pressed }) => [
-                styles.activityRow,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08),
-                  shadowColor: isDark ? '#000000' : colors.primaryStrong,
-                  opacity: pressed ? 0.94 : 1
-                }
-              ]}
-            >
-              <View style={[styles.iconBubble, { backgroundColor: alpha(colors.primary, isDark ? 0.22 : 0.14) }]}>
-                <Feather name="file-text" size={20} color={theme.colors.primary} />
-              </View>
-              <View style={styles.rowContent}>
-                <Text numberOfLines={1} style={[styles.rowTitle, { color: theme.colors.onSurface }]}>{invoice.customerSnapshot.name}</Text>
-                <Text numberOfLines={1} style={[styles.rowMeta, { color: theme.colors.onSurfaceVariant }]}>
-                  <Text style={{ ...fontStyles.semiBold, color: theme.colors.onSurfaceVariant }}>{invoice.invoiceNumber}</Text>
-                  {`  -  ${formatDate(invoice.date)}`}
-                </Text>
-                <View style={[styles.statusChip, { backgroundColor: tone.background, borderColor: tone.border }]}>
-                  <Text variant="labelSmall" style={[styles.statusText, { color: tone.foreground }]}>{invoice.status}</Text>
-                </View>
-              </View>
-              <View style={styles.amountBlock}>
-                <Text style={[styles.amountText, { color: theme.colors.onSurface }]}>{formatCurrency(invoice.total)}</Text>
-                <View style={styles.viewHint}>
-                  <Text style={[styles.viewHintLabel, { color: theme.colors.primary }]}>View</Text>
-                  <Feather name="chevron-right" size={15} color={theme.colors.primary} />
-                </View>
-              </View>
-            </Pressable>
-          );
-        }) : <EmptyState title="No recent invoices" message="Recent invoices appear after matching sales activity." />}
-      </AppCard>
+        {performance?.topCustomers.length ? performance.topCustomers.map((c, index) => (
+          <View key={`${c.customerId ?? c.name}-${index}`} style={[styles.listRow, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]}>
+            <View style={[styles.rankBadge, { backgroundColor: index === 0 ? alpha(colors.accent, isDark ? 0.22 : 0.14) : alpha(colors.primary, isDark ? 0.22 : 0.14) }]}>
+              <Text style={[styles.rankText, { color: index === 0 ? colors.accent : colors.primary }]}>#{index + 1}</Text>
+            </View>
+            <View style={styles.rowContent}>
+              <Text numberOfLines={1} style={[styles.rowTitle, { color: theme.colors.onSurface }]}>{c.name}</Text>
+              <Text style={[styles.rowMeta, { color: theme.colors.onSurfaceVariant }]}>{c.invoices} invoice{c.invoices === 1 ? '' : 's'}</Text>
+            </View>
+            <Text style={[styles.amountText, { color: theme.colors.onSurface }]}>{formatCurrency(c.sales)}</Text>
+          </View>
+        )) : <EmptyState title="No customer data" message="Top customers appear after invoices are created." />}
+      </SectionCard>
 
       <ReportRangeSheet
         visible={filtersOpen}
@@ -329,26 +408,7 @@ export function ReportsScreen({ navigation }: ReportsScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  activityRow: {
-    alignItems: 'center',
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    elevation: 2,
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
-    padding: 14,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 16
-  },
-  amountBlock: { alignItems: 'flex-end', gap: 6 },
   amountText: { ...fontStyles.bold, fontSize: 15, letterSpacing: -0.25 },
-  countBox: { alignItems: 'center', borderRadius: radii.lg, borderWidth: 1, flex: 1, paddingHorizontal: 8, paddingVertical: 14 },
-  countGrid: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  countIconTile: { alignItems: 'center', borderRadius: radii.md, height: 30, justifyContent: 'center', marginBottom: 8, width: 30 },
-  countLabel: { ...fontStyles.semiBold, fontSize: 11, letterSpacing: 0.3, marginTop: 2 },
-  countValue: { ...fontStyles.bold, fontSize: 23, lineHeight: 28 },
   applyBtn: {
     alignItems: 'center',
     borderRadius: radii.lg,
@@ -364,40 +424,55 @@ const styles = StyleSheet.create({
     shadowRadius: 14
   },
   applyLabel: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 14, letterSpacing: 0.2 },
-  filterButton: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', gap: 7, justifyContent: 'center', marginTop: 14, paddingVertical: 10 },
-  filterButtonText: { ...fontStyles.bold, fontSize: 12.5 },
+  avgRow: { flexDirection: 'row', marginHorizontal: -6, marginTop: 12 },
+  dueChip: { alignItems: 'center', borderRadius: radii.lg, borderWidth: 1, flex: 1, paddingVertical: 14 },
+  dueChipLabel: { ...fontStyles.semiBold, fontSize: 11, letterSpacing: 0.3, marginTop: 4, textTransform: 'uppercase' },
+  dueChipValue: { ...fontStyles.bold, fontSize: 18, letterSpacing: -0.3 },
+  dueChips: { flexDirection: 'row', gap: 10, marginTop: 14 },
   grabber: { alignItems: 'center', paddingTop: 8 },
   grabberBar: { borderRadius: radii.pill, height: 4, width: 38 },
-  iconBubble: { alignItems: 'center', borderRadius: radii.card, height: 42, justifyContent: 'center', width: 42 },
+  hero: { marginTop: 14 },
+  heroLabel: { ...fontStyles.semiBold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
+  heroValue: { ...fontStyles.bold, fontSize: 30, letterSpacing: -0.8, lineHeight: 36, marginTop: 4 },
   iconAction: { alignItems: 'center', borderRadius: radii.md, height: 36, justifyContent: 'center', width: 36 },
-  invoiceMiniChip: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', gap: 5, paddingHorizontal: 9, paddingVertical: 5 },
-  invoiceMiniText: { ...fontStyles.bold, fontSize: 11 },
-  productRow: {
+  linkBtn: { alignItems: 'center', flexDirection: 'row', gap: 1 },
+  linkLabel: { ...fontStyles.bold, fontSize: 13 },
+  listRow: {
     alignItems: 'center',
     borderRadius: radii.lg,
     borderWidth: 1,
-    elevation: 2,
     flexDirection: 'row',
     gap: 12,
-    marginTop: 12,
-    padding: 14,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 16
+    marginTop: 10,
+    padding: 13
   },
-  rankBadge: { alignItems: 'center', borderRadius: radii.pill, height: 42, justifyContent: 'center', width: 42 },
-  rankText: { ...fontStyles.bold, fontSize: 13 },
+  methodAmount: { ...fontStyles.bold, fontSize: 14 },
+  methodIcon: { alignItems: 'center', borderRadius: radii.md, height: 34, justifyContent: 'center', width: 34 },
+  methodLabel: { ...fontStyles.semiBold, fontSize: 13.5 },
+  methodRow: { alignItems: 'center', flexDirection: 'row', gap: 12, marginTop: 12 },
+  methodTop: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  rangeBar: { alignItems: 'center', flexDirection: 'row', gap: 10 },
+  rangeCaption: { ...typeScale.caption, marginBottom: 14, marginTop: 8, paddingHorizontal: 2 },
+  rankBadge: { alignItems: 'center', borderRadius: radii.pill, height: 38, justifyContent: 'center', width: 38 },
+  rankText: { ...fontStyles.bold, fontSize: 12.5 },
   resetBtn: { alignItems: 'center', flexDirection: 'row', gap: 4 },
   resetLabel: { ...fontStyles.bold, fontSize: 12 },
   rowContent: { flex: 1, minWidth: 0 },
-  rowMeta: { ...typeScale.caption, marginTop: 2 },
-  rowTitle: { ...fontStyles.bold, fontSize: 15 },
-  salesBlock: { alignItems: 'flex-end', gap: 6 },
+  rowMeta: { ...typeScale.caption, marginTop: 3 },
+  rowTitle: { ...fontStyles.bold, fontSize: 14.5 },
   screenContent: { paddingTop: 8 },
   sectionCard: { marginBottom: 16 },
-  sectionHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
+  segChip: { alignItems: 'center', borderRadius: radii.md, flex: 1, flexDirection: 'row', gap: 4, justifyContent: 'center', paddingVertical: 9 },
+  segChipCustom: { flexGrow: 1.3 },
+  segText: { ...fontStyles.bold, fontSize: 12.5 },
+  segment: { borderRadius: radii.lg, flex: 1, flexDirection: 'row', gap: 4, padding: 4 },
+  sectionHeader: { alignItems: 'center', flexDirection: 'row', gap: 10, marginBottom: 2 },
   sectionHint: { ...typeScale.caption, marginTop: 2 },
-  sectionTitle: { ...fontStyles.bold, fontSize: 16 },
+  sectionIcon: { alignItems: 'center', borderRadius: radii.md, height: 38, justifyContent: 'center', width: 38 },
+  sectionTitle: { ...fontStyles.bold, fontSize: 15.5, letterSpacing: -0.2 },
+  shareCaption: { ...typeScale.caption, marginTop: 8 },
+  shareFill: { borderRadius: radii.pill, height: '100%' },
+  shareTrack: { borderRadius: radii.pill, height: 8, marginTop: 12, overflow: 'hidden', width: '100%' },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -414,22 +489,11 @@ const styles = StyleSheet.create({
   sheetHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 8 },
   sheetSubtitle: { ...typeScale.caption, marginTop: 2 },
   sheetTitle: { ...fontStyles.bold, fontSize: 18, letterSpacing: -0.3 },
-  soldChip: { alignItems: 'center', flexDirection: 'row', gap: 5, marginTop: 6 },
-  statRow: { flexDirection: 'row', marginBottom: 2, marginHorizontal: -6 },
-  statusChip: { alignSelf: 'flex-start', borderRadius: radii.badge, borderWidth: 1, marginTop: 8, paddingHorizontal: 9, paddingVertical: 4 },
-  statusText: { ...fontStyles.semiBold, fontSize: 11, letterSpacing: 0.4, textTransform: 'capitalize' },
-  summaryBody: { alignItems: 'flex-end', flexDirection: 'row', gap: 12, justifyContent: 'space-between', marginTop: 16 },
-  summaryCard: { marginBottom: 14 },
-  summaryHeader: { alignItems: 'center', flexDirection: 'row', gap: 10 },
-  summaryIconTile: { alignItems: 'center', borderRadius: radii.md, height: 40, justifyContent: 'center', width: 40 },
-  summaryLabel: { ...fontStyles.semiBold, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
-  summaryMetric: { flex: 1, minWidth: 0 },
-  summarySide: { alignItems: 'flex-end', gap: 6 },
-  summarySubtitle: { ...typeScale.caption, marginTop: 2 },
-  summaryTitle: { ...fontStyles.bold, fontSize: 15 },
-  summaryValue: { ...fontStyles.bold, fontSize: 28, letterSpacing: -0.7, lineHeight: 34 },
-  syncText: { ...typeScale.caption, fontSize: 11 },
-  trendChip: { alignItems: 'center', borderRadius: radii.pill, height: 26, justifyContent: 'center', width: 26 },
-  viewHint: { alignItems: 'center', flexDirection: 'row', gap: 2 },
-  viewHintLabel: { ...fontStyles.bold, fontSize: 12 }
+  splitCell: { flex: 1 },
+  splitLabel: { ...fontStyles.semiBold, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' },
+  splitRow: { flexDirection: 'row', gap: 12, marginTop: 14 },
+  splitValue: { ...fontStyles.bold, fontSize: 22, letterSpacing: -0.5, marginTop: 4 },
+  subHead: { ...fontStyles.bold, fontSize: 13.5, marginTop: 20 },
+  subHeadInline: { marginTop: 0 },
+  subHeadRow: { alignItems: 'flex-end', flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }
 });

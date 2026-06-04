@@ -220,24 +220,6 @@ export function OrdersScreen({ navigation }: OrdersScreenProps) {
 
   const stickyHeader = (
     <View style={[styles.stickyHeader, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.switcher, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.12) }]}>
-        <Pressable
-          style={styles.switcherOption}
-          onPress={() => {
-            // Swap in place when this list is the stack root; pop back when pushed on top of
-            // InvoiceList (e.g. via the dashboard quick link) so the stack never stacks lists.
-            if (navigation.getState().index > 0) navigation.popToTop();
-            else navigation.replace('InvoiceList');
-          }}
-        >
-          <MaterialCommunityIcons name="file-document" size={18} color={theme.colors.onSurfaceVariant} />
-          <Text style={[styles.switcherLabel, { color: theme.colors.onSurfaceVariant }]}>Invoices</Text>
-        </Pressable>
-        <Pressable style={[styles.switcherOption, { backgroundColor: theme.colors.primary }]} onPress={() => undefined}>
-          <MaterialCommunityIcons name="clipboard-list-outline" size={18} color="#FFFFFF" />
-          <Text style={[styles.switcherLabel, { color: '#FFFFFF' }]}>Orders</Text>
-        </Pressable>
-      </View>
       <View style={[styles.searchWrap, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.1) }]}>
         <Feather name="search" size={18} color={theme.colors.onSurfaceVariant} />
         <RNTextInput
@@ -407,9 +389,6 @@ const styles = StyleSheet.create({
   stickyHeader: { gap: 12, marginBottom: 10, paddingBottom: 4, paddingTop: 4 },
   statusPill: { alignItems: 'center', alignSelf: 'flex-start', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', gap: 5, paddingHorizontal: 9, paddingVertical: 4 },
   statusText: { ...fontStyles.semiBold, fontSize: 11, letterSpacing: 0.4, textTransform: 'capitalize' },
-  switcher: { borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', padding: 4 },
-  switcherLabel: { ...fontStyles.bold, fontSize: 14 },
-  switcherOption: { alignItems: 'center', borderRadius: radii.pill, flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', minHeight: 42 },
   viewHint: { alignItems: 'center', flexDirection: 'row', gap: 2 },
   viewHintLabel: { ...fontStyles.bold, fontSize: 12 }
 });

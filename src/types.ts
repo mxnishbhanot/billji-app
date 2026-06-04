@@ -227,6 +227,38 @@ export type RecordPaymentResponse = {
   customerBalance: CustomerBalance | null;
 };
 
+export type OutstandingInvoice = {
+  id: string;
+  invoiceNumber: string;
+  date: string;
+  total: number;
+  balanceDue: number;
+};
+
+export type CustomerOutstanding = {
+  success?: boolean;
+  invoices: OutstandingInvoice[];
+  totalOutstanding: number;
+};
+
+export type CustomerPaymentPayload = {
+  amount: number;
+  invoiceIds: string[];
+  method: PaymentMethod;
+  allowCredit?: boolean;
+  reference?: string;
+  notes?: string;
+  receivedAt?: string;
+};
+
+export type CustomerPaymentResponse = {
+  success: boolean;
+  payment: Payment;
+  allocations: PaymentAllocation[];
+  invoices: Invoice[];
+  customerBalance: CustomerBalance | null;
+};
+
 export type AuditLogEntry = {
   _id: string;
   action: string;
@@ -273,6 +305,28 @@ export type ReportSummary = {
   rangeSales: number; rangeLabel: string;
   invoiceCounts: Partial<Record<InvoiceStatus, number>>; topProducts: { name: string; quantity: number; sales: number }[];
   salesTrend: { date: string; sales: number; invoices: number }[]; recentInvoices: Invoice[];
+  // Q1 — how much did I sell? (invoiced/gross)
+  sales: {
+    today: number; week: number; month: number; range: number; rangeLabel: string; invoiceCount: number;
+    trend: { date: string; sales: number; invoices: number }[];
+  };
+  // Q2 — how much did I collect? (real payments)
+  collected: {
+    today: number; week: number; month: number; range: number; rangeLabel: string;
+    invoicedInRange: number; uncollectedInRange: number;
+    methodBreakdown: { method: PaymentMethod; amount: number; count: number }[];
+  };
+  // Q3 — who owes me money? (open-balance snapshot)
+  dues: {
+    totalOutstanding: number; unpaidCount: number; unpaidAmount: number; partialCount: number; partialAmount: number;
+    topDebtors: { customerId: string | null; name: string; balance: number; invoices: number }[];
+  };
+  // Q4 — what is performing well?
+  performance: {
+    topProducts: { name: string; quantity: number; sales: number }[];
+    topCustomers: { customerId: string | null; name: string; sales: number; invoices: number }[];
+    averageInvoiceValue: number;
+  };
 };
 
 export type Page<T, K extends string> = { success: boolean; pagination: Pagination } & Record<K, T[]>;
