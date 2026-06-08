@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, TextInput as RNTextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput as RNTextInput, View } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { UseFormReturn } from 'react-hook-form';
 import { Button, Dialog, List, Portal, Switch, Text, TextInput, Tooltip, useTheme } from 'react-native-paper';
@@ -152,6 +152,7 @@ export function CustomerSelectorCard({
 export function ProductPickerList({
   cardBorder,
   colors,
+  hasMore = false,
   isDark,
   loadingMore,
   onAddProduct,
@@ -164,6 +165,7 @@ export function ProductPickerList({
 }: {
   cardBorder: string;
   colors: ColorSet;
+  hasMore?: boolean;
   isDark: boolean;
   loadingMore: boolean;
   onAddProduct: (product: Product) => void;
@@ -194,18 +196,18 @@ export function ProductPickerList({
         style={[styles.input, { backgroundColor: inputBackground }]}
       />
       {products.length ? (
-        <FlatList
-          data={products}
-          keyExtractor={(item) => item._id}
-          keyboardShouldPersistTaps="handled"
-          nestedScrollEnabled
-          onEndReached={onLoadMore}
-          onEndReachedThreshold={0.4}
-          showsVerticalScrollIndicator={products.length > VISIBLE_PRODUCT_ROWS}
+        // Non-virtualized bounded list: a FlatList here would be a VirtualizedList nested in the
+        // screen's KeyboardAwareScrollView, which mis-measures height and swallows touches — that
+        // broke the product search. ScrollView + map renders correctly inside the parent scroll.
+        <ScrollView
           style={styles.productList}
-          ListFooterComponent={loadingMore ? <ActivityIndicator color={theme.colors.primary} style={styles.inlineLoader} /> : null}
-          renderItem={({ item }) => (
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={products.length > VISIBLE_PRODUCT_ROWS}
+        >
+          {products.map((item) => (
             <List.Item
+              key={item._id}
               title={item.name}
               titleStyle={[styles.productTitle, { color: theme.colors.onSurface }]}
               description={`${formatCurrency(item.price)} · Stock ${item.stockQuantity}`}
@@ -213,14 +215,22 @@ export function ProductPickerList({
               style={[styles.productRow, { backgroundColor: subSurface, borderColor: cardBorder }]}
               onPress={() => onAddProduct(item)}
               right={() => (
-                <Pressable onPress={() => onAddProduct(item)} style={({ pressed }) => [styles.addBtn, { backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary }]}>
+                // Visual affordance only — the row's onPress is the single add handler so a tap
+                // on the button can't fire onAddProduct twice.
+                <View style={[styles.addBtn, { backgroundColor: theme.colors.primary }]}>
                   <Feather name="plus" size={14} color="#FFFFFF" />
                   <Text style={styles.addBtnLabel}>Add</Text>
-                </Pressable>
+                </View>
               )}
             />
-          )}
-        />
+          ))}
+          {loadingMore ? <ActivityIndicator color={theme.colors.primary} style={styles.inlineLoader} /> : null}
+          {hasMore && !loadingMore ? (
+            <Pressable onPress={onLoadMore} style={({ pressed }) => [styles.loadMoreBtn, { borderColor: cardBorder, backgroundColor: alpha(colors.primary, pressed ? 0.12 : 0.04) }]}>
+              <Text style={[styles.loadMoreLabel, { color: theme.colors.primary }]}>Load more</Text>
+            </Pressable>
+          ) : null}
+        </ScrollView>
       ) : <Text style={[styles.emptyProductsText, { color: theme.colors.onSurfaceVariant }]}>No saved products found. Add a custom item below.</Text>}
       <Pressable onPress={onOpenCustomItem} style={({ pressed }) => [styles.dashedBtn, { borderColor: alpha(colors.primary, isDark ? 0.4 : 0.28), backgroundColor: alpha(colors.primary, pressed ? 0.12 : 0.04) }]}>
         <MaterialCommunityIcons name="plus-circle-outline" size={16} color={theme.colors.primary} />
@@ -318,7 +328,7 @@ export function InvoiceItemsEditor({
       {items.length ? (
         <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={items.length > VISIBLE_INVOICE_ITEM_ROWS} scrollEnabled={items.length > VISIBLE_INVOICE_ITEM_ROWS} style={styles.invoiceItemsList}>
           {items.map((item, index) => (
-            <View key={`${item.name}-${index}`} style={[styles.invoiceItem, { backgroundColor: subSurface, borderColor: cardBorder }]}>
+            <View key={item.productId ?? item._uid ?? `${item.name}-${index}`} style={[styles.invoiceItem, { backgroundColor: subSurface, borderColor: cardBorder }]}>
               <View style={styles.itemHeader}>
                 <View style={styles.flexContent}>
                   <Text style={[styles.itemName, { color: theme.colors.onSurface }]}>{item.name}</Text>
@@ -513,7 +523,7 @@ export function PreviousDuesCard({
           <MoneyInput
             cardBorder={cardBorder}
             inputBackground={inputBackground}
-            label="Amount collected"
+            label={`Amount collected (${formatCurrency(outstanding.totalOutstanding)} due)`}
             value={amount}
             onChangeText={onAmountChange}
             activeOutlineColor={theme.colors.primary}
@@ -714,6 +724,8 @@ const styles = StyleSheet.create({
   grandTotalRow: { alignItems: 'center', borderTopWidth: 1, flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, paddingTop: 10 },
   grandTotalValue: { ...fontStyles.bold, fontSize: 20, letterSpacing: -0.4 },
   inlineLoader: { marginVertical: 8 },
+  loadMoreBtn: { alignItems: 'center', borderRadius: radii.md, borderWidth: 1, marginBottom: 8, marginTop: 2, paddingVertical: 10 },
+  loadMoreLabel: { ...fontStyles.medium, fontSize: 13 },
   input: { fontSize: 14 },
   inputOutline: { borderRadius: radii.input },
   invoiceItem: { borderRadius: radii.md, borderWidth: 1, marginTop: 10, padding: spacing.cardPaddingCompact },

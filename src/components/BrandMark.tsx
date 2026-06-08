@@ -29,7 +29,7 @@ export function BrandMark({ size = 44, compact = false, imageUri, label }: Props
       ]}
     >
       {imageUri ? (
-        <Image source={{ uri: imageUri }} resizeMode="contain" style={styles.image} />
+        <Image source={{ uri: imageUri }} resizeMode="cover" style={styles.image} />
       ) : (
         <Text
           style={[
@@ -59,8 +59,8 @@ const styles = StyleSheet.create({
     shadowRadius: 18
   },
   image: {
-    height: '86%',
-    width: '86%'
+    height: '100%',
+    width: '100%'
   },
   letter: {
     ...fontStyles.bold,

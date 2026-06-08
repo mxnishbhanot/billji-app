@@ -195,7 +195,7 @@ export function SettingsScreen() {
   const navigation = useNavigation<AppNavigation>();
   const theme = useTheme();
   const isDark = theme.dark;
-  const colors = appColors(isDark);
+  const colors = useMemo(() => appColors(isDark), [isDark]);
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((event) => { scrollY.value = event.contentOffset.y; });
   const heroParallaxStyle = useAnimatedStyle(() => ({
@@ -296,7 +296,9 @@ export function SettingsScreen() {
         width: 1024,
         height: 1024,
         cropperCircleOverlay: true,
-        enableRotationGesture: true,
+        // Lock rotation while scaling — two-finger pinch was accidentally rotating the image.
+        // Rotation stays available via the rotate controls (cropperRotateButtonsHidden: false).
+        enableRotationGesture: false,
         cropperRotateButtonsHidden: false,
         cropperToolbarTitle: 'Adjust logo',
         cropperActiveWidgetColor: '#4338CA',

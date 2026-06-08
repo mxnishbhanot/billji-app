@@ -89,6 +89,7 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
       <ProductPickerList
         cardBorder={cardBorder}
         colors={colors}
+        hasMore={Boolean(builder.productsQuery.hasNextPage)}
         isDark={isDark}
         loadingMore={builder.productsQuery.isFetchingNextPage}
         onAddProduct={builder.addProduct}
@@ -141,6 +142,7 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
       <Button
         mode="contained"
         loading={builder.isGenerating}
+        disabled={builder.isGenerating}
         onPress={builder.createInvoice}
         style={styles.generateButton}
         contentStyle={styles.generateButtonContent}

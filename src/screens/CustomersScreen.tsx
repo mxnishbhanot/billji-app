@@ -116,12 +116,7 @@ const CustomerCard = memo(function CustomerCard({
               <Text numberOfLines={1} style={[styles.contactPillText, { color: colors.destructive }]}>Due {formatCurrency(item.outstandingDues)}</Text>
             </View>
           ) : null}
-          {typeof item.creditBalance === 'number' && item.creditBalance > 0 ? (
-            <View style={[styles.contactPill, themed.creditPill]}>
-              <Feather name="arrow-down-circle" size={13} color={colors.accent} />
-              <Text numberOfLines={1} style={[styles.contactPillText, { color: colors.accent }]}>Credit {formatCurrency(item.creditBalance)}</Text>
-            </View>
-          ) : null}
+          {/* Credit (advance balance) shelved — "coming soon". Hidden until the balance calc is reworked. */}
           <View style={[styles.contactPill, item.email ? themed.emailPill : themed.noEmailPill]}>
             <Feather name={item.email ? 'mail' : 'mail'} size={13} color={item.email ? colors.accent : colors.warning} />
             <Text numberOfLines={1} style={[styles.contactPillText, { color: item.email ? colors.accent : colors.warning }]}>{item.email || 'No email'}</Text>

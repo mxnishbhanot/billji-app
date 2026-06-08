@@ -99,6 +99,10 @@ const InvoiceCard = memo(function InvoiceCard({
   const avatarFg = item.status === 'paid' ? colors.accent : colors.primary;
   const paymentMeta = item.paymentStatus !== 'paid' ? paymentStatusMeta(item.paymentStatus) : null;
   const hasBalance = typeof item.balanceDue === 'number' && item.balanceDue > 0;
+  const fromOrder = Boolean(item.sourceOrder);
+  const orderChip = useMemo(() => ({
+    backgroundColor: alpha(onSurfaceVariant, isDark ? 0.18 : 0.1)
+  }), [onSurfaceVariant, isDark]);
 
   return (
     <Pressable
@@ -131,6 +135,12 @@ const InvoiceCard = memo(function InvoiceCard({
             <Text style={[styles.statusText, { color: tone.foreground }]}>{item.status}</Text>
           </View>
           {paymentMeta ? <StatusPill label={paymentMeta.label} tone={paymentMeta.tone} /> : null}
+          {fromOrder ? (
+            <View style={[styles.orderChip, orderChip]}>
+              <MaterialCommunityIcons name="cart-outline" size={12} color={onSurfaceVariant} />
+              <Text style={[styles.orderChipText, { color: onSurfaceVariant }]}>Order</Text>
+            </View>
+          ) : null}
         </View>
         <View style={styles.viewHint}>
           <Text style={[styles.viewHintLabel, { color: primary }]}>View</Text>
@@ -438,6 +448,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4
   },
   statusText: { ...fontStyles.semiBold, fontSize: 11, letterSpacing: 0.4, textTransform: 'capitalize' },
+  orderChip: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    borderRadius: radii.pill,
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  orderChipText: { ...fontStyles.semiBold, fontSize: 11, letterSpacing: 0.2 },
   viewHint: { alignItems: 'center', flexDirection: 'row', gap: 2 },
   viewHintLabel: { ...fontStyles.bold, fontSize: 12 }
 });

@@ -73,6 +73,10 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
   });
 
   const canCollect = canRecordPayment && outstanding.totalOutstanding > 0;
+  // Drive Outstanding from the live query (invalidated on settle) so it updates in
+  // place. Fall back to the navigation snapshot until the query resolves / when the
+  // user lacks payment permission (query disabled).
+  const outstandingAmount = outstandingQuery.data ? outstanding.totalOutstanding : customer.outstandingDues ?? 0;
 
   const contactRows = [
     { icon: 'phone' as const, value: `${customer.countryCode || '+91'} ${customer.phone}` },
@@ -96,8 +100,8 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
       </View>
 
       <View style={styles.statRow}>
-        <StatCard label="Outstanding" value={formatCurrency(customer.outstandingDues)} hint="Amount due" tone="danger" icon="alert-circle-outline" />
-        <StatCard label="Credit" value={formatCurrency(customer.creditBalance)} hint="Advance balance" tone="success" icon="wallet-outline" />
+        <StatCard label="Outstanding" value={formatCurrency(outstandingAmount)} hint="Amount due" tone="danger" icon="alert-circle-outline" />
+        <StatCard label="Credit" value="Coming soon" hint="Advance balance" tone="success" icon="wallet-outline" />
       </View>
 
       {canCollect ? (

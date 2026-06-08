@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -29,7 +29,7 @@ const draftTotal = (payload: InvoiceDraftPayload) =>
 export function DraftsScreen({ navigation }: DraftsScreenProps) {
   const theme = useTheme();
   const isDark = theme.dark;
-  const colors = appColors(isDark);
+  const colors = useMemo(() => appColors(isDark), [isDark]);
   const queryClient = useQueryClient();
   const { showDialog } = useAppDialog();
   const [deleting, setDeleting] = useState<InvoiceDraft | null>(null);
@@ -41,7 +41,7 @@ export function DraftsScreen({ navigation }: DraftsScreenProps) {
     onError: (error) => showDialog({ title: 'Could not discard draft', message: apiErrorMessage(error), tone: 'error' })
   });
 
-  const renderRow = ({ item }: { item: InvoiceDraft }) => {
+  const renderRow = useCallback(({ item }: { item: InvoiceDraft }) => {
     const customerName = item.payload?.selectedCustomer?.name || 'No customer yet';
     const itemCount = item.payload?.items?.length || 0;
     return (
@@ -60,7 +60,7 @@ export function DraftsScreen({ navigation }: DraftsScreenProps) {
         </View>
         <View style={[styles.cardDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) }]} />
         <View style={styles.cardBottom}>
-          <StatusPill label={item.dirty ? 'Unsynced' : 'Synced'} tone={item.dirty ? 'pending' : 'paid'} />
+          <StatusPill label={item.dirty ? 'Unsynced' : 'Synced'} tone={item.dirty ? 'pending' : 'synced'} />
           <Pressable onPress={() => setDeleting(item)} hitSlop={8} style={[styles.discardBtn, { backgroundColor: alpha(colors.destructive, isDark ? 0.16 : 0.08) }]}>
             <Feather name="trash-2" size={14} color={theme.colors.error} />
             <Text style={[styles.discardText, { color: theme.colors.error }]}>Discard</Text>
@@ -68,7 +68,7 @@ export function DraftsScreen({ navigation }: DraftsScreenProps) {
         </View>
       </Pressable>
     );
-  };
+  }, [navigation, colors, isDark, theme]);
 
   return (
     <Screen title="Drafts" scroll={false} contentStyle={styles.screenContent}>

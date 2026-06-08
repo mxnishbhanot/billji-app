@@ -73,12 +73,18 @@ export const useInvoiceBuilder = ({
 
   const customers = useMemo(() => customersQuery.data?.pages.flatMap((page) => page.customers) ?? [], [customersQuery.data]);
   const products = useMemo(() => productsQuery.data?.pages.flatMap((page) => page.products) ?? [], [productsQuery.data]);
-  const activeCustomer = selectedCustomer ?? customers.find((customer) => customer._id === selectedCustomerId) ?? null;
+  const activeCustomer = useMemo(
+    () => selectedCustomer ?? customers.find((customer) => customer._id === selectedCustomerId) ?? null,
+    [selectedCustomer, customers, selectedCustomerId]
+  );
   const draftPayload = useMemo(
     () => buildInvoiceDraftPayload({ selectedCustomerId, selectedCustomer: activeCustomer, items, taxRate, discountType, discountValue, notes }),
     [activeCustomer, discountType, discountValue, items, notes, selectedCustomerId, taxRate]
   );
-  const totals = calculateClientTotals({ items, taxRate: Number(taxRate || 0), discountType, discountValue: Number(discountValue || 0) });
+  const totals = useMemo(
+    () => calculateClientTotals({ items, taxRate: Number(taxRate || 0), discountType, discountValue: Number(discountValue || 0) }),
+    [items, taxRate, discountType, discountValue]
+  );
 
   const outstandingQuery = useQuery({
     queryKey: queryKeys.payments.customerOutstanding(selectedCustomerId),
@@ -183,16 +189,21 @@ export const useInvoiceBuilder = ({
     }
   };
 
-  const addProduct = (product: Product) => setItems((current) => addProductToItems(current, product));
-  const updateQuantity = (index: number, delta: number) => setItems((current) => updateItemQuantity(current, index, delta));
-  const setQuantity = (index: number, quantity: number) => setItems((current) => setItemQuantity(current, index, quantity));
-  const removeItem = (index: number) => setItems((current) => removeInvoiceItem(current, index));
-  const addCustomItem = (item: InvoiceItem) => setItems((current) => [...current, item]);
+  const addProduct = useCallback((product: Product) => setItems((current) => addProductToItems(current, product)), []);
+  const updateQuantity = useCallback((index: number, delta: number) => setItems((current) => updateItemQuantity(current, index, delta)), []);
+  const setQuantity = useCallback((index: number, quantity: number) => setItems((current) => setItemQuantity(current, index, quantity)), []);
+  const removeItem = useCallback((index: number) => setItems((current) => removeInvoiceItem(current, index)), []);
+  const addCustomItem = useCallback((item: InvoiceItem) => setItems((current) => [...current, item]), []);
 
-  const buildPayload = (allowOversell = false) =>
-    buildInvoicePayload({ selectedCustomerId, items, taxRate, discountType, discountValue, notes, allowOversell });
+  const buildPayload = useCallback(
+    (allowOversell = false) => buildInvoicePayload({ selectedCustomerId, items, taxRate, discountType, discountValue, notes, allowOversell }),
+    [selectedCustomerId, items, taxRate, discountType, discountValue, notes]
+  );
 
   const createInvoice = async () => {
+    // Re-entry guard: a second tap before isPending propagates would POST twice → duplicate invoice.
+    if (createInvoiceMutation.isPending || recordDuesMutation.isPending) return;
+
     if (!selectedCustomerId) {
       showDialog({ title: 'Select or add a customer', message: 'Choose a saved customer or quick add a new one before generating the invoice.', tone: 'warning' });
       return;

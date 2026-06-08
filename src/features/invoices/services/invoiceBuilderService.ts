@@ -34,7 +34,12 @@ export const setItemQuantity = (items: InvoiceItem[], index: number, quantity: n
 
 export const removeInvoiceItem = (items: InvoiceItem[], index: number) => items.filter((_, itemIndex) => itemIndex !== index);
 
+// Monotonic client-only id so custom-item rows keep a stable React key (and stepper
+// state) across reorders/removals — custom items have no productId to key on.
+let customItemSeq = 0;
+
 export const customItemFromForm = (values: CustomItemFormValues): InvoiceItem => ({
+  _uid: `custom-${(customItemSeq += 1)}`,
   name: values.name,
   price: Number(values.price),
   quantity: Number(values.quantity || 1),

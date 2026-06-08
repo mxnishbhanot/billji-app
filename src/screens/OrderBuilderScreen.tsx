@@ -88,6 +88,7 @@ export function OrderBuilderScreen({ navigation }: OrderBuilderScreenProps) {
       <ProductPickerList
         cardBorder={cardBorder}
         colors={colors}
+        hasMore={Boolean(builder.productsQuery.hasNextPage)}
         isDark={isDark}
         loadingMore={builder.productsQuery.isFetchingNextPage}
         onAddProduct={builder.addProduct}
@@ -126,6 +127,7 @@ export function OrderBuilderScreen({ navigation }: OrderBuilderScreenProps) {
       <Button
         mode="contained"
         loading={builder.createOrderMutation.isPending}
+        disabled={builder.createOrderMutation.isPending}
         onPress={builder.createOrder}
         style={styles.createButton}
         contentStyle={styles.createButtonContent}

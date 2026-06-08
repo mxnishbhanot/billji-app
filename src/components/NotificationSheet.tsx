@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { NotificationItem } from '@/types';
-import { formatDate } from '@/utils/format';
+import { formatRelativeTime } from '@/utils/format';
 
 type Props = {
   visible: boolean;
@@ -34,6 +34,61 @@ const toneMeta = (notification: NotificationItem, colors: ReturnType<typeof appC
   }
   return { icon: 'bell' as const, color: notification.tone === 'warning' ? colors.warning : colors.primary, label: 'Alert' };
 };
+
+type RowProps = {
+  notification: NotificationItem;
+  colors: ReturnType<typeof appColors>;
+  isDark: boolean;
+  onSurface: string;
+  onSurfaceVariant: string;
+  onPress: (notification: NotificationItem) => void;
+  onDismiss: (notification: NotificationItem) => void;
+};
+
+// Memoized row: with optimistic cache updates, untouched notifications keep their object
+// reference, so only the changed row re-renders. Comparator ignores callback identity
+// (handlers are recreated each parent render but behaviour is stable per notification).
+const NotificationRow = memo(
+  function NotificationRow({ notification, colors, isDark, onSurface, onSurfaceVariant, onPress, onDismiss }: RowProps) {
+    const meta = toneMeta(notification, colors);
+    const unread = !notification.read;
+    return (
+      <Pressable
+        onPress={() => onPress(notification)}
+        style={({ pressed }) => [
+          styles.notificationCard,
+          {
+            backgroundColor: pressed ? alpha(meta.color, isDark ? 0.16 : 0.08) : isDark ? alpha(colors.surface, 0.78) : colors.card,
+            borderColor: unread ? alpha(meta.color, isDark ? 0.48 : 0.28) : isDark ? colors.border : alpha(colors.primaryStrong, 0.1)
+          }
+        ]}
+      >
+        <View style={[styles.iconBubble, { backgroundColor: alpha(meta.color, isDark ? 0.22 : 0.12) }]}>
+          <Feather name={meta.icon} size={16} color={meta.color} />
+        </View>
+        <View style={styles.notificationBody}>
+          <View style={styles.notificationTitleRow}>
+            <Text numberOfLines={1} style={[styles.notificationTitle, { color: onSurface }]}>{notification.title}</Text>
+            {unread ? <View style={[styles.unreadDot, { backgroundColor: meta.color }]} /> : null}
+          </View>
+          <Text numberOfLines={2} style={[styles.notificationDescription, { color: onSurfaceVariant }]}>{notification.description}</Text>
+          <View style={styles.metaRow}>
+            <Text style={[styles.metaLabel, { color: meta.color }]}>{meta.label}</Text>
+            {notification.sortDate ? <Text style={[styles.metaDate, { color: onSurfaceVariant }]}>{formatRelativeTime(notification.sortDate)}</Text> : null}
+          </View>
+        </View>
+        <Pressable onPress={() => onDismiss(notification)} hitSlop={8} style={[styles.dismissBtn, { backgroundColor: isDark ? colors.surface : alpha(colors.primaryStrong, 0.05) }]}>
+          <Feather name="x" size={14} color={onSurfaceVariant} />
+        </Pressable>
+      </Pressable>
+    );
+  },
+  (prev, next) =>
+    prev.notification === next.notification &&
+    prev.isDark === next.isDark &&
+    prev.onSurface === next.onSurface &&
+    prev.onSurfaceVariant === next.onSurfaceVariant
+);
 
 export function NotificationSheet({
   visible,
@@ -72,50 +127,26 @@ export function NotificationSheet({
     }
   }, [visible, translateY, backdropOpacity]);
 
-  const renderNotification = (notification: NotificationItem) => {
-    const meta = toneMeta(notification, colors);
-    const unread = !notification.read;
-
-    return (
-      <Pressable
-        key={notification.id}
-        onPress={() => onPressNotification(notification)}
-        style={({ pressed }) => [
-          styles.notificationCard,
-          {
-            backgroundColor: pressed ? alpha(meta.color, isDark ? 0.16 : 0.08) : isDark ? alpha(colors.surface, 0.78) : colors.card,
-            borderColor: unread ? alpha(meta.color, isDark ? 0.48 : 0.28) : isDark ? colors.border : alpha(colors.primaryStrong, 0.1)
-          }
-        ]}
-      >
-        <View style={[styles.iconBubble, { backgroundColor: alpha(meta.color, isDark ? 0.22 : 0.12) }]}>
-          <Feather name={meta.icon} size={16} color={meta.color} />
-        </View>
-        <View style={styles.notificationBody}>
-          <View style={styles.notificationTitleRow}>
-            <Text numberOfLines={1} style={[styles.notificationTitle, { color: theme.colors.onSurface }]}>{notification.title}</Text>
-            {unread ? <View style={[styles.unreadDot, { backgroundColor: meta.color }]} /> : null}
-          </View>
-          <Text numberOfLines={2} style={[styles.notificationDescription, { color: theme.colors.onSurfaceVariant }]}>{notification.description}</Text>
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaLabel, { color: meta.color }]}>{meta.label}</Text>
-            {notification.sortDate ? <Text style={[styles.metaDate, { color: theme.colors.onSurfaceVariant }]}>{formatDate(notification.sortDate)}</Text> : null}
-          </View>
-        </View>
-        <Pressable onPress={() => onDismiss(notification)} hitSlop={8} style={[styles.dismissBtn, { backgroundColor: isDark ? colors.surface : alpha(colors.primaryStrong, 0.05) }]}>
-          <Feather name="x" size={14} color={theme.colors.onSurfaceVariant} />
-        </Pressable>
-      </Pressable>
-    );
-  };
-
   const renderSection = (title: string, items: NotificationItem[]) => {
     if (!items.length) return null;
 
     return (
       <View style={styles.section}>
         <Text style={[styles.sectionLabel, { color: theme.colors.onSurfaceVariant }]}>{title}</Text>
-        <View style={styles.notificationStack}>{items.map(renderNotification)}</View>
+        <View style={styles.notificationStack}>
+          {items.map((notification) => (
+            <NotificationRow
+              key={notification.id}
+              notification={notification}
+              colors={colors}
+              isDark={isDark}
+              onSurface={theme.colors.onSurface}
+              onSurfaceVariant={theme.colors.onSurfaceVariant}
+              onPress={onPressNotification}
+              onDismiss={onDismiss}
+            />
+          ))}
+        </View>
       </View>
     );
   };

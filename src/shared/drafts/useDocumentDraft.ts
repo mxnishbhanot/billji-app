@@ -36,6 +36,10 @@ export const useDocumentDraft = <TPayload,>({
   const currentDraftIdRef = useRef(currentDraftId);
   const lastEditedAtRef = useRef<string | null>(null);
   const serverDraftIdRef = useRef<string | null>(null);
+  // Latest payload mirrored into a ref so the NetInfo listener can read it without
+  // being in the effect deps (otherwise it re-subscribes on every keystroke).
+  const payloadRef = useRef(payload);
+  payloadRef.current = payload;
 
   const hasDraftContent = useMemo(() => hasPayloadContent(payload), [hasPayloadContent, payload]);
 
@@ -184,7 +188,7 @@ export const useDocumentDraft = <TPayload,>({
         businessId,
         documentType,
         schemaVersion: DRAFT_SCHEMA_VERSION,
-        payload,
+        payload: payloadRef.current,
         dirty: true,
         lastEditedAt,
         lastSyncedAt: null
@@ -192,7 +196,7 @@ export const useDocumentDraft = <TPayload,>({
     });
 
     return () => unsubscribe();
-  }, [businessId, documentType, draftHydrated, hasDraftContent, isDraftDirty, payload, syncDraft]);
+  }, [businessId, documentType, draftHydrated, hasDraftContent, isDraftDirty, syncDraft]);
 
   const resumeDraft = () => {
     if (!recoveryDraft) return;
@@ -208,6 +212,9 @@ export const useDocumentDraft = <TPayload,>({
 
   const duplicateDraft = () => {
     if (!recoveryDraft) return;
+    // Copy content into a fresh draft, but remove the original — leaving it behind
+    // orphans a recoverable draft that can be regenerated into a duplicate document.
+    void clearDraft(recoveryDraft.localDraftId).catch(() => {});
     setActiveDraftId(createDraftId(documentType));
     serverDraftIdRef.current = null;
     lastEditedAtRef.current = null;

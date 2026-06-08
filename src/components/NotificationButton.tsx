@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { InfiniteData, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Appbar, Badge, useTheme } from 'react-native-paper';
 import { notificationsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
@@ -15,6 +15,12 @@ import { alpha, appColors, radii } from '@/theme/theme';
 import { NotificationItem } from '@/types';
 
 const PAGE_SIZE = 10;
+type NotifPage = { notifications: NotificationItem[]; unreadCount: number; pagination: { nextPage: number | null } };
+type NotifCache = InfiniteData<NotifPage> | undefined;
+
+// Apply a transform to every cached page in place of waiting for a server refetch.
+const patchPages = (data: NotifCache, mapPage: (page: NotifPage) => NotifPage): NotifCache =>
+  data ? { ...data, pages: data.pages.map(mapPage) } : data;
 // Memoized: header parents re-render on every draft/keystroke state change and the
 // inline icon render-prop would otherwise redraw (visibly blink) the bell each time.
 export const NotificationButton = memo(function NotificationButton() {
@@ -42,8 +48,57 @@ export const NotificationButton = memo(function NotificationButton() {
 
   const notifications = useMemo(() => query.data?.pages.flatMap((page) => page.notifications) ?? [], [query.data]);
   const unreadCount = query.data?.pages[0]?.unreadCount ?? 0;
-  const markSeen = useMutation({ mutationFn: ({ ids, all = false }: { ids: string[]; all?: boolean }) => notificationsApi.markSeen(ids, all), onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all }) });
-  const dismiss = useMutation({ mutationFn: (ids: string[]) => notificationsApi.dismiss(ids), onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all }) });
+  const key = queryKeys.notifications.all;
+  // Optimistic mutations: patch the cache synchronously so the sheet updates instantly,
+  // roll back on error, and reconcile with the server only after it settles.
+  const markSeen = useMutation({
+    mutationFn: ({ ids, all = false }: { ids: string[]; all?: boolean }) => notificationsApi.markSeen(ids, all),
+    onMutate: async ({ ids, all = false }) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<InfiniteData<NotifPage>>(key);
+      const idSet = new Set(ids);
+      const newlyRead = (previous?.pages ?? []).reduce(
+        (sum, page) => sum + page.notifications.filter((n) => !n.read && (all || idSet.has(n.id))).length,
+        0
+      );
+      queryClient.setQueryData<NotifCache>(key, (data) =>
+        patchPages(data, (page) => ({
+          ...page,
+          unreadCount: all ? 0 : Math.max(0, page.unreadCount - newlyRead),
+          notifications: page.notifications.map((n) => (all || idSet.has(n.id) ? { ...n, read: true } : n))
+        }))
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(key, context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: key })
+  });
+  const dismiss = useMutation({
+    mutationFn: (ids: string[]) => notificationsApi.dismiss(ids),
+    onMutate: async (ids) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<InfiniteData<NotifPage>>(key);
+      const idSet = new Set(ids);
+      const removedUnread = (previous?.pages ?? []).reduce(
+        (sum, page) => sum + page.notifications.filter((n) => idSet.has(n.id) && !n.read).length,
+        0
+      );
+      queryClient.setQueryData<NotifCache>(key, (data) =>
+        patchPages(data, (page) => ({
+          ...page,
+          unreadCount: Math.max(0, page.unreadCount - removedUnread),
+          notifications: page.notifications.filter((n) => !idSet.has(n.id))
+        }))
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(key, context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: key })
+  });
   const openPanel = () => setOpen(true);
   const markAllRead = () => markSeen.mutate({ ids: [], all: true });
   const loadMore = () => {

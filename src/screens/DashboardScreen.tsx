@@ -33,6 +33,16 @@ const recentActivityRange = () => {
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
   return { from: formatISODate(start), to: formatISODate(today) };
 };
+const todayRange = () => {
+  const today = new Date();
+  const iso = formatISODate(today);
+  return { from: iso, to: iso };
+};
+const monthRange = () => {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), 1);
+  return { from: formatISODate(start), to: formatISODate(today) };
+};
 
 function HeroPattern() {
   return (
@@ -256,7 +266,7 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
   const { can } = usePermissions();
   const canCreateInvoice = can(PERMISSION.invoicesCreate);
   const isDark = theme.dark;
-  const colors = appColors(isDark);
+  const colors = useMemo(() => appColors(isDark), [isDark]);
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((event) => { scrollY.value = event.contentOffset.y; });
   const heroParallaxStyle = useAnimatedStyle(() => ({
@@ -275,9 +285,27 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
   const report = query.data;
 
   const stats: { label: string; value: string | number; hint: string; tone?: 'primary' | 'success' | 'warning' | 'danger'; icon: keyof typeof MaterialCommunityIcons.glyphMap; onPress?: () => void }[] = [
-    { label: 'TODAY', value: formatCurrency(report?.todaySales), hint: 'Collected', icon: 'credit-card' },
-    { label: 'THIS MONTH', value: formatCurrency(report?.monthlySales), hint: 'Collected', icon: 'calendar-month' },
-    { label: 'INVOICES', value: report?.totalInvoices || 0, hint: 'All time', icon: 'file-document' },
+    {
+      label: 'TODAY',
+      value: formatCurrency(report?.todaySales),
+      hint: 'Collected',
+      icon: 'credit-card',
+      onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList', params: { status: 'paid', ...todayRange(), sort: 'newest', fromReports: true } })
+    },
+    {
+      label: 'THIS MONTH',
+      value: formatCurrency(report?.monthlySales),
+      hint: 'Collected',
+      icon: 'calendar-month',
+      onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList', params: { status: 'paid', ...monthRange(), sort: 'newest', fromReports: true } })
+    },
+    {
+      label: 'INVOICES',
+      value: report?.totalInvoices || 0,
+      hint: 'All time',
+      icon: 'file-document',
+      onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList' })
+    },
     {
       label: 'PENDING',
       value: report?.pendingInvoices || 0,
