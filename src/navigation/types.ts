@@ -53,6 +53,7 @@ export type SettingsStackParamList = {
   SettingsHome: undefined;
   BusinessProfile: undefined;
   TaxSettings: undefined;
+  InvoiceTemplate: undefined;
   NotificationSettings: undefined;
   ActivityLog: undefined;
   Ledger: undefined;
@@ -113,5 +114,6 @@ export type CustomerDetailScreenProps = NativeStackScreenProps<CustomersStackPar
 export type SettingsScreenProps = NativeStackScreenProps<SettingsStackParamList, 'SettingsHome'>;
 export type BusinessProfileScreenProps = NativeStackScreenProps<SettingsStackParamList, 'BusinessProfile'>;
 export type TaxSettingsScreenProps = NativeStackScreenProps<SettingsStackParamList, 'TaxSettings'>;
+export type InvoiceTemplateScreenProps = NativeStackScreenProps<SettingsStackParamList, 'InvoiceTemplate'>;
 export type ActivityLogScreenProps = NativeStackScreenProps<SettingsStackParamList, 'ActivityLog'>;
 export type LedgerScreenProps = NativeStackScreenProps<SettingsStackParamList, 'Ledger'>;

@@ -28,6 +28,7 @@ const PaymentsScreen = lazy(() => import('@/screens/PaymentsScreen').then((m) =>
 const SettingsScreen = lazy(() => import('@/screens/SettingsScreen').then((m) => ({ default: m.SettingsScreen })));
 const BusinessProfileScreen = lazy(() => import('@/screens/BusinessProfileScreen').then((m) => ({ default: m.BusinessProfileScreen })));
 const TaxSettingsScreen = lazy(() => import('@/screens/TaxSettingsScreen').then((m) => ({ default: m.TaxSettingsScreen })));
+const InvoiceTemplateScreen = lazy(() => import('@/screens/InvoiceTemplateScreen').then((m) => ({ default: m.InvoiceTemplateScreen })));
 const NotificationSettingsScreen = lazy(() => import('@/screens/NotificationSettingsScreen').then((m) => ({ default: m.NotificationSettingsScreen })));
 const ActivityLogScreen = lazy(() => import('@/screens/ActivityLogScreen').then((m) => ({ default: m.ActivityLogScreen })));
 const LedgerScreen = lazy(() => import('@/screens/LedgerScreen').then((m) => ({ default: m.LedgerScreen })));
@@ -102,7 +103,7 @@ function DashboardNavigator() {
 
 function InvoiceNavigator() {
   return (
-    <InvoiceStack.Navigator screenOptions={{ headerShown: false }} screenLayout={renderWithSuspense}>
+    <InvoiceStack.Navigator initialRouteName="InvoiceList" screenOptions={{ headerShown: false }} screenLayout={renderWithSuspense}>
       {/* OrderList reached only from the dashboard Orders button; no in-place list swap, no push animation. */}
       <InvoiceStack.Screen name="InvoiceList" component={InvoicesScreen} options={{ animation: 'none' }} />
       <InvoiceStack.Screen name="InvoiceCreate" component={InvoiceBuilderScreen} />
@@ -140,6 +141,7 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="SettingsHome" component={SettingsScreen} />
       <SettingsStack.Screen name="BusinessProfile" component={BusinessProfileScreen} />
       <SettingsStack.Screen name="TaxSettings" component={TaxSettingsScreen} />
+      <SettingsStack.Screen name="InvoiceTemplate" component={InvoiceTemplateScreen} />
       <SettingsStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
       <SettingsStack.Screen name="ActivityLog" component={ActivityLogScreen} />
       <SettingsStack.Screen name="Ledger" component={LedgerScreen} />

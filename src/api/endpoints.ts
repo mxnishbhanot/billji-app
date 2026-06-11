@@ -16,6 +16,7 @@ import {
   InvoiceCreatePayload,
   InvoiceDraftPayload,
   InvoiceQuery,
+  InvoiceTemplate,
   LedgerEntryRow,
   Order,
   OrderCreatePayload,
@@ -57,7 +58,9 @@ export const authApi = {
   requestPasswordReset: (email: string) => api.post<{ success: boolean; message: string; resetToken?: string }>('/auth/password-reset/request', { email }).then((res) => res.data),
   confirmPasswordReset: (token: string, password: string) => api.post<{ success: boolean; message: string }>('/auth/password-reset/confirm', { token, password }).then((res) => res.data),
   me: () => api.get<{ success: boolean; user: User }>('/auth/me').then((res) => res.data.user),
-  updateSettings: (payload: Partial<BusinessProfile>) => api.patch<{ success: boolean; user: User }>('/settings', payload).then((res) => res.data)
+  updateSettings: (payload: Partial<BusinessProfile>) => api.patch<{ success: boolean; user: User }>('/settings', payload).then((res) => res.data),
+  invoiceTemplatePreview: (payload: Partial<InvoiceTemplate>) =>
+    api.post<string>('/settings/invoice-template/preview', payload, { responseType: 'text', transformResponse: (data) => data }).then((res) => res.data)
 };
 
 export const productsApi = {

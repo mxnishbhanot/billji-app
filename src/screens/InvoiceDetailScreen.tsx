@@ -1,10 +1,11 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Button, Dialog, Portal, Text, useTheme } from 'react-native-paper';
-import Svg, { Circle, Defs, G, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { ActivityIndicator, Button, Dialog, Portal, Text, useTheme } from 'react-native-paper';
+import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import { EmptyState } from '@/components/EmptyState';
 import { invoicesApi, paymentsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
@@ -21,7 +22,7 @@ import { alpha, appColors, fontStyles, radii, statusTone, typeScale } from '@/th
 import { Invoice, InvoicePaymentStatus, InvoiceStatus, RecordPaymentPayload } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/format';
 import { emailSchema } from '@/validation/schemas';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 function HeroPattern() {
   return (
@@ -34,16 +35,113 @@ function HeroPattern() {
         </LinearGradient>
       </Defs>
       <Rect x="0" y="0" width={360} height={220} fill="url(#invHeroGrad)" />
-      <G opacity="0.18">
-        {Array.from({ length: 14 }).map((_, row) =>
-          Array.from({ length: 22 }).map((__, col) => (
-            <Circle key={`${row}-${col}`} cx={col * 18 + 9} cy={row * 18 + 9} r={1} fill="#FFFFFF" />
-          ))
-        )}
+      <G opacity="0.2" stroke="#FFFFFF" strokeWidth={1.2} fill="none" strokeLinecap="round">
+        <Path d="M -26 52 C 28 12, 84 12, 134 48 S 236 96, 392 26" />
+        <Path d="M -30 88 C 38 40, 96 44, 154 82 S 270 136, 392 78" opacity={0.72} />
+        <Path d="M -28 134 C 48 88, 116 102, 176 130 S 282 178, 390 122" opacity={0.58} />
+        <Path d="M 32 212 C 92 166, 148 180, 204 200 S 294 236, 388 184" opacity={0.42} />
       </G>
-      <Circle cx={340} cy={236} r={92} fill="#6366F1" opacity={0.24} />
-      <Circle cx={-12} cy={-12} r={70} fill="#F472B6" opacity={0.08} />
+      <G opacity="0.18" stroke="#FFFFFF" strokeWidth={1.1} fill="none">
+        <Circle cx={272} cy={58} r={18} />
+        <Circle cx={302} cy={92} r={8} />
+        <Circle cx={70} cy={164} r={13} />
+        <Circle cx={110} cy={40} r={6} />
+      </G>
+      <G opacity="0.08" stroke="#A5B4FC" strokeWidth={18} fill="none">
+        <Path d="M 238 -18 C 284 16, 318 52, 386 48" />
+        <Path d="M -34 198 C 36 158, 86 174, 146 216" />
+      </G>
     </Svg>
+  );
+}
+
+function FloatingHeroBubbles() {
+  const first = useMemo(() => new Animated.Value(0), []);
+  const second = useMemo(() => new Animated.Value(0), []);
+  const third = useMemo(() => new Animated.Value(0), []);
+  const fourth = useMemo(() => new Animated.Value(0), []);
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(first, { toValue: 1, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(first, { toValue: 0, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+        ]),
+        Animated.sequence([
+          Animated.timing(second, { toValue: 1, duration: 12000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(second, { toValue: 0, duration: 12000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+        ]),
+        Animated.sequence([
+          Animated.timing(third, { toValue: 1, duration: 15000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(third, { toValue: 0, duration: 15000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+        ]),
+        Animated.sequence([
+          Animated.timing(fourth, { toValue: 1, duration: 18000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(fourth, { toValue: 0, duration: 18000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+        ])
+      ])
+    );
+
+    animation.start();
+    return () => animation.stop();
+  }, [first, fourth, second, third]);
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Animated.View
+        style={[
+          styles.heroBubbleLarge,
+          {
+            opacity: first.interpolate({ inputRange: [0, 1], outputRange: [0.16, 0.26] }),
+            transform: [
+              { translateX: first.interpolate({ inputRange: [0, 1], outputRange: [0, -20] }) },
+              { translateY: first.interpolate({ inputRange: [0, 1], outputRange: [0, 12] }) },
+              { scale: first.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.08] }) }
+            ]
+          }
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.heroBubbleSmall,
+          {
+            opacity: second.interpolate({ inputRange: [0, 1], outputRange: [0.1, 0.2] }),
+            transform: [
+              { translateX: second.interpolate({ inputRange: [0, 1], outputRange: [0, 18] }) },
+              { translateY: second.interpolate({ inputRange: [0, 1], outputRange: [0, -10] }) },
+              { scale: second.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1.1] }) }
+            ]
+          }
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.heroBubbleMedium,
+          {
+            opacity: third.interpolate({ inputRange: [0, 1], outputRange: [0.08, 0.18] }),
+            transform: [
+              { translateX: third.interpolate({ inputRange: [0, 1], outputRange: [0, 24] }) },
+              { translateY: third.interpolate({ inputRange: [0, 1], outputRange: [0, 18] }) },
+              { scale: third.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.12] }) }
+            ]
+          }
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.heroBubbleTiny,
+          {
+            opacity: fourth.interpolate({ inputRange: [0, 1], outputRange: [0.12, 0.22] }),
+            transform: [
+              { translateX: fourth.interpolate({ inputRange: [0, 1], outputRange: [0, -16] }) },
+              { translateY: fourth.interpolate({ inputRange: [0, 1], outputRange: [0, -18] }) },
+              { scale: fourth.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.14] }) }
+            ]
+          }
+        ]}
+      />
+    </View>
   );
 }
 
@@ -123,7 +221,21 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   });
   const shareWhatsApp = async () => { if (!invoice) return; try { await openOrSharePdf(invoice.pdfUrl, invoice.invoiceNumber); } catch (error) { showDialog({ title: 'Could not share invoice', message: apiErrorMessage(error), tone: 'error' }); } };
 
-  if (!invoice) return <Screen title="Invoice"><Text>Loading invoice...</Text></Screen>;
+  if (query.isLoading) {
+    return (
+      <Screen title="Invoice">
+        <ActivityIndicator color={theme.colors.primary} style={styles.loader} />
+      </Screen>
+    );
+  }
+
+  if (!invoice) {
+    return (
+      <Screen title="Invoice">
+        <EmptyState title="Invoice not found" message="This invoice may have been removed." actionLabel="Back" onAction={() => navigation.goBack()} />
+      </Screen>
+    );
+  }
 
   const currentStatus = invoice.status;
   const paidAmount = invoice.paidAmount ?? (invoice.paymentStatus === 'paid' ? invoice.total : 0);
@@ -166,6 +278,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
     <Screen title={invoice.invoiceNumber}>
       <View style={[styles.heroCard, { borderColor: alpha('#C3C0FF', 0.3) }]}>
         <HeroPattern />
+        <FloatingHeroBubbles />
         <View style={styles.heroInner}>
           <View style={[styles.heroEyebrowBadge, { borderColor: alpha('#FFFFFF', 0.22), backgroundColor: alpha('#1C1A4A', 0.4) }]}>
             <Text style={styles.heroEyebrow}>{invoice.invoiceNumber}</Text>
@@ -292,7 +405,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
             onPress={requestCancel}
             style={styles.footerButton}
           >
-            Cancel invoice
+            Cancel
           </Button>
         ) : null}
         {canDeleteInvoice ? (
@@ -304,7 +417,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
             onPress={requestDelete}
             style={styles.footerButton}
           >
-            Delete invoice
+            Delete
           </Button>
         ) : null}
       </View>
@@ -355,8 +468,13 @@ const styles = StyleSheet.create({
   },
   countBadge: { alignItems: 'center', borderRadius: radii.pill, minWidth: 24, paddingHorizontal: 8, paddingVertical: 2 },
   countBadgeText: { ...fontStyles.bold, fontSize: 11 },
-  footerActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
+  footerActions: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   footerButton: { borderRadius: radii.input, flex: 1 },
+  heroBubbleLarge: { backgroundColor: alpha('#FFFFFF', 0.18), borderColor: alpha('#FFFFFF', 0.34), borderRadius: 78, borderWidth: 1, height: 156, position: 'absolute', right: -44, top: 96, width: 156 },
+  heroBubbleMedium: { backgroundColor: alpha('#A5B4FC', 0.16), borderColor: alpha('#FFFFFF', 0.24), borderRadius: 60, borderWidth: 1, bottom: -28, height: 120, left: 30, position: 'absolute', width: 120 },
+  heroBubbleSmall: { backgroundColor: alpha('#FFFFFF', 0.14), borderColor: alpha('#FFFFFF', 0.28), borderRadius: 46, borderWidth: 1, height: 92, left: -26, position: 'absolute', top: -18, width: 92 },
+  heroBubbleTiny: { backgroundColor: alpha('#FFFFFF', 0.16), borderColor: alpha('#FFFFFF', 0.3), borderRadius: 26, borderWidth: 1, height: 52, position: 'absolute', right: 94, top: 40, width: 52 },
+  loader: { marginTop: 48 },
   grandTotal: {
     alignItems: 'center',
     borderTopWidth: 1,

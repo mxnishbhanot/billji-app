@@ -14,6 +14,14 @@ export type TaxSettings = {
   compoundTax: boolean;
 };
 
+export type InvoiceTemplate = {
+  accentColor: string;
+  showLogo: boolean;
+  showNotes: boolean;
+  showSignature: boolean;
+  showPaymentRows: boolean;
+};
+
 export type BusinessProfile = {
   businessName?: string;
   logoUrl?: string;
@@ -29,6 +37,7 @@ export type BusinessProfile = {
   invoicePrefix?: string;
   panNumber?: string;
   taxSettings?: TaxSettings;
+  invoiceTemplate?: InvoiceTemplate;
   theme?: 'light' | 'dark';
 };
 

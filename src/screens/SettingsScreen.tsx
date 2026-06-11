@@ -14,7 +14,6 @@ import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
 import { BrandLogoSheet } from '@/components/BrandLogoSheet';
 import { BrandMark } from '@/components/BrandMark';
-import { FormTextInput } from '@/components/FormTextInput';
 import { Screen } from '@/components/Screen';
 import { AppNavigation } from '@/navigation/types';
 import { disconnectSocket } from '@/services/socket';
@@ -25,7 +24,7 @@ import { BusinessProfileFormValues } from '@/types';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { settingsSchema } from '@/validation/schemas';
 
-type SettingsPanel = 'invoice' | 'account' | 'security' | null;
+type SettingsPanel = 'account' | 'security' | null;
 type SettingsRowProps = {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   title: string;
@@ -252,7 +251,6 @@ export function SettingsScreen() {
     await logout();
   };
 
-  const saveAndClose = form.handleSubmit((values) => save.mutate(values, { onSuccess: () => setActivePanel(null) }));
   const saveBrand = form.handleSubmit((values) => save.mutate(values, { onSuccess: () => setBrandSheetVisible(false) }));
 
   const setLogo = (dataUri: string) => form.setValue('logoUrl', dataUri, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
@@ -374,22 +372,6 @@ export function SettingsScreen() {
       );
     }
 
-    if (activePanel === 'invoice') {
-      return (
-        <>
-          <Dialog.Title>Invoice Numbering</Dialog.Title>
-          <Dialog.Content>
-            <View style={[styles.prefixPreview, { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.08), borderColor: alpha(colors.primary, isDark ? 0.28 : 0.16) }]}>
-              <MaterialCommunityIcons name="file-document-outline" size={18} color={theme.colors.primary} />
-              <Text style={[styles.prefixPreviewText, { color: theme.colors.primary }]}>{invoicePrefix || 'INV'}-0001</Text>
-            </View>
-            <FormTextInput control={form.control} name="invoicePrefix" label="Invoice prefix" />
-          </Dialog.Content>
-          <Dialog.Actions><Button onPress={closePanel}>Cancel</Button><Button loading={save.isPending} onPress={saveAndClose}>Save</Button></Dialog.Actions>
-        </>
-      );
-    }
-
     return null;
   };
 
@@ -440,7 +422,7 @@ export function SettingsScreen() {
       </SettingsGroup>
 
       <SettingsGroup title="INVOICING">
-        <SettingsRow icon="counter" title="Invoice Numbering" subtitle={`${invoicePrefix || 'INV'}-0001 format`} tone={colors.primary} onPress={() => setActivePanel('invoice')} />
+        <SettingsRow icon="file-document-edit-outline" title="Invoice Template" subtitle={`Customize PDF · ${invoicePrefix || 'INV'}-0001`} tone={colors.primary} onPress={() => navigation.navigate('InvoiceTemplate')} />
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow
           icon="theme-light-dark"
@@ -527,8 +509,6 @@ const styles = StyleSheet.create({
   groupLabel: { ...fontStyles.bold, fontSize: 11, letterSpacing: 1.1, marginBottom: 8, marginLeft: 2 },
   planPill: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderRadius: radii.pill, flexDirection: 'row', gap: 4, marginTop: 6, paddingHorizontal: 8, paddingVertical: 3 },
   planText: { ...fontStyles.bold, color: '#4338CA', fontSize: 10 },
-  prefixPreview: { alignItems: 'center', alignSelf: 'flex-start', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', gap: 7, marginBottom: 12, paddingHorizontal: 12, paddingVertical: 7 },
-  prefixPreviewText: { ...fontStyles.bold, fontSize: 12 },
   profileCard: { alignItems: 'center', borderRadius: 26, borderWidth: 1, flexDirection: 'row', gap: 14, marginBottom: 20, minHeight: 120, overflow: 'hidden', padding: 18 },
   profileContent: { flex: 1, minWidth: 0 },
   profileEdit: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, height: 38, justifyContent: 'center', width: 38 },
