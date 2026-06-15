@@ -293,28 +293,6 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
         </View>
       </View>
 
-      <View style={styles.actionRow}>
-        {actions.map((action) => (
-          <Pressable
-            key={action.label}
-            onPress={action.onPress}
-            style={({ pressed }) => [
-              styles.actionTile,
-              {
-                backgroundColor: colors.card,
-                borderColor: cardBorder,
-                opacity: pressed ? 0.85 : 1
-              }
-            ]}
-          >
-            <View style={[styles.actionIconWrap, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.12) }]}>
-              <Feather name={action.icon} size={16} color={theme.colors.primary} />
-            </View>
-            <Text style={[styles.actionLabel, { color: theme.colors.onSurface }]}>{action.label}</Text>
-          </Pressable>
-        ))}
-      </View>
-
       <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
         <View style={styles.sectionHead}>
           <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Items</Text>
@@ -394,6 +372,28 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
             </Pressable>
           </>
         ) : null}
+      </View>
+
+      <View style={styles.actionRow}>
+        {actions.map((action) => (
+          <Pressable
+            key={action.label}
+            onPress={action.onPress}
+            style={({ pressed }) => [
+              styles.actionTile,
+              {
+                backgroundColor: colors.card,
+                borderColor: cardBorder,
+                opacity: pressed ? 0.85 : 1
+              }
+            ]}
+          >
+            <View style={[styles.actionIconWrap, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.12) }]}>
+              <Feather name={action.icon} size={16} color={theme.colors.primary} />
+            </View>
+            <Text style={[styles.actionLabel, { color: theme.colors.onSurface }]}>{action.label}</Text>
+          </Pressable>
+        ))}
       </View>
 
       <View style={styles.footerActions}>
