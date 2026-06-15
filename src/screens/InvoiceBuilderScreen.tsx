@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { NavigationAction } from '@react-navigation/native';
 import { useForm } from 'react-hook-form';
@@ -68,6 +68,17 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
   const closeCustomModal = () => {
     builder.setCustomModal(false);
     customForm.reset(customItemDefaults);
+  };
+  const openPreview = () => {
+    if (!builder.activeCustomer) {
+      showDialog({ title: 'Select or add a customer', message: 'Choose a saved customer or quick add a new one before previewing the invoice.', tone: 'warning' });
+      return;
+    }
+    if (!builder.items.length) {
+      showDialog({ title: 'Add at least one item', message: 'Pick a product or add a custom item before previewing the invoice.', tone: 'warning' });
+      return;
+    }
+    navigation.navigate('InvoicePreview', { payload: builder.buildPayload(false) });
   };
 
   return (
@@ -139,17 +150,22 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
         outstanding={builder.outstanding}
         subSurface={subSurface}
       />
-      <Button
-        mode="contained"
-        loading={builder.isGenerating}
-        disabled={builder.isGenerating}
-        onPress={builder.createInvoice}
-        style={styles.generateButton}
-        contentStyle={styles.generateButtonContent}
-        labelStyle={styles.generateButtonLabel}
-      >
-        Generate invoice
-      </Button>
+      <View style={styles.actionRow}>
+        <Button mode="outlined" onPress={openPreview} style={styles.previewButton} contentStyle={styles.generateButtonContent} labelStyle={styles.generateButtonLabel}>
+          Preview
+        </Button>
+        <Button
+          mode="contained"
+          loading={builder.isGenerating}
+          disabled={builder.isGenerating}
+          onPress={builder.createInvoice}
+          style={styles.generateButton}
+          contentStyle={styles.generateButtonContent}
+          labelStyle={styles.generateButtonLabel}
+        >
+          Generate invoice
+        </Button>
+      </View>
       <InvoiceBuilderDialogs
         addCustomerLoading={builder.addCustomer.isPending}
         customerForm={customerForm}
@@ -205,7 +221,9 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
 }
 
 const styles = StyleSheet.create({
-  generateButton: { borderRadius: radii.input, marginBottom: 18 },
+  actionRow: { flexDirection: 'row', gap: 12, marginBottom: 18 },
+  generateButton: { borderRadius: radii.input, flex: 1 },
   generateButtonContent: { paddingVertical: 6 },
-  generateButtonLabel: { ...fontStyles.bold, fontSize: 14, letterSpacing: 0.2 }
+  generateButtonLabel: { ...fontStyles.bold, fontSize: 14, letterSpacing: 0.2 },
+  previewButton: { borderRadius: radii.input, flex: 1 }
 });

@@ -294,6 +294,7 @@ export const useInvoiceBuilder = ({
     stockWarning,
     taxRate,
     totals,
-    updateQuantity
+    updateQuantity,
+    buildPayload
   };
 };

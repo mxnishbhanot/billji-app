@@ -18,6 +18,7 @@ const CustomersScreen = lazy(() => import('@/screens/CustomersScreen').then((m) 
 const CustomerDetailScreen = lazy(() => import('@/screens/CustomerDetailScreen').then((m) => ({ default: m.CustomerDetailScreen })));
 const InvoicesScreen = lazy(() => import('@/screens/InvoicesScreen').then((m) => ({ default: m.InvoicesScreen })));
 const InvoiceBuilderScreen = lazy(() => import('@/screens/InvoiceBuilderScreen').then((m) => ({ default: m.InvoiceBuilderScreen })));
+const InvoicePreviewScreen = lazy(() => import('@/screens/InvoicePreviewScreen').then((m) => ({ default: m.InvoicePreviewScreen })));
 const InvoiceDetailScreen = lazy(() => import('@/screens/InvoiceDetailScreen').then((m) => ({ default: m.InvoiceDetailScreen })));
 const DraftsScreen = lazy(() => import('@/screens/DraftsScreen').then((m) => ({ default: m.DraftsScreen })));
 const OrdersScreen = lazy(() => import('@/screens/OrdersScreen').then((m) => ({ default: m.OrdersScreen })));
@@ -107,6 +108,7 @@ function InvoiceNavigator() {
       {/* OrderList reached only from the dashboard Orders button; no in-place list swap, no push animation. */}
       <InvoiceStack.Screen name="InvoiceList" component={InvoicesScreen} options={{ animation: 'none' }} />
       <InvoiceStack.Screen name="InvoiceCreate" component={InvoiceBuilderScreen} />
+      <InvoiceStack.Screen name="InvoicePreview" component={InvoicePreviewScreen} />
       <InvoiceStack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
       <InvoiceStack.Screen name="Drafts" component={DraftsScreen} />
       <InvoiceStack.Screen name="OrderList" component={OrdersScreen} options={{ animation: 'none' }} />

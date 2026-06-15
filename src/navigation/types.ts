@@ -1,6 +1,6 @@
 import { CompositeNavigationProp, NavigationProp, NavigatorScreenParams, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Customer, InvoiceStatus } from '@/types';
+import { Customer, InvoiceCreatePayload, InvoiceStatus } from '@/types';
 
 export type InvoiceSortParam = 'newest' | 'oldest' | 'amount-high' | 'amount-low';
 export type ProductSortParam = 'updated' | 'top-sales' | 'name-asc' | 'price-high' | 'price-low' | 'stock-low';
@@ -25,6 +25,7 @@ export type InvoiceStackParamList = {
     status?: InvoiceStatus;
   } | undefined;
   InvoiceCreate: undefined;
+  InvoicePreview: { payload: InvoiceCreatePayload };
   InvoiceDetail: { id: string };
   Drafts: undefined;
   OrderList: undefined;
@@ -103,6 +104,7 @@ export type ReportsScreenProps = {
 export type PaymentsScreenProps = NativeStackScreenProps<DashboardStackParamList, 'Payments'>;
 export type InvoicesScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'InvoiceList'>;
 export type InvoiceBuilderScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'InvoiceCreate'>;
+export type InvoicePreviewScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'InvoicePreview'>;
 export type InvoiceDetailScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'InvoiceDetail'>;
 export type DraftsScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'Drafts'>;
 export type OrdersScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'OrderList'>;

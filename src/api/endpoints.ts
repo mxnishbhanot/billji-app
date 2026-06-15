@@ -92,6 +92,8 @@ export const invoicesApi = {
   page: (params: InvoiceQuery) => api.get<InvoicePage>('/invoices', { params: { ...params, paginated: true } }).then((res) => res.data),
   create: (payload: InvoiceCreatePayload) =>
     api.post<{ invoice: Invoice }>('/invoices', payload, { headers: { 'Idempotency-Key': idempotencyKey('invoice') } }).then((res) => res.data.invoice),
+  preview: (payload: InvoiceCreatePayload) =>
+    api.post<string>('/invoices/preview', payload, { responseType: 'text', transformResponse: (data) => data }).then((res) => res.data),
   get: (id: string) => api.get<{ invoice: Invoice }>(`/invoices/${id}`).then((res) => res.data.invoice),
   status: (id: string, status: string) => api.patch<{ invoice: Invoice }>(`/invoices/${id}/status`, { status }).then((res) => res.data.invoice),
   duplicate: (id: string) => api.post<{ invoice: Invoice }>(`/invoices/${id}/duplicate`).then((res) => res.data.invoice),
