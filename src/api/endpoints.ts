@@ -95,7 +95,8 @@ export const invoicesApi = {
   preview: (payload: InvoiceCreatePayload) =>
     api.post<string>('/invoices/preview', payload, { responseType: 'text', transformResponse: (data) => data }).then((res) => res.data),
   get: (id: string) => api.get<{ invoice: Invoice }>(`/invoices/${id}`).then((res) => res.data.invoice),
-  status: (id: string, status: string) => api.patch<{ invoice: Invoice }>(`/invoices/${id}/status`, { status }).then((res) => res.data.invoice),
+  status: (id: string, status: string, cancelReason?: string) =>
+    api.patch<{ invoice: Invoice }>(`/invoices/${id}/status`, { status, ...(cancelReason ? { cancelReason } : {}) }).then((res) => res.data.invoice),
   duplicate: (id: string) => api.post<{ invoice: Invoice }>(`/invoices/${id}/duplicate`).then((res) => res.data.invoice),
   remove: (id: string) => api.delete(`/invoices/${id}`).then((res) => res.data),
   whatsapp: (id: string) => api.get<{ link: string; message: string }>(`/invoices/${id}/whatsapp`).then((res) => res.data),

@@ -171,30 +171,60 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   const query = useQuery({ queryKey: queryKeys.invoices.detail(id), queryFn: () => invoicesApi.get(id) });
   const paymentsQuery = useQuery({ queryKey: queryKeys.payments.invoice(id), queryFn: () => paymentsApi.list({ invoiceId: id }) });
   const invoice = query.data;
+  const customerId = invoice?.customer ?? '';
+  // Customer-level outstanding (all unpaid invoices incl. this one) — drives the
+  // "also settle previous dues" option when collecting payment on this invoice.
+  const outstandingQuery = useQuery({
+    queryKey: queryKeys.payments.customerOutstanding(customerId),
+    queryFn: () => paymentsApi.customerOutstanding(customerId),
+    enabled: Boolean(customerId)
+  });
   // Targeted invalidation sets per action — only the query families the action actually affects.
-  // Cancel/delete restore stock (products) and reduce customer dues, but never touch payments
-  // (both are blocked when payments exist). Recording a payment never changes stock.
+  // Delete is gated to unprocessed invoices (no payments/stock/ledger), so it only touches
+  // invoices/products/customers/reports. Cancel can run on paid invoices: it restores stock,
+  // reverses ledger, and flags payments refund-pending — so it also invalidates payments.
   const invalidateStatusChange = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
   };
+  const invalidateCancel = () => {
+    invalidateStatusChange();
+    queryClient.invalidateQueries({ queryKey: queryKeys.payments.all });
+    if (customerId) queryClient.invalidateQueries({ queryKey: queryKeys.payments.customerOutstanding(customerId) });
+  };
   const invalidatePayment = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.payments.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
+    if (customerId) queryClient.invalidateQueries({ queryKey: queryKeys.payments.customerOutstanding(customerId) });
   };
-  const cancelInvoice = useMutation({ mutationFn: () => invoicesApi.status(id, 'cancelled'), onSuccess: () => { setCancelling(false); invalidateStatusChange(); query.refetch(); }, onError: (error) => { setCancelling(false); showDialog({ title: 'Could not cancel invoice', message: apiErrorMessage(error), tone: 'error' }); } });
-  const remove = useMutation({ mutationFn: () => invoicesApi.remove(id), onSuccess: () => { setDeleting(false); invalidateStatusChange(); navigation.navigate('InvoiceList'); }, onError: (error) => showDialog({ title: 'Could not delete invoice', message: apiErrorMessage(error), tone: 'error' }) });
+  const cancelInvoice = useMutation({ mutationFn: () => invoicesApi.status(id, 'cancelled'), onSuccess: () => { setCancelling(false); invalidateCancel(); query.refetch(); paymentsQuery.refetch(); }, onError: (error) => { setCancelling(false); showDialog({ title: 'Could not cancel invoice', message: apiErrorMessage(error), tone: 'error' }); } });
+  const remove = useMutation({ mutationFn: () => invoicesApi.remove(id), onSuccess: () => { setDeleting(false); invalidateStatusChange(); navigation.navigate('InvoiceList'); }, onError: (error) => { setDeleting(false); showDialog({ title: 'Could not delete invoice', message: apiErrorMessage(error), tone: 'error' }); } });
   const sendEmail = useMutation({ mutationFn: (email: string) => invoicesApi.email(id, email), onSuccess: () => { setEmailOpen(false); query.refetch(); }, onError: (error) => showDialog({ title: 'Could not send email', message: apiErrorMessage(error), tone: 'error' }) });
   const recordPayment = useMutation({
-    mutationFn: (payload: RecordPaymentPayload) => paymentsApi.recordInvoicePayment(id, payload),
-    // Optimistic: patch the cached invoice detail so paid/balance/status flip instantly.
-    onMutate: async (payload) => {
+    mutationFn: async ({ payload, settlePreviousDues, invoiceIds }: { payload: RecordPaymentPayload; settlePreviousDues: boolean; invoiceIds: string[] }) => {
+      if (settlePreviousDues && customerId) {
+        await paymentsApi.recordCustomerPayment(customerId, {
+          amount: payload.amount,
+          method: payload.method,
+          reference: payload.reference,
+          notes: payload.notes,
+          invoiceIds
+        });
+        return;
+      }
+      await paymentsApi.recordInvoicePayment(id, payload);
+    },
+    // Optimistic patch only for the single-invoice path; a dues-settling payment spans
+    // multiple invoices (server allocates oldest-first), so we just refetch on success.
+    onMutate: async ({ payload, settlePreviousDues }) => {
+      let previous: Invoice | undefined;
+      if (settlePreviousDues) return { previous };
       await queryClient.cancelQueries({ queryKey: queryKeys.invoices.detail(id) });
-      const previous = queryClient.getQueryData<Invoice>(queryKeys.invoices.detail(id));
+      previous = queryClient.getQueryData<Invoice>(queryKeys.invoices.detail(id));
       if (previous) {
         const paid = (previous.paidAmount ?? 0) + payload.amount;
         const balance = Math.max(previous.total - paid, 0);
@@ -208,7 +238,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
       }
       return { previous };
     },
-    onError: (error, _payload, context) => {
+    onError: (error, _vars, context) => {
       if (context?.previous) queryClient.setQueryData(queryKeys.invoices.detail(id), context.previous);
       showDialog({ title: 'Could not record payment', message: apiErrorMessage(error), tone: 'error' });
     },
@@ -217,6 +247,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
       invalidatePayment();
       query.refetch();
       paymentsQuery.refetch();
+      outstandingQuery.refetch();
     }
   });
   const shareWhatsApp = async () => { if (!invoice) return; try { await openOrSharePdf(invoice.pdfUrl, invoice.invoiceNumber); } catch (error) { showDialog({ title: 'Could not share invoice', message: apiErrorMessage(error), tone: 'error' }); } };
@@ -241,26 +272,38 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   const paidAmount = invoice.paidAmount ?? (invoice.paymentStatus === 'paid' ? invoice.total : 0);
   const balanceDue = invoice.balanceDue ?? Math.max(invoice.total - paidAmount, 0);
   const paymentStatus = invoice.paymentStatus ?? (currentStatus === 'paid' ? 'paid' : 'unpaid');
+  // Previous dues = customer's total outstanding minus this invoice's own balance.
+  const outstanding = outstandingQuery.data ?? { invoices: [], totalOutstanding: 0 };
+  const previousDues = Math.max(outstanding.totalOutstanding - balanceDue, 0);
+  // Oldest-first: settle other unpaid invoices, then this one.
+  const settleInvoiceIds = [...outstanding.invoices.map((item) => item.id).filter((invoiceId) => invoiceId !== id), id];
   const tone = statusTone(currentStatus, isDark);
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.08);
   const isCancelled = currentStatus === 'cancelled';
-  const hasPayments = paidAmount > 0 || (paymentsQuery.data?.length ?? 0) > 0;
-  const requestCancel = () => {
-    if (hasPayments) {
-      showDialog({
-        title: 'Refund before cancelling',
-        message: 'This invoice has recorded payments. Refund or reverse them first, then cancel.',
-        tone: 'error'
-      });
-      return;
-    }
-    setCancelling(true);
-  };
+  const hasPayments = invoice.eligibility?.hasPayments ?? (paidAmount > 0 || (paymentsQuery.data?.length ?? 0) > 0);
+  const hasProductItems = invoice.items.some((item) => item.product);
+  // Server eligibility is authoritative; the heuristic only covers the (rare)
+  // window before the detail query resolves. Delete is for draft/unprocessed
+  // invoices only — never once payments, stock, or ledger entries exist.
+  const canCancel = invoice.eligibility?.canCancel ?? !isCancelled;
+  const canDelete = invoice.eligibility?.canDelete ?? (!isCancelled && !hasPayments && !hasProductItems);
+
+  // Cancel keeps the record and reverses stock/accounting, but never refunds.
+  // The warning copy depends on how much was already paid.
+  const cancelMessage =
+    paidAmount > 0 && balanceDue <= 0
+      ? 'This invoice has been fully paid. Cancelling it will restore inventory and cancel the invoice but will not refund or reverse any existing payments.'
+      : paidAmount > 0
+        ? 'This invoice has received a partial payment. Cancelling it will restore inventory and cancel the invoice but will not refund or reverse any existing payments.'
+        : 'This voids the invoice, restores stock for product items, and keeps the record for history.';
+
+  const requestCancel = () => setCancelling(true);
   const requestDelete = () => {
-    if (hasPayments) {
+    if (!canDelete) {
       showDialog({
         title: 'Cannot delete invoice',
-        message: 'This invoice has recorded payments. Refund or reverse them first, then delete only if this was test data or an accidental duplicate.',
+        message:
+          'This invoice cannot be deleted because it has associated payments or inventory/accounting transactions. Please cancel the invoice instead.',
         tone: 'error'
       });
       return;
@@ -304,7 +347,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
           <View key={item._id || `${item.name}-${index}`} style={[styles.itemRow, index < invoice.items.length - 1 && { borderBottomWidth: 1, borderColor: cardBorder }]}>
             <View style={styles.itemContent}>
               <Text style={[styles.itemName, { color: theme.colors.onSurface }]}>{item.name}</Text>
-              <Text style={[styles.itemMeta, { color: theme.colors.onSurfaceVariant }]}>{item.quantity} × {formatCurrency(item.price)}</Text>
+              <Text style={[styles.itemMeta, { color: theme.colors.onSurfaceVariant }]}>{item.quantity}{item.unit ? ` ${item.unit}` : ''} × {formatCurrency(item.price)}</Text>
             </View>
             <Text style={[styles.itemTotal, { color: theme.colors.onSurface }]}>{formatCurrency(item.total)}</Text>
           </View>
@@ -397,7 +440,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
       </View>
 
       <View style={styles.footerActions}>
-        {canUpdateInvoice && !isCancelled ? (
+        {canUpdateInvoice && canCancel ? (
           <Button
             mode="outlined"
             textColor={theme.colors.error}
@@ -408,11 +451,12 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
             Cancel
           </Button>
         ) : null}
-        {canDeleteInvoice ? (
+        {canDeleteInvoice && !isCancelled ? (
           <Button
             mode="contained"
             buttonColor={theme.colors.error}
             textColor={theme.colors.onError}
+            disabled={!canDelete}
             icon={({ size, color }) => <Feather name="trash-2" size={size} color={color} />}
             onPress={requestDelete}
             style={styles.footerButton}
@@ -436,9 +480,10 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
       <RecordPaymentSheet
         visible={paymentOpen}
         balanceDue={balanceDue}
+        previousDues={previousDues}
         loading={recordPayment.isPending}
         onClose={() => setPaymentOpen(false)}
-        onSubmit={(payload) => recordPayment.mutate(payload)}
+        onSubmit={(payload, settlePreviousDues) => recordPayment.mutate({ payload, settlePreviousDues, invoiceIds: settleInvoiceIds })}
       />
       <PaymentHistorySheet
         visible={historyOpen}
@@ -447,7 +492,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
         onClose={() => setHistoryOpen(false)}
       />
 
-      <ConfirmDialog visible={cancelling} title="Cancel invoice?" message="This voids the invoice, restores stock for product items, and keeps the record for history." confirmLabel="Cancel invoice" onCancel={() => setCancelling(false)} onConfirm={() => cancelInvoice.mutate()} />
+      <ConfirmDialog visible={cancelling} title="Cancel invoice?" message={cancelMessage} confirmLabel="Cancel invoice" onCancel={() => setCancelling(false)} onConfirm={() => cancelInvoice.mutate()} />
       <ConfirmDialog visible={deleting} title="Delete invoice?" message="This permanently removes the invoice. Use delete only for test data or accidental duplicates with no recorded payments." onCancel={() => setDeleting(false)} onConfirm={() => remove.mutate()} />
     </Screen>
   );

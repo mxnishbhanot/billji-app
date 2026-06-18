@@ -1,7 +1,8 @@
 import { Customer, CustomerFormValues, CustomItemFormValues, DiscountType, InvoiceCreatePayload, InvoiceDraftPayload, InvoiceItem, Product, StockShortage } from '@/types';
+import { DEFAULT_UNIT } from '@/constants/units';
 
 export const customerDefaults: CustomerFormValues = { name: '', phone: '', countryCode: '+91', email: '', address: '' };
-export const customItemDefaults: CustomItemFormValues = { name: '', price: '', quantity: '1' };
+export const customItemDefaults: CustomItemFormValues = { name: '', price: '', quantity: '1', unit: DEFAULT_UNIT };
 
 export const initials = (name: string) => {
   const parts = name.trim().split(/\s+/).slice(0, 2);
@@ -43,6 +44,7 @@ export const customItemFromForm = (values: CustomItemFormValues): InvoiceItem =>
   name: values.name,
   price: Number(values.price),
   quantity: Number(values.quantity || 1),
+  unit: values.unit || DEFAULT_UNIT,
   isCustom: true
 });
 

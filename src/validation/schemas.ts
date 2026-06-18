@@ -4,9 +4,9 @@ import { isValidGstin } from '@/utils/gstin';
 export const loginSchema = z.object({ email: z.email('Enter a valid email'), password: z.string().min(1, 'Password is required') });
 export const registerSchema = z.object({ name: z.string().trim().min(1, 'Name is required').max(80), email: z.email('Enter a valid email'), password: z.string().min(8, 'Use 8+ characters') });
 export const customerSchema = z.object({ name: z.string().trim().min(1, 'Customer name is required').max(120), phone: z.string().trim().regex(/^\d{10}$/, 'Phone must be exactly 10 digits'), countryCode: z.string().default('+91'), email: z.union([z.literal(''), z.email('Enter a valid email')]).optional(), address: z.string().max(500).optional() });
-export const productSchema = z.object({ name: z.string().trim().min(1, 'Product name is required').max(120), price: z.string().min(1, 'Price is required'), stockQuantity: z.string().min(1, 'Stock is required'), sku: z.string().max(64).optional(), category: z.string().max(80).optional(), lowStockThreshold: z.string().optional() });
+export const productSchema = z.object({ name: z.string().trim().min(1, 'Product name is required').max(120), price: z.string().min(1, 'Price is required'), stockQuantity: z.string().min(1, 'Stock is required'), sku: z.string().max(64).optional(), category: z.string().max(80).optional(), unit: z.string().max(24).optional(), lowStockThreshold: z.string().optional() });
 export const emailSchema = z.object({ email: z.email('Enter a valid email') });
-export const customItemSchema = z.object({ name: z.string().trim().min(1, 'Item name is required').max(120), price: z.string().min(1, 'Price is required'), quantity: z.string().min(1, 'Quantity is required') });
+export const customItemSchema = z.object({ name: z.string().trim().min(1, 'Item name is required').max(120), price: z.string().min(1, 'Price is required'), quantity: z.string().min(1, 'Quantity is required'), unit: z.string().max(24) });
 export const settingsSchema = z.object({
   businessName: z.string().trim().min(1, 'Business name is required').max(120),
   phone: z.union([z.literal(''), z.string().regex(/^\d{10}$/, 'Phone must be exactly 10 digits')]).optional(),

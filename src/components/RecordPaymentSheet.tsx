@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { Feather } from '@expo/vector-icons';
-import { Text, TextInput, useTheme } from 'react-native-paper';
+import { Switch, Text, TextInput, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PaymentMethodChips } from '@/components/PaymentMethodChips';
+import { splitDuesPayment } from '@/features/invoices/components/InvoiceBuilderParts';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
 import { PaymentMethod, RecordPaymentPayload } from '@/types';
 import { formatCurrency } from '@/utils/format';
@@ -12,12 +13,15 @@ import { formatCurrency } from '@/utils/format';
 type Props = {
   visible: boolean;
   balanceDue: number;
+  // Outstanding on the customer's OTHER unpaid invoices (excludes this one). When > 0,
+  // the sheet offers a switch to settle those oldest-first alongside this invoice.
+  previousDues?: number;
   loading?: boolean;
   onClose: () => void;
-  onSubmit: (payload: RecordPaymentPayload) => void;
+  onSubmit: (payload: RecordPaymentPayload, settlePreviousDues: boolean) => void;
 };
 
-export function RecordPaymentSheet({ visible, balanceDue, loading, onClose, onSubmit }: Props) {
+export function RecordPaymentSheet({ visible, balanceDue, previousDues = 0, loading, onClose, onSubmit }: Props) {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
@@ -28,7 +32,10 @@ export function RecordPaymentSheet({ visible, balanceDue, loading, onClose, onSu
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
+  const [settleDues, setSettleDues] = useState(false);
   const [wasVisible, setWasVisible] = useState(false);
+
+  const hasPreviousDues = previousDues > 0;
 
   // Reset the form on the closed -> open transition (render-phase state adjustment).
   if (visible && !wasVisible) {
@@ -37,9 +44,18 @@ export function RecordPaymentSheet({ visible, balanceDue, loading, onClose, onSu
     setMethod('cash');
     setReference('');
     setNotes('');
+    setSettleDues(false);
   } else if (!visible && wasVisible) {
     setWasVisible(false);
   }
+
+  // Toggling "also settle previous dues" defaults the amount to clear everything
+  // (this invoice + all previous dues); turning it off reverts to this invoice only.
+  const toggleSettleDues = (value: boolean) => {
+    setSettleDues(value);
+    const target = value ? balanceDue + previousDues : balanceDue;
+    setAmount(target > 0 ? String(Math.round(target * 100) / 100) : '');
+  };
 
   useEffect(() => {
     Animated.parallel(
@@ -60,10 +76,12 @@ export function RecordPaymentSheet({ visible, balanceDue, loading, onClose, onSu
 
   const submit = () => {
     if (!canSubmit) return;
-    onSubmit({ amount: numericAmount, method, reference: reference.trim() || undefined, notes: notes.trim() || undefined });
+    onSubmit({ amount: numericAmount, method, reference: reference.trim() || undefined, notes: notes.trim() || undefined }, settleDues && hasPreviousDues);
   };
 
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.1);
+  // Preview how the entered amount splits when settling previous dues (oldest-first), mirroring the server.
+  const split = settleDues && hasPreviousDues ? splitDuesPayment(numericAmount, previousDues, balanceDue) : null;
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
@@ -90,6 +108,16 @@ export function RecordPaymentSheet({ visible, balanceDue, loading, onClose, onSu
           </View>
 
           <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            {hasPreviousDues ? (
+              <View style={[styles.duesRow, { borderColor: cardBorder }]}>
+                <View style={styles.duesText}>
+                  <Text style={[styles.duesLabel, { color: theme.colors.onSurface }]}>Also settle previous dues</Text>
+                  <Text style={[styles.duesSub, { color: theme.colors.onSurfaceVariant }]}>{formatCurrency(previousDues)} on earlier invoices</Text>
+                </View>
+                <Switch value={settleDues} onValueChange={toggleSettleDues} color={theme.colors.primary} />
+              </View>
+            ) : null}
+
             <TextInput
               mode="outlined"
               label="Amount"
@@ -102,6 +130,31 @@ export function RecordPaymentSheet({ visible, balanceDue, loading, onClose, onSu
 
             <Text style={[styles.fieldLabel, { color: theme.colors.onSurfaceVariant }]}>METHOD</Text>
             <PaymentMethodChips value={method} onChange={setMethod} borderColor={cardBorder} />
+
+            {split ? (
+              <View style={[styles.splitPanel, { backgroundColor: alpha(colors.primary, isDark ? 0.12 : 0.06), borderColor: cardBorder }]}>
+                <View style={styles.splitRow}>
+                  <Text style={[styles.splitLabel, { color: theme.colors.onSurfaceVariant }]}>To previous dues</Text>
+                  <Text style={[styles.splitValue, { color: theme.colors.onSurface }]}>{formatCurrency(split.toDues)}</Text>
+                </View>
+                <View style={styles.splitRow}>
+                  <Text style={[styles.splitLabel, { color: theme.colors.onSurfaceVariant }]}>To this invoice</Text>
+                  <Text style={[styles.splitValue, { color: theme.colors.onSurface }]}>{formatCurrency(split.toInvoice)}</Text>
+                </View>
+                {split.invoiceRemaining > 0 ? (
+                  <View style={styles.splitRow}>
+                    <Text style={[styles.splitLabel, { color: theme.colors.onSurfaceVariant }]}>This invoice still due</Text>
+                    <Text style={[styles.splitValue, { color: theme.colors.onSurface }]}>{formatCurrency(split.invoiceRemaining)}</Text>
+                  </View>
+                ) : null}
+                {split.credit > 0 ? (
+                  <View style={styles.splitRow}>
+                    <Text style={[styles.splitLabel, { color: theme.colors.onSurfaceVariant }]}>Customer credit</Text>
+                    <Text style={[styles.splitValue, { color: theme.colors.primary }]}>{formatCurrency(split.credit)}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
 
             <TextInput mode="outlined" label="Reference (optional)" value={reference} onChangeText={setReference} style={styles.input} />
             <TextInput mode="outlined" label="Notes (optional)" value={notes} onChangeText={setNotes} multiline style={styles.input} />
@@ -133,6 +186,14 @@ const styles = StyleSheet.create({
   balanceChip: { borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },
   balanceChipText: { ...fontStyles.bold, fontSize: 11.5 },
   fieldLabel: { ...fontStyles.bold, fontSize: 11, letterSpacing: 1.2, marginBottom: 10, marginTop: 16 },
+  duesRow: { alignItems: 'center', borderRadius: radii.lg, borderWidth: 1, flexDirection: 'row', gap: 12, justifyContent: 'space-between', marginTop: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  duesText: { flex: 1, minWidth: 0 },
+  duesLabel: { ...fontStyles.semiBold, fontSize: 14 },
+  duesSub: { ...fontStyles.medium, fontSize: 12, marginTop: 2 },
+  splitPanel: { borderRadius: radii.lg, borderWidth: 1, gap: 8, marginTop: 16, padding: 14 },
+  splitRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  splitLabel: { ...fontStyles.medium, fontSize: 13 },
+  splitValue: { ...fontStyles.semiBold, fontSize: 13 },
   fill: { flex: 1, justifyContent: 'flex-end' },
   grabber: { alignItems: 'center', paddingTop: 8 },
   grabberBar: { borderRadius: radii.pill, height: 4, width: 38 },

@@ -11,6 +11,8 @@ import { useAppDialog } from '@/components/AppDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { FormTextInput } from '@/components/FormTextInput';
+import { UnitInput } from '@/components/UnitInput';
+import { DEFAULT_UNIT } from '@/constants/units';
 import { ProductHistorySheet } from '@/components/ProductHistorySheet';
 import {
   ProductFilterSheet,
@@ -32,7 +34,7 @@ import { formatCurrency, formatDate } from '@/utils/format';
 import { productSchema } from '@/validation/schemas';
 
 const PAGE_SIZE = 10;
-const blankProduct = { name: '', price: '', stockQuantity: '', sku: '', category: '', lowStockThreshold: '5' };
+const blankProduct = { name: '', price: '', stockQuantity: '', sku: '', category: '', unit: DEFAULT_UNIT, lowStockThreshold: '5' };
 type ProductFilters = ProductFilterValues & { search: string };
 const emptyProductFilters: ProductFilters = { search: '', ...defaultProductFilterValues };
 
@@ -260,7 +262,7 @@ export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
 
   useEffect(() => {
     if (editing === undefined) return;
-    form.reset(editing ? { name: editing.name, price: String(editing.price), stockQuantity: String(editing.stockQuantity), sku: editing.sku || '', category: editing.category || '', lowStockThreshold: String(editing.lowStockThreshold ?? 5) } : blankProduct);
+    form.reset(editing ? { name: editing.name, price: String(editing.price), stockQuantity: String(editing.stockQuantity), sku: editing.sku || '', category: editing.category || '', unit: editing.unit || DEFAULT_UNIT, lowStockThreshold: String(editing.lowStockThreshold ?? 5) } : blankProduct);
   }, [editing, form]);
 
   const loadMoreProducts = () => {
@@ -419,7 +421,7 @@ export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
       />
       <Portal>
         <Dialog visible={editing !== undefined} onDismiss={() => setEditing(undefined)}><Dialog.Title>{editing?._id ? 'Edit product' : 'Add product'}</Dialog.Title><Dialog.Content>
-          <FormTextInput control={form.control} name="name" label="Name" /><FormTextInput control={form.control} name="price" label="Price" keyboardType="decimal-pad" /><FormTextInput control={form.control} name="stockQuantity" label="Stock" keyboardType="number-pad" /><FormTextInput control={form.control} name="sku" label="SKU" /><FormTextInput control={form.control} name="category" label="Category" /><FormTextInput control={form.control} name="lowStockThreshold" label="Low stock alert" keyboardType="number-pad" />
+          <FormTextInput control={form.control} name="name" label="Name" /><FormTextInput control={form.control} name="price" label="Price" keyboardType="decimal-pad" /><FormTextInput control={form.control} name="stockQuantity" label="Stock" keyboardType="number-pad" /><FormTextInput control={form.control} name="sku" label="SKU" /><FormTextInput control={form.control} name="category" label="Category" /><FormTextInput control={form.control} name="lowStockThreshold" label="Low stock alert" keyboardType="number-pad" /><UnitInput value={form.watch('unit') || DEFAULT_UNIT} onChange={(value) => form.setValue('unit', value)} cardBorder={theme.colors.outlineVariant} inputBackground={theme.colors.surface} />
         </Dialog.Content><Dialog.Actions><Button onPress={() => setEditing(undefined)}>Cancel</Button><Button loading={save.isPending} onPress={form.handleSubmit((values) => save.mutate(values))}>Save</Button></Dialog.Actions></Dialog>
       </Portal>
       <ProductHistorySheet

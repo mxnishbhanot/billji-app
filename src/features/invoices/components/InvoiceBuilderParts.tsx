@@ -2,16 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput as RNTextInput, View } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { UseFormReturn } from 'react-hook-form';
-import { Button, Dialog, List, Portal, Switch, Text, TextInput, Tooltip, useTheme } from 'react-native-paper';
+import { Button, Dialog, List, Portal, Text, TextInput, Tooltip, useTheme } from 'react-native-paper';
 import { CustomerPickerSheet } from '@/components/CustomerPickerSheet';
 import { FormTextInput } from '@/components/FormTextInput';
-import { PaymentMethodChips } from '@/components/PaymentMethodChips';
 import { PhoneInput } from '@/components/PhoneInput';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
-import { Customer, CustomerFormValues, CustomerOutstanding, CustomItemFormValues, DiscountType, DraftDocument, InvoiceDraftPayload, InvoiceItem, PaymentMethod, Product, StockShortage } from '@/types';
+import { Customer, CustomerFormValues, CustomItemFormValues, DiscountType, DraftDocument, InvoiceDraftPayload, InvoiceItem, Product, StockShortage } from '@/types';
 import { formatCurrency } from '@/utils/format';
 import { customItemDefaults, customItemFromForm, initials } from '../services/invoiceBuilderService';
 import { MoneyInput, QuantityInput } from './FormInputs';
+import { UnitInput } from '@/components/UnitInput';
+import { DEFAULT_UNIT } from '@/constants/units';
 
 const VISIBLE_PRODUCT_ROWS = 5;
 const VISIBLE_INVOICE_ITEM_ROWS = 5;
@@ -332,7 +333,7 @@ export function InvoiceItemsEditor({
               <View style={styles.itemHeader}>
                 <View style={styles.flexContent}>
                   <Text style={[styles.itemName, { color: theme.colors.onSurface }]}>{item.name}</Text>
-                  <Text style={[styles.itemMeta, { color: theme.colors.onSurfaceVariant }]}>{item.quantity} x {formatCurrency(item.price)}</Text>
+                  <Text style={[styles.itemMeta, { color: theme.colors.onSurfaceVariant }]}>{item.quantity}{item.unit ? ` ${item.unit}` : ''} x {formatCurrency(item.price)}</Text>
                 </View>
                 <Text style={[styles.itemTotal, { color: theme.colors.onSurface }]}>{formatCurrency(item.quantity * item.price)}</Text>
               </View>
@@ -464,101 +465,12 @@ export function TotalsExtrasCard({
 }
 
 // Mirror of the server's greedy allocation: fill previous dues first, then this invoice; leftover is credit.
-const splitDuesPayment = (amount: number, previousDues: number, invoiceTotal: number) => {
+export const splitDuesPayment = (amount: number, previousDues: number, invoiceTotal: number) => {
   const toDues = Math.min(amount, previousDues);
   const toInvoice = Math.min(amount - toDues, invoiceTotal);
   const credit = Math.max(amount - toDues - toInvoice, 0);
   return { toDues, toInvoice, credit, invoiceRemaining: Math.max(invoiceTotal - toInvoice, 0) };
 };
-
-export function PreviousDuesCard({
-  outstanding,
-  invoiceTotal,
-  collectDues,
-  onToggle,
-  amount,
-  onAmountChange,
-  method,
-  onMethodChange,
-  cardBorder,
-  colors,
-  inputBackground,
-  subSurface
-}: {
-  outstanding: CustomerOutstanding;
-  invoiceTotal: number;
-  collectDues: boolean;
-  onToggle: (value: boolean) => void;
-  amount: string;
-  onAmountChange: (value: string) => void;
-  method: PaymentMethod;
-  onMethodChange: (method: PaymentMethod) => void;
-  cardBorder: string;
-  colors: ColorSet;
-  inputBackground: string;
-  subSurface: string;
-}) {
-  const theme = useTheme();
-
-  if (outstanding.totalOutstanding <= 0) return null;
-
-  const split = splitDuesPayment(Number(amount || 0), outstanding.totalOutstanding, invoiceTotal);
-
-  return (
-    <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
-      <View style={styles.sectionHead}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Previous dues</Text>
-        <View style={[styles.balanceChip, { backgroundColor: alpha(colors.warning ?? theme.colors.primary, theme.dark ? 0.24 : 0.14) }]}>
-          <Text style={[styles.balanceChipText, { color: colors.warning ?? theme.colors.primary }]}>{formatCurrency(outstanding.totalOutstanding)} due</Text>
-        </View>
-      </View>
-
-      <View style={styles.duesToggleRow}>
-        <Text style={[styles.duesToggleLabel, { color: theme.colors.onSurface }]}>Collect previous dues</Text>
-        <Switch value={collectDues} onValueChange={onToggle} color={theme.colors.primary} />
-      </View>
-
-      {collectDues ? (
-        <>
-          <MoneyInput
-            cardBorder={cardBorder}
-            inputBackground={inputBackground}
-            label={`Amount collected (${formatCurrency(outstanding.totalOutstanding)} due)`}
-            value={amount}
-            onChangeText={onAmountChange}
-            activeOutlineColor={theme.colors.primary}
-            style={{ marginTop: 10 }}
-          />
-          <Text style={[styles.fieldLabel, { color: theme.colors.onSurfaceVariant }]}>METHOD</Text>
-          <PaymentMethodChips value={method} onChange={onMethodChange} borderColor={cardBorder} />
-
-          <View style={[styles.totalsPanel, { backgroundColor: subSurface, borderColor: cardBorder }]}>
-            <View style={styles.totalRow}>
-              <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>To previous dues</Text>
-              <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>{formatCurrency(split.toDues)}</Text>
-            </View>
-            <View style={styles.totalRow}>
-              <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>To this invoice</Text>
-              <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>{formatCurrency(split.toInvoice)}</Text>
-            </View>
-            {split.invoiceRemaining > 0 ? (
-              <View style={styles.totalRow}>
-                <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>This invoice still due</Text>
-                <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>{formatCurrency(split.invoiceRemaining)}</Text>
-              </View>
-            ) : null}
-            {split.credit > 0 ? (
-              <View style={styles.totalRow}>
-                <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>Customer credit</Text>
-                <Text style={[styles.totalValue, { color: theme.colors.primary }]}>{formatCurrency(split.credit)}</Text>
-              </View>
-            ) : null}
-          </View>
-        </>
-      ) : null}
-    </View>
-  );
-}
 
 export function InvoiceBuilderDialogs({
   addCustomerLoading,
@@ -675,6 +587,7 @@ export function InvoiceBuilderDialogs({
           <FormTextInput control={customForm.control} name="name" label="Name" />
           <MoneyInput cardBorder={theme.colors.outlineVariant} inputBackground={theme.colors.surface} label="Price" value={customForm.watch('price')} onChangeText={(value) => customForm.setValue('price', value)} activeOutlineColor={theme.colors.primary} />
           <QuantityInput cardBorder={theme.colors.outlineVariant} inputBackground={theme.colors.surface} label="Quantity" value={customForm.watch('quantity')} onChangeText={(value) => customForm.setValue('quantity', value)} activeOutlineColor={theme.colors.primary} />
+          <UnitInput value={customForm.watch('unit') || DEFAULT_UNIT} onChange={(value) => customForm.setValue('unit', value)} cardBorder={theme.colors.outlineVariant} inputBackground={theme.colors.surface} />
         </Dialog.Content>
         <Dialog.Actions>
           <Button onPress={onCloseCustomModal}>Cancel</Button>
