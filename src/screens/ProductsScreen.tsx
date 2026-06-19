@@ -4,14 +4,13 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Button, Dialog, Portal, Text, useTheme } from 'react-native-paper';
+import { Text, useTheme } from 'react-native-paper';
 import { productsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
-import { FormTextInput } from '@/components/FormTextInput';
-import { UnitInput } from '@/components/UnitInput';
+import { ProductFormSheet } from '@/components/ProductFormSheet';
 import { DEFAULT_UNIT } from '@/constants/units';
 import { ProductHistorySheet } from '@/components/ProductHistorySheet';
 import {
@@ -419,11 +418,16 @@ export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
         ListFooterComponent={renderProductsFooter}
         renderItem={renderProductCard}
       />
-      <Portal>
-        <Dialog visible={editing !== undefined} onDismiss={() => setEditing(undefined)}><Dialog.Title>{editing?._id ? 'Edit product' : 'Add product'}</Dialog.Title><Dialog.Content>
-          <FormTextInput control={form.control} name="name" label="Name" /><FormTextInput control={form.control} name="price" label="Price" keyboardType="decimal-pad" /><FormTextInput control={form.control} name="stockQuantity" label="Stock" keyboardType="number-pad" /><FormTextInput control={form.control} name="sku" label="SKU" /><FormTextInput control={form.control} name="category" label="Category" /><FormTextInput control={form.control} name="lowStockThreshold" label="Low stock alert" keyboardType="number-pad" /><UnitInput value={form.watch('unit') || DEFAULT_UNIT} onChange={(value) => form.setValue('unit', value)} cardBorder={theme.colors.outlineVariant} inputBackground={theme.colors.surface} />
-        </Dialog.Content><Dialog.Actions><Button onPress={() => setEditing(undefined)}>Cancel</Button><Button loading={save.isPending} onPress={form.handleSubmit((values) => save.mutate(values))}>Save</Button></Dialog.Actions></Dialog>
-      </Portal>
+      <ProductFormSheet
+        visible={editing !== undefined}
+        isEdit={Boolean(editing?._id)}
+        form={form}
+        categories={categoriesQuery.data ?? []}
+        categoriesLoading={categoriesQuery.isLoading}
+        saving={save.isPending}
+        onSubmit={form.handleSubmit((values) => save.mutate(values))}
+        onClose={() => setEditing(undefined)}
+      />
       <ProductHistorySheet
         visible={Boolean(historyProduct)}
         product={historyProduct}
