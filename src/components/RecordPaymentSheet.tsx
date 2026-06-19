@@ -71,8 +71,26 @@ export function RecordPaymentSheet({ visible, balanceDue, previousDues = 0, load
     ).start();
   }, [visible, translateY, backdropOpacity]);
 
+  // Hard cap: this invoice's due, or due + previous dues when settling those too.
+  // Prevents recording a payment larger than what is actually owed.
+  const maxAmount = Math.round((settleDues && hasPreviousDues ? balanceDue + previousDues : balanceDue) * 100) / 100;
+
+  // Keep only digits + a single decimal point, then clamp to maxAmount.
+  const onChangeAmount = (text: string) => {
+    let cleaned = text.replace(/[^0-9.]/g, '');
+    const parts = cleaned.split('.');
+    if (parts.length > 2) cleaned = `${parts[0]}.${parts.slice(1).join('')}`;
+    if (cleaned === '' || cleaned === '.') {
+      setAmount(cleaned);
+      return;
+    }
+    const value = Number(cleaned);
+    if (Number.isFinite(value) && maxAmount > 0 && value > maxAmount) cleaned = String(maxAmount);
+    setAmount(cleaned);
+  };
+
   const numericAmount = Number(amount || 0);
-  const canSubmit = numericAmount > 0 && !loading;
+  const canSubmit = numericAmount > 0 && numericAmount <= maxAmount && !loading;
 
   const submit = () => {
     if (!canSubmit) return;
@@ -123,10 +141,13 @@ export function RecordPaymentSheet({ visible, balanceDue, previousDues = 0, load
               label="Amount"
               keyboardType="decimal-pad"
               value={amount}
-              onChangeText={setAmount}
+              onChangeText={onChangeAmount}
               left={<TextInput.Icon icon="currency-inr" />}
               style={styles.input}
             />
+            {maxAmount > 0 ? (
+              <Text style={[styles.amountHint, { color: theme.colors.onSurfaceVariant }]}>Maximum {formatCurrency(maxAmount)}</Text>
+            ) : null}
 
             <Text style={[styles.fieldLabel, { color: theme.colors.onSurfaceVariant }]}>METHOD</Text>
             <PaymentMethodChips value={method} onChange={setMethod} borderColor={cardBorder} />
@@ -183,6 +204,7 @@ export function RecordPaymentSheet({ visible, balanceDue, previousDues = 0, load
 }
 
 const styles = StyleSheet.create({
+  amountHint: { ...fontStyles.medium, fontSize: 11.5, marginLeft: 4, marginTop: 6 },
   balanceChip: { borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },
   balanceChipText: { ...fontStyles.bold, fontSize: 11.5 },
   fieldLabel: { ...fontStyles.bold, fontSize: 11, letterSpacing: 1.2, marginBottom: 10, marginTop: 16 },

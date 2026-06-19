@@ -14,6 +14,7 @@ import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
 import { BrandLogoSheet } from '@/components/BrandLogoSheet';
 import { BrandMark } from '@/components/BrandMark';
+import { SecuritySessionsSheet } from '@/components/SecuritySessionsSheet';
 import { Screen } from '@/components/Screen';
 import { AppNavigation } from '@/navigation/types';
 import { disconnectSocket } from '@/services/socket';
@@ -24,7 +25,7 @@ import { BusinessProfileFormValues } from '@/types';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { settingsSchema } from '@/validation/schemas';
 
-type SettingsPanel = 'account' | 'security' | null;
+type SettingsPanel = 'account' | null;
 type SettingsRowProps = {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   title: string;
@@ -210,6 +211,7 @@ export function SettingsScreen() {
   const canViewActivity = can(PERMISSION.settingsManage);
   const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
   const [brandSheetVisible, setBrandSheetVisible] = useState(false);
+  const [sessionsSheetVisible, setSessionsSheetVisible] = useState(false);
   const [themeSaving, setThemeSaving] = useState(false);
   const form = useForm<BusinessProfileFormValues>({ defaultValues: { businessName: '', invoicePrefix: 'INV', theme: 'light', ...(user?.businessProfile || {}) }, resolver: zodResolver(settingsSchema) });
   const selectedTheme = useWatch({ control: form.control, name: 'theme' }) || 'light';
@@ -234,7 +236,7 @@ export function SettingsScreen() {
     },
     onError: (error) => showDialog({ title: 'Could not save settings', message: apiErrorMessage(error), tone: 'error' })
   });
-  const sessionsQuery = useQuery({ queryKey: queryKeys.auth.sessions, queryFn: authApi.sessions, enabled: activePanel === 'security' });
+  const sessionsQuery = useQuery({ queryKey: queryKeys.auth.sessions, queryFn: authApi.sessions, enabled: sessionsSheetVisible });
   const revokeSession = useMutation({
     mutationFn: authApi.revokeSession,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.auth.sessions }),
@@ -349,29 +351,6 @@ export function SettingsScreen() {
       );
     }
 
-    if (activePanel === 'security') {
-      return (
-        <>
-          <Dialog.Title>Security & Sessions</Dialog.Title>
-          <Dialog.ScrollArea>
-            <Animated.ScrollView contentContainerStyle={styles.dialogScrollContent}>
-              {sessionsQuery.isLoading ? <ActivityIndicator color={theme.colors.primary} /> : null}
-              {sessionsQuery.data?.map((session) => (
-                <View key={session.id} style={[styles.readOnlyBox, { backgroundColor: isDark ? colors.surface : alpha(colors.primaryStrong, 0.04), borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), marginBottom: 10 }]}>
-                  <Text style={[styles.readOnlyLabel, { color: theme.colors.onSurfaceVariant }]}>{session.current ? 'Current session' : 'Active session'}</Text>
-                  <Text numberOfLines={2} style={[styles.readOnlyValue, { color: theme.colors.onSurface }]}>{session.userAgent || 'Unknown device'}</Text>
-                  <Text style={[styles.readOnlyHint, { color: theme.colors.onSurfaceVariant }]}>Last used {session.lastUsedAt ? new Date(session.lastUsedAt).toLocaleString() : 'recently'}{session.ipAddress ? ` · ${session.ipAddress}` : ''}</Text>
-                  {!session.current ? <Button compact loading={revokeSession.isPending} onPress={() => revokeSession.mutate(session.id)}>Revoke</Button> : null}
-                </View>
-              ))}
-              {!sessionsQuery.isLoading && !sessionsQuery.data?.length ? <Text style={{ color: theme.colors.onSurfaceVariant }}>No active sessions found.</Text> : null}
-            </Animated.ScrollView>
-          </Dialog.ScrollArea>
-          <Dialog.Actions><Button onPress={closePanel}>Close</Button></Dialog.Actions>
-        </>
-      );
-    }
-
     return null;
   };
 
@@ -466,7 +445,7 @@ export function SettingsScreen() {
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow icon="account-circle-outline" title="Login Account" subtitle={user?.email || 'Signed in'} tone={colors.primary} onPress={() => setActivePanel('account')} />
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
-        <SettingsRow icon="shield-key-outline" title="Security & Sessions" subtitle="Manage active sessions" tone={colors.warning} onPress={() => setActivePanel('security')} />
+        <SettingsRow icon="shield-key-outline" title="Security & Sessions" subtitle="See where you're signed in" tone={colors.warning} onPress={() => setSessionsSheetVisible(true)} />
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow
           icon="logout"
@@ -485,6 +464,15 @@ export function SettingsScreen() {
           {renderPanel()}
         </Dialog>
       </Portal>
+
+      <SecuritySessionsSheet
+        visible={sessionsSheetVisible}
+        sessions={sessionsQuery.data}
+        loading={sessionsQuery.isLoading}
+        revokingId={revokeSession.isPending ? revokeSession.variables : null}
+        onRevoke={(id) => revokeSession.mutate(id)}
+        onClose={() => setSessionsSheetVisible(false)}
+      />
 
       <BrandLogoSheet
         visible={brandSheetVisible}

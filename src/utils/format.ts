@@ -30,6 +30,32 @@ export const formatRelativeTime = (value?: string | Date | null) => {
   return relativeFallbackDate.format(new Date(value));
 };
 
+// Turn a raw browser/app user-agent string into a friendly device label people can
+// recognise (e.g. "iPhone · Safari"), plus a Feather icon name for the device kind.
+export const describeDevice = (userAgent?: string | null): { name: string; icon: 'smartphone' | 'tablet' | 'monitor' | 'help-circle' } => {
+  const ua = (userAgent || '').toLowerCase();
+  if (!ua) return { name: 'Unknown device', icon: 'help-circle' };
+
+  let os = '';
+  let icon: 'smartphone' | 'tablet' | 'monitor' | 'help-circle' = 'monitor';
+  if (/ipad/.test(ua)) { os = 'iPad'; icon = 'tablet'; }
+  else if (/iphone|ipod/.test(ua)) { os = 'iPhone'; icon = 'smartphone'; }
+  else if (/android/.test(ua)) { os = /mobile/.test(ua) ? 'Android phone' : 'Android'; icon = /mobile/.test(ua) ? 'smartphone' : 'tablet'; }
+  else if (/windows/.test(ua)) { os = 'Windows PC'; icon = 'monitor'; }
+  else if (/mac os x|macintosh/.test(ua)) { os = 'Mac'; icon = 'monitor'; }
+  else if (/linux/.test(ua)) { os = 'Linux'; icon = 'monitor'; }
+
+  let app = '';
+  if (/billji|expo|okhttp|cfnetwork/.test(ua)) app = 'Billji app';
+  else if (/edg\//.test(ua)) app = 'Edge';
+  else if (/crios|chrome/.test(ua)) app = 'Chrome';
+  else if (/fxios|firefox/.test(ua)) app = 'Firefox';
+  else if (/safari/.test(ua)) app = 'Safari';
+
+  const name = [os, app].filter(Boolean).join(' · ');
+  return { name: name || 'Unknown device', icon };
+};
+
 export const calculateClientTotals = ({ items, taxRate = 0, discountType = 'flat', discountValue = 0 }: { items: InvoiceItem[]; taxRate?: number; discountType?: DiscountType; discountValue?: number }) => {
   const subtotal = roundMoney(items.reduce((sum, item) => sum + roundMoney(Number(item.quantity || 0) * Number(item.price || 0)), 0));
   const discount = discountType === 'percentage' ? subtotal * (Number(discountValue || 0) / 100) : Number(discountValue || 0);

@@ -9,7 +9,20 @@ import { Screen } from '@/components/Screen';
 import { InvoicePreviewScreenProps } from '@/navigation/types';
 import { radii } from '@/theme/theme';
 
-const A4_RATIO = 794 / 1123;
+const A4_PAGE_WIDTH = 794;
+const A4_RATIO = A4_PAGE_WIDTH / 1123;
+
+// The PDF template is a fixed 794px-wide A4 page. WebView has no viewport meta of
+// its own, so it renders the page at full width and the user sees it zoomed in.
+// Inject a viewport that pins the content width to 794 so WebView scales the whole
+// page down to fit the device. Replace any existing viewport to avoid conflicts.
+const VIEWPORT_TAG = `<meta name="viewport" content="width=${A4_PAGE_WIDTH}, initial-scale=1, maximum-scale=1, user-scalable=no">`;
+function withFittedViewport(html: string) {
+  const stripped = html.replace(/<meta[^>]*name=["']viewport["'][^>]*>/i, '');
+  if (/<head[^>]*>/i.test(stripped)) return stripped.replace(/<head[^>]*>/i, (head) => `${head}${VIEWPORT_TAG}`);
+  if (/<html[^>]*>/i.test(stripped)) return stripped.replace(/<html[^>]*>/i, (tag) => `${tag}<head>${VIEWPORT_TAG}</head>`);
+  return `${VIEWPORT_TAG}${stripped}`;
+}
 
 function PreviewSurface({ html, frameWidth }: { html: string; frameWidth: number }) {
   if (Platform.OS === 'web') {
@@ -32,7 +45,7 @@ function PreviewSurface({ html, frameWidth }: { html: string; frameWidth: number
   return (
     <WebView
       originWhitelist={['*']}
-      source={{ html }}
+      source={{ html: withFittedViewport(html) }}
       style={styles.webview}
       scrollEnabled
       showsVerticalScrollIndicator={false}
