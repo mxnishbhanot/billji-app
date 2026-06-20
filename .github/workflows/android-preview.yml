@@ -1,0 +1,48 @@
+name: Android Preview Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      keep:
+        description: "How many recent builds to keep"
+        required: false
+        default: "2"
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: android-preview
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build & Prune
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      KEEP: ${{ github.event.inputs.keep || '2' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Android preview (APK)
+        run: eas build --platform android --profile preview --non-interactive --wait
+
+      - name: Prune old builds (keep last $KEEP)
+        run: node ./scripts/prune-builds.mjs --platform android --profile preview --keep "$KEEP"
