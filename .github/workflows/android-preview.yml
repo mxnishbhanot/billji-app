@@ -15,16 +15,23 @@ concurrency:
   group: android-preview
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build & Prune
     runs-on: ubuntu-latest
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       KEEP: ${{ github.event.inputs.keep || '2' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -43,6 +50,11 @@ jobs:
 
       - name: Build Android preview (APK)
         run: eas build --platform android --profile preview --non-interactive --wait
+
+      - name: Post build link + release notes to Discord
+        run: node ./scripts/notify-discord.mjs --platform android --profile preview
+        env:
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
 
       - name: Prune old builds (keep last $KEEP)
         run: node ./scripts/prune-builds.mjs --platform android --profile preview --keep "$KEEP"
