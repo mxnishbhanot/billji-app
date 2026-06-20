@@ -147,7 +147,17 @@ export function LoginScreen({ navigation }: LoginScreenProps) {
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
   const setSession = useAuthStore((state) => state.setSession);
+  const logoutReason = useAuthStore((state) => state.logoutReason);
+  const clearLogoutReason = useAuthStore((state) => state.clearLogoutReason);
   const [passwordVisible, setPasswordVisible] = useState(false);
+
+  // Surface a friendly explanation when the app force-signed-out (e.g. this device
+  // was signed out from another phone) instead of a raw "jwt expired" failure.
+  useEffect(() => {
+    if (!logoutReason) return;
+    showDialog({ title: 'Signed out', message: logoutReason });
+    clearLogoutReason();
+  }, [logoutReason, showDialog, clearLogoutReason]);
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((event) => { scrollY.value = event.contentOffset.y; });
   const heroParallaxStyle = useAnimatedStyle(() => ({
@@ -227,7 +237,7 @@ export function LoginScreen({ navigation }: LoginScreenProps) {
             <Button
               mode="text"
               compact
-              onPress={() => showDialog({ title: 'Forgot password', message: 'Password reset will be available after reset email support is connected.' })}
+              onPress={() => navigation.navigate('ForgotPassword')}
               labelStyle={styles.forgotButtonLabel}
               style={styles.forgotButton}
             >

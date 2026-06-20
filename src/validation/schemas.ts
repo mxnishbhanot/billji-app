@@ -3,6 +3,14 @@ import { isValidGstin } from '@/utils/gstin';
 
 export const loginSchema = z.object({ email: z.email('Enter a valid email'), password: z.string().min(1, 'Password is required') });
 export const registerSchema = z.object({ name: z.string().trim().min(1, 'Name is required').max(80), email: z.email('Enter a valid email'), password: z.string().min(8, 'Use 8+ characters') });
+export const forgotPasswordSchema = z.object({ email: z.email('Enter a valid email') });
+export const resetPasswordSchema = z
+  .object({
+    code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code'),
+    password: z.string().min(8, 'Use 8+ characters'),
+    confirmPassword: z.string().min(1, 'Confirm your password')
+  })
+  .refine((data) => data.password === data.confirmPassword, { message: 'Passwords do not match', path: ['confirmPassword'] });
 export const customerSchema = z.object({ name: z.string().trim().min(1, 'Customer name is required').max(120), phone: z.string().trim().regex(/^\d{10}$/, 'Phone must be exactly 10 digits'), countryCode: z.string().default('+91'), email: z.union([z.literal(''), z.email('Enter a valid email')]).optional(), address: z.string().max(500).optional() });
 const decimalAmount = (label: string) =>
   z.string().trim().min(1, `${label} is required`)

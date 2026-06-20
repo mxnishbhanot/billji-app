@@ -30,9 +30,20 @@ export const formatRelativeTime = (value?: string | Date | null) => {
   return relativeFallbackDate.format(new Date(value));
 };
 
-// Turn a raw browser/app user-agent string into a friendly device label people can
-// recognise (e.g. "iPhone · Safari"), plus a Feather icon name for the device kind.
-export const describeDevice = (userAgent?: string | null): { name: string; icon: 'smartphone' | 'tablet' | 'monitor' | 'help-circle' } => {
+// Turn a device label / user-agent into a friendly name people can recognise plus a
+// Feather icon. Prefer the explicit deviceName the mobile app sends (e.g. "Samsung
+// Galaxy S21 · Android 14") — the user-agent (okhttp/expo) carries no model.
+export const describeDevice = (
+  userAgent?: string | null,
+  deviceName?: string | null
+): { name: string; icon: 'smartphone' | 'tablet' | 'monitor' | 'help-circle' } => {
+  const named = (deviceName || '').trim();
+  if (named) {
+    const lower = named.toLowerCase();
+    const icon = /ipad|tablet|\btab\b|\bpad\b/.test(lower) ? 'tablet' : 'smartphone';
+    return { name: named, icon };
+  }
+
   const ua = (userAgent || '').toLowerCase();
   if (!ua) return { name: 'Unknown device', icon: 'help-circle' };
 

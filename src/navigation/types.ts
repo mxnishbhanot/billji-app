@@ -8,6 +8,8 @@ export type ProductSortParam = 'updated' | 'top-sales' | 'name-asc' | 'price-hig
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
+  ForgotPassword: undefined;
+  ResetPassword: { email: string };
 };
 
 export type DashboardStackParamList = {
@@ -84,6 +86,8 @@ export type AppNavigationParamList = RootStackParamList &
 export type AppNavigation = NavigationProp<AppNavigationParamList>;
 export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 export type RegisterScreenProps = NativeStackScreenProps<AuthStackParamList, 'Register'>;
+export type ForgotPasswordScreenProps = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
+export type ResetPasswordScreenProps = NativeStackScreenProps<AuthStackParamList, 'ResetPassword'>;
 export type DashboardNavigation = CompositeNavigationProp<
   NativeStackNavigationProp<DashboardStackParamList, 'DashboardHome'>,
   NavigationProp<TabParamList>

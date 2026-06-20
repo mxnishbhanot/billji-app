@@ -260,10 +260,21 @@ function QuantityStepper({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
 
+  const handleChange = (value: string) => {
+    const cleaned = value.replace(/[^0-9]/g, '');
+    setDraft(cleaned);
+    const parsed = parseInt(cleaned, 10);
+    if (!Number.isNaN(parsed) && parsed >= 1 && parsed !== quantity) onSetQuantity(index, parsed);
+  };
+
   const commit = () => {
     setEditing(false);
     const parsed = parseInt(draft, 10);
-    if (!Number.isNaN(parsed) && parsed >= 1 && parsed !== quantity) onSetQuantity(index, parsed);
+    if (Number.isNaN(parsed) || parsed < 1) {
+      setDraft(String(quantity));
+    } else if (parsed !== quantity) {
+      onSetQuantity(index, parsed);
+    }
   };
 
   return (
@@ -278,7 +289,7 @@ function QuantityStepper({
           maxLength={5}
           selectTextOnFocus
           value={draft}
-          onChangeText={(value) => setDraft(value.replace(/[^0-9]/g, ''))}
+          onChangeText={handleChange}
           onBlur={commit}
           onSubmitEditing={commit}
           style={[styles.stepperInput, { color: theme.colors.onSurface }]}

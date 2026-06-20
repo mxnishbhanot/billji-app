@@ -81,6 +81,7 @@ export type UserSession = {
   id: string;
   business?: string;
   userAgent?: string;
+  deviceName?: string;
   ipAddress?: string;
   lastUsedAt?: string;
   createdAt?: string;

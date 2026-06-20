@@ -70,7 +70,7 @@ export function SecuritySessionsSheet({ visible, sessions, loading, revokingId, 
             {loading ? <ActivityIndicator color={theme.colors.primary} style={styles.loader} /> : null}
 
             {sessions?.map((session) => {
-              const device = describeDevice(session.userAgent);
+              const device = describeDevice(session.userAgent, session.deviceName);
               const revoking = revokingId === session.id;
               return (
                 <View key={session.id} style={[styles.row, { backgroundColor: rowBg, borderColor: cardBorder }]}>

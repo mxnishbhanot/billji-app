@@ -55,8 +55,8 @@ export const authApi = {
   logout: () => api.post<{ success: boolean }>('/auth/logout').then((res) => res.data),
   sessions: () => api.get<{ sessions: UserSession[] }>('/auth/sessions').then((res) => res.data.sessions),
   revokeSession: (sessionId: string) => api.delete<{ success: boolean }>(`/auth/sessions/${sessionId}`).then((res) => res.data),
-  requestPasswordReset: (email: string) => api.post<{ success: boolean; message: string; resetToken?: string }>('/auth/password-reset/request', { email }).then((res) => res.data),
-  confirmPasswordReset: (token: string, password: string) => api.post<{ success: boolean; message: string }>('/auth/password-reset/confirm', { token, password }).then((res) => res.data),
+  requestPasswordReset: (email: string) => api.post<{ success: boolean; message: string; resetCode?: string }>('/auth/password-reset/request', { email }).then((res) => res.data),
+  confirmPasswordReset: (email: string, code: string, password: string) => api.post<{ success: boolean; message: string }>('/auth/password-reset/confirm', { email, code, password }).then((res) => res.data),
   me: () => api.get<{ success: boolean; user: User }>('/auth/me').then((res) => res.data.user),
   updateSettings: (payload: Partial<BusinessProfile>) => api.patch<{ success: boolean; user: User }>('/settings', payload).then((res) => res.data),
   invoiceTemplatePreview: (payload: Partial<InvoiceTemplate>) =>

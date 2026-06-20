@@ -311,11 +311,15 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
     setDeleting(true);
   };
 
-  const actions: { label: string; icon: keyof typeof Feather.glyphMap; onPress: () => void }[] = [
-    { label: 'PDF', icon: 'file-text', onPress: () => openOrSharePdf(invoice.pdfUrl, invoice.invoiceNumber) },
-    { label: 'WhatsApp', icon: 'send', onPress: shareWhatsApp },
-    { label: 'Email', icon: 'mail', onPress: () => { emailForm.reset({ email: invoice.customerSnapshot.email || '' }); setEmailOpen(true); } }
-  ];
+  // Cancelled invoices are voided (stock + accounting reversed) and must not be
+  // shareable/sendable by any channel — share sheet, WhatsApp, or email.
+  const actions: { label: string; icon: keyof typeof Feather.glyphMap; onPress: () => void }[] = isCancelled
+    ? []
+    : [
+        { label: 'PDF', icon: 'file-text', onPress: () => openOrSharePdf(invoice.pdfUrl, invoice.invoiceNumber) },
+        { label: 'WhatsApp', icon: 'send', onPress: shareWhatsApp },
+        { label: 'Email', icon: 'mail', onPress: () => { emailForm.reset({ email: invoice.customerSnapshot.email || '' }); setEmailOpen(true); } }
+      ];
 
   return (
     <Screen title={invoice.invoiceNumber}>
@@ -379,8 +383,8 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
       <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
         <Text style={[styles.sectionTitle, { color: theme.colors.onSurface, marginBottom: 12 }]}>Payment status</Text>
         <View style={[styles.statusPreview, { backgroundColor: tone.background, borderColor: tone.border }]}>
-          <MaterialCommunityIcons name={paymentStatusIconName(paymentStatus)} size={16} color={tone.foreground} />
-          <Text style={[styles.statusPreviewText, { color: tone.foreground }]}>{paymentStatus}</Text>
+          <MaterialCommunityIcons name={isCancelled ? 'close-circle' : paymentStatusIconName(paymentStatus)} size={16} color={tone.foreground} />
+          <Text style={[styles.statusPreviewText, { color: tone.foreground }]}>{isCancelled ? 'cancelled' : paymentStatus}</Text>
         </View>
         <View style={styles.paymentSummaryRows}>
           <View style={styles.totalRow}>
@@ -417,6 +421,14 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
         ) : null}
       </View>
 
+      {isCancelled ? (
+        <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
+          <View style={[styles.statusPreview, { backgroundColor: tone.background, borderColor: tone.border }]}>
+            <MaterialCommunityIcons name="close-circle" size={16} color={tone.foreground} />
+            <Text style={[styles.statusPreviewText, { color: tone.foreground }]}>This invoice is cancelled and can no longer be shared or sent.</Text>
+          </View>
+        </View>
+      ) : (
       <View style={styles.actionRow}>
         {actions.map((action) => (
           <Pressable
@@ -438,6 +450,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
           </Pressable>
         ))}
       </View>
+      )}
 
       <View style={styles.footerActions}>
         {canUpdateInvoice && canCancel ? (

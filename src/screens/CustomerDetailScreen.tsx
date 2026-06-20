@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Text, useTheme } from 'react-native-paper';
@@ -78,6 +78,17 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
   // user lacks payment permission (query disabled).
   const outstandingAmount = outstandingQuery.data ? outstanding.totalOutstanding : customer.outstandingDues ?? 0;
 
+  const dialNumber = `${customer.countryCode || '+91'}${(customer.phone || '').replace(/[^\d]/g, '')}`;
+  const handleCall = async () => {
+    if (!customer.phone) return;
+    const url = `tel:${dialNumber}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      showDialog({ title: 'Could not place call', message: 'No dialer app is available on this device.', tone: 'error' });
+    }
+  };
+
   const contactRows = [
     { icon: 'phone' as const, value: `${customer.countryCode || '+91'} ${customer.phone}` },
     customer.email ? { icon: 'mail' as const, value: customer.email } : null,
@@ -88,7 +99,20 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
   return (
     <Screen title="Customer">
       <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]}>
-        <Text style={[styles.name, { color: theme.colors.onSurface }]}>{customer.name}</Text>
+        <View style={styles.nameRow}>
+          <Text style={[styles.name, { color: theme.colors.onSurface }]}>{customer.name}</Text>
+          {customer.phone ? (
+            <Pressable
+              onPress={handleCall}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`Call ${customer.name}`}
+              style={({ pressed }) => [styles.callBtn, { backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary }]}
+            >
+              <Feather name="phone" size={18} color="#FFFFFF" />
+            </Pressable>
+          ) : null}
+        </View>
         <View style={styles.contactList}>
           {contactRows.map((row) => (
             <View key={row.icon} style={styles.contactRow}>
@@ -154,6 +178,7 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
 
 const styles = StyleSheet.create({
   amount: { ...fontStyles.bold, fontSize: 15 },
+  callBtn: { alignItems: 'center', borderRadius: radii.md, height: 40, justifyContent: 'center', width: 40 },
   collectBtn: { alignItems: 'center', borderRadius: radii.input, flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 16, paddingVertical: 13 },
   collectBtnLabel: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 14, letterSpacing: 0.2 },
   contactList: { gap: 8, marginTop: 12 },
@@ -163,7 +188,8 @@ const styles = StyleSheet.create({
   iconTile: { alignItems: 'center', borderRadius: radii.md, height: 38, justifyContent: 'center', width: 38 },
   loader: { marginVertical: 24 },
   meta: { ...typeScale.caption, fontSize: 12, marginTop: 2 },
-  name: { ...fontStyles.bold, fontSize: 20, letterSpacing: -0.4 },
+  name: { ...fontStyles.bold, flex: 1, fontSize: 20, letterSpacing: -0.4 },
+  nameRow: { alignItems: 'center', flexDirection: 'row', gap: 12 },
   paymentRow: { alignItems: 'center', borderRadius: radii.lg, borderWidth: 1, flexDirection: 'row', gap: 12, marginBottom: 10, padding: 14 },
   profileCard: { borderRadius: radii.lg, borderWidth: 1, marginBottom: 16, padding: 18 },
   sectionTitle: { ...fontStyles.bold, fontSize: 16, marginBottom: 12, marginTop: 4 },

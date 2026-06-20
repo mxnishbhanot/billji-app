@@ -11,10 +11,14 @@ type AuthState = {
   sessionId: string | null;
   user: User | null;
   hydrated: boolean;
+  // Set when the app force-signs-out (token refresh failed, e.g. this device was
+  // signed out from another device). LoginScreen reads + clears it to explain why.
+  logoutReason: string | null;
   hydrate: () => Promise<void>;
   setSession: (session: AuthSession) => Promise<void>;
   setUser: (user: User) => Promise<void>;
-  logout: () => Promise<void>;
+  logout: (reason?: string) => Promise<void>;
+  clearLogoutReason: () => void;
 };
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -24,6 +28,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   sessionId: null,
   user: null,
   hydrated: false,
+  logoutReason: null,
   hydrate: async () => {
     try {
       const raw = await SecureStore.getItemAsync(SESSION_KEY);
@@ -46,8 +51,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user });
     if (token) await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify({ token, accessToken: accessToken || token, refreshToken, sessionId, user }));
   },
-  logout: async () => {
-    set({ token: null, accessToken: null, refreshToken: null, sessionId: null, user: null });
+  logout: async (reason) => {
+    set({ token: null, accessToken: null, refreshToken: null, sessionId: null, user: null, logoutReason: reason || null });
     await SecureStore.deleteItemAsync(SESSION_KEY);
-  }
+  },
+  clearLogoutReason: () => set({ logoutReason: null })
 }));

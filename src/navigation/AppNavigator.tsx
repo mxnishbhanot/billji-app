@@ -13,6 +13,8 @@ import { LoginScreen } from '@/screens/LoginScreen';
 // the require() cost of all 20 screen modules (bottom-tabs lazy-mounts, but static
 // imports still execute every screen module as soon as the tab bar renders).
 const RegisterScreen = lazy(() => import('@/screens/RegisterScreen').then((m) => ({ default: m.RegisterScreen })));
+const ForgotPasswordScreen = lazy(() => import('@/screens/ForgotPasswordScreen').then((m) => ({ default: m.ForgotPasswordScreen })));
+const ResetPasswordScreen = lazy(() => import('@/screens/ResetPasswordScreen').then((m) => ({ default: m.ResetPasswordScreen })));
 const ProductsScreen = lazy(() => import('@/screens/ProductsScreen').then((m) => ({ default: m.ProductsScreen })));
 const CustomersScreen = lazy(() => import('@/screens/CustomersScreen').then((m) => ({ default: m.CustomersScreen })));
 const CustomerDetailScreen = lazy(() => import('@/screens/CustomerDetailScreen').then((m) => ({ default: m.CustomerDetailScreen })));
@@ -88,6 +90,8 @@ function AuthNavigator() {
     <AuthStack.Navigator screenOptions={{ headerShown: false }} screenLayout={renderWithSuspense}>
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
+      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <AuthStack.Screen name="ResetPassword" component={ResetPasswordScreen} />
     </AuthStack.Navigator>
   );
 }
