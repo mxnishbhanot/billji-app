@@ -266,16 +266,14 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.md,
     justifyContent: 'center',
-    minHeight: 640,
     paddingVertical: spacing.md
   },
   heroPanel: {
     backgroundColor: '#1C1A4A',
     borderRadius: radii.xl,
     borderWidth: 1,
-    minHeight: 150,
     overflow: 'hidden',
-    padding: spacing.lg,
+    padding: spacing.md,
     shadowColor: '#4338CA',
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.08,
@@ -291,14 +289,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radii.full,
     backgroundColor: alpha('#FFFFFF', 0.96),
-    height: 104,
+    height: 80,
     justifyContent: 'center',
     overflow: 'hidden',
-    width: 104
+    width: 80
   },
   logo: {
-    height: 104,
-    width: 104
+    height: 80,
+    width: 80
   },
   brandCopy: {
     flex: 1,

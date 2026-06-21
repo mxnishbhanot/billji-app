@@ -8,6 +8,7 @@ import { PaymentMethodChips } from '@/components/PaymentMethodChips';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
 import { CustomerOutstanding, PaymentMethod } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/format';
+import { sanitizeDecimal } from '@/utils/number';
 
 type Props = {
   visible: boolean;
@@ -105,7 +106,7 @@ export function CollectDuesSheet({ visible, outstanding, loading, onClose, onSub
               label="Amount"
               keyboardType="decimal-pad"
               value={amount}
-              onChangeText={setAmount}
+              onChangeText={(text) => setAmount(sanitizeDecimal(text))}
               left={<TextInput.Icon icon="currency-inr" />}
               error={exceedsTarget}
               style={styles.input}

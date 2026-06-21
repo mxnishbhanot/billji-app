@@ -167,6 +167,9 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   const [cancelling, setCancelling] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Which share action is mid-flight (PDF download is a network call — on slow
+  // connections the tap looks dead without a spinner). One at a time.
+  const [busyAction, setBusyAction] = useState<string | null>(null);
   const emailForm = useForm<{ email: string }>({ defaultValues: { email: '' }, resolver: zodResolver(emailSchema) });
   const query = useQuery({ queryKey: queryKeys.invoices.detail(id), queryFn: () => invoicesApi.get(id) });
   const paymentsQuery = useQuery({ queryKey: queryKeys.payments.invoice(id), queryFn: () => paymentsApi.list({ invoiceId: id }) });
@@ -250,7 +253,19 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
       outstandingQuery.refetch();
     }
   });
-  const shareWhatsApp = async () => { if (!invoice) return; try { await openOrSharePdf(invoice.pdfUrl, invoice.invoiceNumber); } catch (error) { showDialog({ title: 'Could not share invoice', message: apiErrorMessage(error), tone: 'error' }); } };
+  // Run a share action with a busy lock so the tile can show a spinner and ignore
+  // repeat taps until the (possibly slow) PDF download/share resolves.
+  const runShare = async (label: string) => {
+    if (!invoice || busyAction) return;
+    setBusyAction(label);
+    try {
+      await openOrSharePdf(invoice.pdfUrl, invoice.invoiceNumber);
+    } catch (error) {
+      showDialog({ title: 'Could not share invoice', message: apiErrorMessage(error), tone: 'error' });
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   if (query.isLoading) {
     return (
@@ -316,8 +331,8 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   const actions: { label: string; icon: keyof typeof Feather.glyphMap; onPress: () => void }[] = isCancelled
     ? []
     : [
-        { label: 'PDF', icon: 'file-text', onPress: () => openOrSharePdf(invoice.pdfUrl, invoice.invoiceNumber) },
-        { label: 'WhatsApp', icon: 'send', onPress: shareWhatsApp },
+        { label: 'PDF', icon: 'file-text', onPress: () => runShare('PDF') },
+        { label: 'WhatsApp', icon: 'send', onPress: () => runShare('WhatsApp') },
         { label: 'Email', icon: 'mail', onPress: () => { emailForm.reset({ email: invoice.customerSnapshot.email || '' }); setEmailOpen(true); } }
       ];
 
@@ -430,25 +445,34 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
         </View>
       ) : (
       <View style={styles.actionRow}>
-        {actions.map((action) => (
-          <Pressable
-            key={action.label}
-            onPress={action.onPress}
-            style={({ pressed }) => [
-              styles.actionTile,
-              {
-                backgroundColor: colors.card,
-                borderColor: cardBorder,
-                opacity: pressed ? 0.85 : 1
-              }
-            ]}
-          >
-            <View style={[styles.actionIconWrap, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.12) }]}>
-              <Feather name={action.icon} size={16} color={theme.colors.primary} />
-            </View>
-            <Text style={[styles.actionLabel, { color: theme.colors.onSurface }]}>{action.label}</Text>
-          </Pressable>
-        ))}
+        {actions.map((action) => {
+          const isBusy = busyAction === action.label;
+          const disabled = Boolean(busyAction) && !isBusy;
+          return (
+            <Pressable
+              key={action.label}
+              onPress={action.onPress}
+              disabled={Boolean(busyAction)}
+              style={({ pressed }) => [
+                styles.actionTile,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: cardBorder,
+                  opacity: pressed ? 0.85 : disabled ? 0.5 : 1
+                }
+              ]}
+            >
+              <View style={[styles.actionIconWrap, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.12) }]}>
+                {isBusy ? (
+                  <ActivityIndicator size={16} color={theme.colors.primary} />
+                ) : (
+                  <Feather name={action.icon} size={16} color={theme.colors.primary} />
+                )}
+              </View>
+              <Text style={[styles.actionLabel, { color: theme.colors.onSurface }]}>{isBusy ? 'Preparing…' : action.label}</Text>
+            </Pressable>
+          );
+        })}
       </View>
       )}
 

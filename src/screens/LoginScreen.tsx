@@ -282,7 +282,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.md,
     justifyContent: 'center',
-    minHeight: 620,
     paddingVertical: spacing.md
   },
   heroPanel: {
@@ -290,10 +289,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#1C1A4A',
     borderRadius: radii.xl,
     borderWidth: 1,
-    minHeight: 230,
     overflow: 'hidden',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md,
     shadowColor: '#4338CA',
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.08,
@@ -303,41 +301,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radii.full,
     backgroundColor: alpha('#FFFFFF', 0.96),
-    height: 104,
+    height: 76,
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
     overflow: 'hidden',
-    width: 104
+    width: 76
   },
   logo: {
-    height: 104,
-    width: 104
+    height: 76,
+    width: 76
   },
   wordmarkRow: {
     flexDirection: 'row',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     marginTop: spacing.xs
   },
   wordmarkBill: {
     ...fontStyles.bold,
     color: '#FFFFFF',
-    fontSize: 36,
-    letterSpacing: -1.6,
-    lineHeight: 42
+    fontSize: 30,
+    letterSpacing: -1.4,
+    lineHeight: 36
   },
   wordmarkJi: {
     ...fontStyles.bold,
     color: '#FF8A1F',
-    fontSize: 36,
-    letterSpacing: -1.6,
-    lineHeight: 42
+    fontSize: 30,
+    letterSpacing: -1.4,
+    lineHeight: 36
   },
   tagline: {
     ...fontStyles.semiBold,
     color: alpha('#FFFFFF', 0.88),
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: spacing.xs
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 0
   },
   bubbleLarge: {
     backgroundColor: alpha('#FFFFFF', 0.18),

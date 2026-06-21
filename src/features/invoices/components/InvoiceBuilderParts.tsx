@@ -4,15 +4,14 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { UseFormReturn } from 'react-hook-form';
 import { Button, Dialog, List, Portal, Text, TextInput, Tooltip, useTheme } from 'react-native-paper';
 import { CustomerPickerSheet } from '@/components/CustomerPickerSheet';
+import { CustomItemSheet } from '@/components/CustomItemSheet';
 import { FormTextInput } from '@/components/FormTextInput';
 import { PhoneInput } from '@/components/PhoneInput';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
 import { Customer, CustomerFormValues, CustomItemFormValues, DiscountType, DraftDocument, InvoiceDraftPayload, InvoiceItem, Product, StockShortage } from '@/types';
 import { formatCurrency } from '@/utils/format';
 import { customItemDefaults, customItemFromForm, initials } from '../services/invoiceBuilderService';
-import { MoneyInput, QuantityInput } from './FormInputs';
-import { UnitInput } from '@/components/UnitInput';
-import { DEFAULT_UNIT } from '@/constants/units';
+import { MoneyInput } from './FormInputs';
 
 const VISIBLE_PRODUCT_ROWS = 5;
 const VISIBLE_INVOICE_ITEM_ROWS = 5;
@@ -563,6 +562,12 @@ export function InvoiceBuilderDialogs({
       onQuickAdd={onQuickAddCustomer}
       onClose={onCloseCustomerPicker}
     />
+    <CustomItemSheet
+      visible={customModal}
+      form={customForm}
+      onClose={onCloseCustomModal}
+      onSubmit={customForm.handleSubmit((values) => { onAddCustomItem(customItemFromForm(values)); onCloseCustomModal(); customForm.reset(customItemDefaults); })}
+    />
     <Portal>
       <Dialog visible={Boolean(recoveryDraft)} onDismiss={onRecoveryResume}>
         <Dialog.Title>{recoveryTitle}</Dialog.Title>
@@ -589,20 +594,6 @@ export function InvoiceBuilderDialogs({
         <Dialog.Actions>
           <Button onPress={onCloseCustomerModal}>Cancel</Button>
           <Button loading={addCustomerLoading} onPress={customerForm.handleSubmit(onCustomerSubmit)}>Save</Button>
-        </Dialog.Actions>
-      </Dialog>
-
-      <Dialog visible={customModal} onDismiss={onCloseCustomModal}>
-        <Dialog.Title>Custom item</Dialog.Title>
-        <Dialog.Content>
-          <FormTextInput control={customForm.control} name="name" label="Name" />
-          <MoneyInput cardBorder={theme.colors.outlineVariant} inputBackground={theme.colors.surface} label="Price" value={customForm.watch('price')} onChangeText={(value) => customForm.setValue('price', value)} activeOutlineColor={theme.colors.primary} />
-          <QuantityInput cardBorder={theme.colors.outlineVariant} inputBackground={theme.colors.surface} label="Quantity" value={customForm.watch('quantity')} onChangeText={(value) => customForm.setValue('quantity', value)} activeOutlineColor={theme.colors.primary} />
-          <UnitInput value={customForm.watch('unit') || DEFAULT_UNIT} onChange={(value) => customForm.setValue('unit', value)} cardBorder={theme.colors.outlineVariant} inputBackground={theme.colors.surface} />
-        </Dialog.Content>
-        <Dialog.Actions>
-          <Button onPress={onCloseCustomModal}>Cancel</Button>
-          <Button onPress={customForm.handleSubmit((values) => { onAddCustomItem(customItemFromForm(values)); onCloseCustomModal(); customForm.reset(customItemDefaults); })}>Add</Button>
         </Dialog.Actions>
       </Dialog>
 
@@ -634,7 +625,7 @@ const styles = StyleSheet.create({
   fieldLabel: { ...fontStyles.bold, fontSize: 11, letterSpacing: 1.2, marginBottom: 10, marginTop: 16 },
   countBadge: { alignItems: 'center', borderRadius: radii.pill, minWidth: 24, paddingHorizontal: 8, paddingVertical: 2 },
   countBadgeText: { ...fontStyles.bold, fontSize: 11 },
-  customerActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  customerActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
   customerMeta: { ...typeScale.caption, fontSize: 12, marginTop: 2 },
   customerName: { ...fontStyles.bold, fontSize: 14 },
   customerSelected: { alignItems: 'center', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: 12, marginTop: 4, padding: 12 },

@@ -72,7 +72,7 @@ export const calculateClientTotals = ({ items, taxRate = 0, discountType = 'flat
   const discount = discountType === 'percentage' ? subtotal * (Number(discountValue || 0) / 100) : Number(discountValue || 0);
   const discountAmount = roundMoney(Math.min(Math.max(discount, 0), subtotal));
   const taxable = Math.max(subtotal - discountAmount, 0);
-  const taxAmount = roundMoney(taxable * (Number(taxRate || 0) / 100));
+  const taxAmount = roundMoney(taxable * (Math.max(Number(taxRate || 0), 0) / 100));
   return { subtotal, discountAmount, taxAmount, total: roundMoney(taxable + taxAmount) };
 };
 

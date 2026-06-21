@@ -29,7 +29,12 @@ export const productSchema = z.object({
   lowStockThreshold: z.union([z.literal(''), z.string().trim().regex(/^\d+$/, 'Low stock alert must be a whole number')]).optional()
 });
 export const emailSchema = z.object({ email: z.email('Enter a valid email') });
-export const customItemSchema = z.object({ name: z.string().trim().min(1, 'Item name is required').max(120), price: z.string().min(1, 'Price is required'), quantity: z.string().min(1, 'Quantity is required'), unit: z.string().max(24) });
+export const customItemSchema = z.object({
+  name: z.string().trim().min(1, 'Item name is required').max(120),
+  price: decimalAmount('Price'),
+  quantity: wholeNumber('Quantity').refine((v) => Number(v) >= 1, 'Quantity must be at least 1'),
+  unit: z.string().max(24)
+});
 export const settingsSchema = z.object({
   businessName: z.string().trim().min(1, 'Business name is required').max(120),
   phone: z.union([z.literal(''), z.string().regex(/^\d{10}$/, 'Phone must be exactly 10 digits')]).optional(),

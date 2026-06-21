@@ -97,8 +97,13 @@ const InvoiceCard = memo(function InvoiceCard({
 
   const tone = statusTone(item.status, isDark);
   const avatarFg = item.status === 'paid' ? colors.accent : colors.primary;
-  const paymentMeta = item.paymentStatus !== 'paid' ? paymentStatusMeta(item.paymentStatus) : null;
-  const hasBalance = typeof item.balanceDue === 'number' && item.balanceDue > 0;
+  const isCancelled = item.status === 'cancelled';
+  const paymentMeta =
+    !isCancelled && item.paymentStatus !== 'paid' ? paymentStatusMeta(item.paymentStatus) : null;
+  // Cancelled invoice owes nothing (balance void). If money was received before
+  // cancellation it's awaiting refund — surface that instead of a stale "Due".
+  const refundDue = isCancelled && typeof item.paidAmount === 'number' && item.paidAmount > 0;
+  const hasBalance = !isCancelled && typeof item.balanceDue === 'number' && item.balanceDue > 0;
   const fromOrder = Boolean(item.sourceOrder);
   const orderChip = useMemo(() => ({
     backgroundColor: alpha(onSurfaceVariant, isDark ? 0.18 : 0.1)
@@ -122,7 +127,9 @@ const InvoiceCard = memo(function InvoiceCard({
         </View>
         <View style={styles.amountBlock}>
           <Text style={[styles.invoiceAmount, { color: onSurface }]}>{formatCurrency(item.total)}</Text>
-          {hasBalance ? (
+          {refundDue ? (
+            <Text style={[styles.balanceDue, { color: colors.warning }]}>Refund due {formatCurrency(item.paidAmount)}</Text>
+          ) : hasBalance ? (
             <Text style={[styles.balanceDue, { color: colors.warning }]}>Due {formatCurrency(item.balanceDue)}</Text>
           ) : null}
         </View>

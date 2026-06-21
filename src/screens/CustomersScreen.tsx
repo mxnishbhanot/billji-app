@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { Button, Dialog, Portal, Text, useTheme } from 'react-native-paper';
+import { Text, useTheme } from 'react-native-paper';
 import { customersApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
@@ -18,9 +18,8 @@ import {
   CustomerSortOption,
   defaultCustomerFilterValues
 } from '@/components/CustomerFilterSheet';
+import { CustomerFormSheet } from '@/components/CustomerFormSheet';
 import { EmptyState } from '@/components/EmptyState';
-import { FormTextInput } from '@/components/FormTextInput';
-import { PhoneInput } from '@/components/PhoneInput';
 import { Screen } from '@/components/Screen';
 import { CustomersStackParamList } from '@/navigation/types';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
@@ -346,21 +345,14 @@ export function CustomersScreen() {
         ListFooterComponent={renderCustomersFooter}
         renderItem={renderCustomerCard}
       />
-      <Portal>
-        <Dialog visible={editing !== undefined} onDismiss={() => setEditing(undefined)}>
-          <Dialog.Title>{editing?._id ? 'Edit customer' : 'Add customer'}</Dialog.Title>
-          <Dialog.Content>
-            <FormTextInput control={form.control} name="name" label="Name" />
-            <PhoneInput control={form.control} name="phone" />
-            <FormTextInput control={form.control} name="email" label="Email" keyboardType="email-address" />
-            <FormTextInput control={form.control} name="address" label="Address" multiline />
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setEditing(undefined)}>Cancel</Button>
-            <Button loading={save.isPending} onPress={form.handleSubmit((values) => save.mutate(values))}>Save</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+      <CustomerFormSheet
+        visible={editing !== undefined}
+        isEdit={Boolean(editing?._id)}
+        form={form}
+        saving={save.isPending}
+        onSubmit={form.handleSubmit((values) => save.mutate(values))}
+        onClose={() => setEditing(undefined)}
+      />
       <CustomerFilterSheet
         visible={filtersOpen}
         values={draftFilterValues}
