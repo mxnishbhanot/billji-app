@@ -12,10 +12,10 @@ import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { InvoiceTemplate } from '@/types';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
+import { A4_RATIO, withFittedViewport } from '@/utils/invoicePreview';
 
 // Professional preset accents. Index 0 (indigo) matches the brand + backend default.
 const ACCENT_PRESETS = ['#4338CA', '#2563EB', '#0D9488', '#16A34A', '#475569', '#E11D48'] as const;
-const A4_RATIO = 794 / 1123;
 
 const templateDefaults = (tpl?: InvoiceTemplate): InvoiceTemplate => ({
   accentColor: tpl?.accentColor || ACCENT_PRESETS[0],
@@ -63,7 +63,7 @@ function PreviewSurface({ html, frameWidth }: { html: string; frameWidth: number
   return (
     <WebView
       originWhitelist={['*']}
-      source={{ html }}
+      source={{ html: withFittedViewport(html) }}
       style={styles.webview}
       scrollEnabled
       showsVerticalScrollIndicator={false}

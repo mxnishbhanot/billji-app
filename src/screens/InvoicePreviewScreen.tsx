@@ -8,25 +8,11 @@ import { useAppDialog } from '@/components/AppDialog';
 import { Screen } from '@/components/Screen';
 import { InvoicePreviewScreenProps } from '@/navigation/types';
 import { radii } from '@/theme/theme';
-
-const A4_PAGE_WIDTH = 794;
-const A4_RATIO = A4_PAGE_WIDTH / 1123;
-
-// The PDF template is a fixed 794px-wide A4 page. WebView has no viewport meta of
-// its own, so it renders the page at full width and the user sees it zoomed in.
-// Inject a viewport that pins the content width to 794 so WebView scales the whole
-// page down to fit the device. Replace any existing viewport to avoid conflicts.
-const VIEWPORT_TAG = `<meta name="viewport" content="width=${A4_PAGE_WIDTH}, initial-scale=1, maximum-scale=1, user-scalable=no">`;
-function withFittedViewport(html: string) {
-  const stripped = html.replace(/<meta[^>]*name=["']viewport["'][^>]*>/i, '');
-  if (/<head[^>]*>/i.test(stripped)) return stripped.replace(/<head[^>]*>/i, (head) => `${head}${VIEWPORT_TAG}`);
-  if (/<html[^>]*>/i.test(stripped)) return stripped.replace(/<html[^>]*>/i, (tag) => `${tag}<head>${VIEWPORT_TAG}</head>`);
-  return `${VIEWPORT_TAG}${stripped}`;
-}
+import { A4_PAGE_WIDTH, A4_RATIO, withFittedViewport } from '@/utils/invoicePreview';
 
 function PreviewSurface({ html, frameWidth }: { html: string; frameWidth: number }) {
   if (Platform.OS === 'web') {
-    const scale = frameWidth > 0 ? frameWidth / 794 : 1;
+    const scale = frameWidth > 0 ? frameWidth / A4_PAGE_WIDTH : 1;
     return createElement('iframe', {
       srcDoc: html,
       title: 'Invoice preview',

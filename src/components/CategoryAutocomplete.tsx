@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Control, Controller, FieldValues, Path } from 'react-hook-form';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { HelperText, Text, TextInput, useTheme } from 'react-native-paper';
 import { alpha, appColors, fontStyles, radii, spacing } from '@/theme/theme';
@@ -9,7 +9,9 @@ import { alpha, appColors, fontStyles, radii, spacing } from '@/theme/theme';
 // distinct categories (GET /products/categories). Typing "Cen" surfaces "Centring"
 // so users reuse a category verbatim instead of risking a typo/duplicate. Still a
 // free-text field — they can type a brand-new category too.
-const MAX_SUGGESTIONS = 6;
+const MAX_SUGGESTIONS = 50;
+// Roughly four 42px rows tall; the list scrolls when more matches are available.
+const SUGGESTIONS_MAX_HEIGHT = 176;
 
 type Props<T extends FieldValues> = {
   control: Control<T>;
@@ -53,7 +55,11 @@ export function CategoryAutocomplete<T extends FieldValues>({ control, name, cat
               mode="outlined"
               label={label}
               value={text}
-              onChangeText={onChange}
+              // Editing always re-opens the list — tapping back into a field that
+              // already holds a picked value keeps native focus, so onFocus may not
+              // fire again; flipping focused here makes deleting a character (or
+              // typing) surface the suggestions once more.
+              onChangeText={(next) => { onChange(next); setFocused(true); }}
               onFocus={() => setFocused(true)}
               onBlur={() => { setFocused(false); onBlur(); }}
               error={Boolean(error)}
@@ -69,21 +75,28 @@ export function CategoryAutocomplete<T extends FieldValues>({ control, name, cat
             />
             {showSuggestions ? (
               <View style={[styles.suggestions, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.14) }]}>
-                {matches.map((category) => (
-                  <Pressable
-                    key={category}
-                    // onPressIn (touch-down) fires before the input's onBlur, which
-                    // would otherwise unmount this list before a plain onPress lands.
-                    onPressIn={() => { onChange(category); setFocused(false); }}
-                    style={({ pressed }) => [
-                      styles.suggestion,
-                      { backgroundColor: pressed ? alpha(colors.primary, isDark ? 0.18 : 0.08) : 'transparent' }
-                    ]}
-                  >
-                    <Feather name="corner-down-left" size={13} color={theme.colors.onSurfaceVariant} />
-                    <Text numberOfLines={1} style={[styles.suggestionText, { color: theme.colors.onSurface }]}>{category}</Text>
-                  </Pressable>
-                ))}
+                <ScrollView
+                  style={{ maxHeight: SUGGESTIONS_MAX_HEIGHT }}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator
+                >
+                  {matches.map((category) => (
+                    <Pressable
+                      key={category}
+                      // onPressIn (touch-down) fires before the input's onBlur, which
+                      // would otherwise unmount this list before a plain onPress lands.
+                      onPressIn={() => { onChange(category); setFocused(false); }}
+                      style={({ pressed }) => [
+                        styles.suggestion,
+                        { backgroundColor: pressed ? alpha(colors.primary, isDark ? 0.18 : 0.08) : 'transparent' }
+                      ]}
+                    >
+                      <Feather name="corner-down-left" size={13} color={theme.colors.onSurfaceVariant} />
+                      <Text numberOfLines={1} style={[styles.suggestionText, { color: theme.colors.onSurface }]}>{category}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
               </View>
             ) : null}
             {error?.message ? <HelperText type="error" visible>{error.message}</HelperText> : null}
