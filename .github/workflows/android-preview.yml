@@ -2,11 +2,6 @@ name: Android Preview Build
 
 on:
   workflow_dispatch:
-    inputs:
-      keep:
-        description: "How many recent builds to keep"
-        required: false
-        default: "2"
   push:
     branches:
       - main
@@ -20,18 +15,11 @@ permissions:
 
 jobs:
   build:
-    name: Build & Prune
+    name: Build APK & Release
     runs-on: ubuntu-latest
-    env:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-      KEEP: ${{ github.event.inputs.keep || '2' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -39,22 +27,66 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Setup EAS
-        uses: expo/expo-github-action@v8
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
         with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Android preview (APK)
-        run: eas build --platform android --profile preview --non-interactive --wait
+      - name: Prebuild (generate android/)
+        run: npx expo prebuild --platform android --no-install
 
-      - name: Post build link + release notes to Discord
-        run: node ./scripts/notify-discord.mjs --platform android --profile preview
+      - name: Pin Gradle 8.13
+        run: sed -i 's#gradle-[0-9.]*-bin.zip#gradle-8.13-bin.zip#' android/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug
+        working-directory: android
+
+      - name: Stage APK
+        id: apk
+        run: |
+          SHA="${GITHUB_SHA::7}"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "billji-preview-${SHA}.apk"
+          echo "name=billji-preview-${SHA}.apk" >> "$GITHUB_OUTPUT"
+          echo "tag=preview-${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        id: release
         env:
-          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.apk.outputs.tag }}"
+          gh release create "$TAG" "${{ steps.apk.outputs.name }}" \
+            --title "BillJi preview ${TAG}" \
+            --notes "Auto preview build — commit ${GITHUB_SHA::7}: ${{ github.event.head_commit.message }}" \
+            --target "$GITHUB_SHA"
+          URL=$(gh release view "$TAG" --json assets -q '.assets[0].url')
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
-      - name: Prune old builds (keep last $KEEP)
-        run: node ./scripts/prune-builds.mjs --platform android --profile preview --keep "$KEEP"
+      - name: Notify Discord (success)
+        if: success()
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          MSG="📦 **BillJi Android preview** \`${GITHUB_SHA::7}\` ready
+          ${{ github.event.head_commit.message }}
+          ⬇️ ${{ steps.release.outputs.url }}"
+          curl -sf -H "Content-Type: application/json" \
+            -d "$(jq -nc --arg c "$MSG" '{content:$c}')" "$WEBHOOK"
+
+      - name: Notify Discord (failure)
+        if: failure()
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          MSG="❌ **BillJi Android preview build FAILED** \`${GITHUB_SHA::7}\`
+          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -sf -H "Content-Type: application/json" \
+            -d "$(jq -nc --arg c "$MSG" '{content:$c}')" "$WEBHOOK"
