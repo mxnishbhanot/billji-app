@@ -17,12 +17,17 @@ import { A4_RATIO, withFittedViewport } from '@/utils/invoicePreview';
 // Professional preset accents. Index 0 (indigo) matches the brand + backend default.
 const ACCENT_PRESETS = ['#4338CA', '#2563EB', '#0D9488', '#16A34A', '#475569', '#E11D48'] as const;
 
+// Mirrors DEFAULT_INVOICE_NOTES in backend invoiceHtml.js — what prints when the
+// business leaves custom notes blank. Shown as the field placeholder.
+const DEFAULT_INVOICE_NOTES = 'Please make payment by the due date. Quote the invoice number when paying.';
+
 const templateDefaults = (tpl?: InvoiceTemplate): InvoiceTemplate => ({
   accentColor: tpl?.accentColor || ACCENT_PRESETS[0],
   showLogo: tpl?.showLogo ?? true,
   showNotes: tpl?.showNotes ?? true,
   showSignature: tpl?.showSignature ?? true,
-  showPaymentRows: tpl?.showPaymentRows ?? true
+  showPaymentRows: tpl?.showPaymentRows ?? true,
+  notes: tpl?.notes ?? ''
 });
 
 type ToggleKey = 'showLogo' | 'showNotes' | 'showSignature' | 'showPaymentRows';
@@ -125,6 +130,7 @@ export function InvoiceTemplateScreen() {
 
   const setAccent = (accentColor: string) => setTpl((prev) => ({ ...prev, accentColor }));
   const toggle = (key: ToggleKey) => (value: boolean) => setTpl((prev) => ({ ...prev, [key]: value }));
+  const setNotes = (notes: string) => setTpl((prev) => ({ ...prev, notes }));
   const onSave = () => save.mutate({ invoiceTemplate: tpl, invoicePrefix: (prefix || 'INV').trim().toUpperCase().slice(0, 12) });
 
   const headerAction = (
@@ -191,6 +197,27 @@ export function InvoiceTemplateScreen() {
         ))}
       </View>
 
+      <SectionLabel title="NOTES & TERMS" />
+      <View style={[styles.notesCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
+        <TextInput
+          mode="outlined"
+          label="Custom notes & terms"
+          value={tpl.notes ?? ''}
+          onChangeText={setNotes}
+          placeholder={DEFAULT_INVOICE_NOTES}
+          multiline
+          numberOfLines={4}
+          maxLength={1000}
+          disabled={!tpl.showNotes}
+          style={styles.notesInput}
+        />
+        <Text style={[styles.notesHint, { color: theme.colors.onSurfaceVariant }]}>
+          {tpl.showNotes
+            ? 'Shown on every invoice. Leave blank to use the default text above.'
+            : 'Turn on “Notes & terms” above to print this block.'}
+        </Text>
+      </View>
+
       <SectionLabel title="NUMBERING" />
       <View style={[styles.numberCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
         <View style={[styles.prefixPreview, { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.08), borderColor: alpha(colors.primary, isDark ? 0.28 : 0.16) }]}>
@@ -207,6 +234,9 @@ const styles = StyleSheet.create({
   colorCard: { alignItems: 'center', borderRadius: radii.lg, borderWidth: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 14, justifyContent: 'space-between', marginBottom: 18, padding: 16 },
   colorSwatch: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 2, height: 40, justifyContent: 'center', width: 40 },
   colorSwatchWrap: { padding: 2 },
+  notesCard: { borderRadius: radii.lg, borderWidth: 1, marginBottom: 18, padding: 14 },
+  notesHint: { ...typeScale.caption, fontSize: 12, marginTop: 8 },
+  notesInput: { maxHeight: 140 },
   numberCard: { borderRadius: radii.lg, borderWidth: 1, marginBottom: 18, padding: 14 },
   prefixPreview: { alignItems: 'center', alignSelf: 'flex-start', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', gap: 7, marginBottom: 12, paddingHorizontal: 12, paddingVertical: 7 },
   prefixPreviewText: { ...fontStyles.bold, fontSize: 12 },

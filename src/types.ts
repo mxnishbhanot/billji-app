@@ -20,6 +20,7 @@ export type InvoiceTemplate = {
   showNotes: boolean;
   showSignature: boolean;
   showPaymentRows: boolean;
+  notes?: string;
 };
 
 export type BusinessProfile = {

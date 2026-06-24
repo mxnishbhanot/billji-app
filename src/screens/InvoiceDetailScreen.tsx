@@ -438,9 +438,9 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
 
       {isCancelled ? (
         <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
-          <View style={[styles.statusPreview, { backgroundColor: tone.background, borderColor: tone.border }]}>
+          <View style={[styles.statusPreview, styles.cancelledNotice, { backgroundColor: tone.background, borderColor: tone.border }]}>
             <MaterialCommunityIcons name="close-circle" size={16} color={tone.foreground} />
-            <Text style={[styles.statusPreviewText, { color: tone.foreground }]}>This invoice is cancelled and can no longer be shared or sent.</Text>
+            <Text style={[styles.statusPreviewText, styles.cancelledNoticeText, { color: tone.foreground }]}>This invoice is cancelled and can no longer be shared or sent.</Text>
           </View>
         </View>
       ) : (
@@ -613,6 +613,9 @@ const styles = StyleSheet.create({
     paddingVertical: 5
   },
   statusPreviewText: { ...fontStyles.bold, fontSize: 11, letterSpacing: 0.4, textTransform: 'capitalize' },
+  // Long-sentence variant of the chip: stretch full width, top-align icon, wrap text inside the card.
+  cancelledNotice: { alignItems: 'flex-start', alignSelf: 'stretch', marginBottom: 0 },
+  cancelledNoticeText: { flex: 1, flexShrink: 1, textTransform: 'none' },
   totalLabel: { ...typeScale.bodyPrimary, fontSize: 14 },
   totalRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   totalRows: { gap: 10 },

@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
   },
   wordmarkJi: {
     ...fontStyles.bold,
-    color: '#FF8A1F',
+    color: '#1E7FFF',
     fontSize: 30,
     letterSpacing: -1.4,
     lineHeight: 36

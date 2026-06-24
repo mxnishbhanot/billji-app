@@ -22,7 +22,7 @@ const billjiLogo = require('../../assets/main-logo-clean.png');
 
 function AuthHeroPattern() {
   return (
-    <Svg pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 360 190" preserveAspectRatio="xMidYMid slice">
+    <Svg pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 360 260" preserveAspectRatio="xMidYMid slice">
       <Defs>
         <LinearGradient id="authRegisterHeroGrad" x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0" stopColor="#1C1A4A" />
@@ -30,22 +30,22 @@ function AuthHeroPattern() {
           <Stop offset="1" stopColor="#40388C" />
         </LinearGradient>
       </Defs>
-      <Rect x="0" y="0" width={360} height={190} fill="url(#authRegisterHeroGrad)" />
+      <Rect x="0" y="0" width={360} height={260} fill="url(#authRegisterHeroGrad)" />
       <G opacity="0.2" stroke="#FFFFFF" strokeWidth={1.2} fill="none" strokeLinecap="round">
-        <Path d="M -26 46 C 28 10, 84 10, 134 42 S 236 86, 392 22" />
-        <Path d="M -30 82 C 38 38, 96 42, 154 76 S 270 126, 392 72" opacity={0.72} />
-        <Path d="M -28 128 C 48 86, 116 98, 176 124 S 282 168, 390 118" opacity={0.58} />
-        <Path d="M 32 190 C 92 146, 148 158, 204 176 S 294 212, 388 162" opacity={0.42} />
+        <Path d="M -26 58 C 28 22, 84 22, 134 54 S 236 98, 392 34" />
+        <Path d="M -30 102 C 38 58, 96 62, 154 96 S 270 146, 392 92" opacity={0.72} />
+        <Path d="M -28 158 C 48 116, 116 128, 176 154 S 282 198, 390 148" opacity={0.58} />
+        <Path d="M 32 244 C 92 200, 148 212, 204 230 S 294 266, 388 216" opacity={0.42} />
       </G>
       <G opacity="0.18" stroke="#FFFFFF" strokeWidth={1.1} fill="none">
-        <Circle cx={272} cy={52} r={18} />
-        <Circle cx={302} cy={84} r={8} />
-        <Circle cx={70} cy={142} r={13} />
-        <Circle cx={110} cy={36} r={6} />
+        <Circle cx={272} cy={64} r={18} />
+        <Circle cx={302} cy={96} r={8} />
+        <Circle cx={70} cy={178} r={13} />
+        <Circle cx={110} cy={48} r={6} />
       </G>
       <G opacity="0.08" stroke="#A5B4FC" strokeWidth={18} fill="none">
         <Path d="M 238 -18 C 284 16, 318 52, 386 48" />
-        <Path d="M -34 176 C 36 138, 86 154, 146 194" />
+        <Path d="M -34 232 C 36 194, 86 210, 146 250" />
       </G>
     </Svg>
   );
@@ -174,18 +174,15 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
           <Reanimated.View style={[styles.heroPanel, { borderColor: alpha('#C3C0FF', 0.3) }, heroParallaxStyle]}>
             <AuthHeroPattern />
             <FloatingBubbles />
-            <View style={styles.brandRow}>
-              <View style={styles.logoWrap}>
-                <Image source={billjiLogo} resizeMode="contain" style={styles.logo} />
-              </View>
-              <View style={styles.brandCopy}>
-                <View style={styles.wordmarkRow}>
-                  <Text style={styles.wordmarkBill}>Bill</Text>
-                  <Text style={styles.wordmarkJi}>Ji</Text>
-                </View>
-                <Text style={styles.tagline}>Hisaab Apka, Growth Apki</Text>
-              </View>
+            <View style={styles.logoWrap}>
+              <Image source={billjiLogo} resizeMode="contain" style={styles.logo} />
             </View>
+
+            <View style={styles.wordmarkRow}>
+              <Text style={styles.wordmarkBill}>Bill</Text>
+              <Text style={styles.wordmarkJi}>Ji</Text>
+            </View>
+            <Text style={styles.tagline}>Hisaab Apka, Growth Apki</Text>
           </Reanimated.View>
 
           <AppCard style={[styles.formCard, { borderColor: isDark ? alpha(colors.primary, 0.18) : alpha(colors.primaryStrong, 0.08) }]}>
@@ -269,62 +266,57 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md
   },
   heroPanel: {
+    alignItems: 'center',
     backgroundColor: '#1C1A4A',
     borderRadius: radii.xl,
     borderWidth: 1,
     overflow: 'hidden',
-    padding: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     shadowColor: '#4338CA',
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.08,
     shadowRadius: 28
   },
-  brandRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: 0
-  },
   logoWrap: {
     alignItems: 'center',
     borderRadius: radii.full,
     backgroundColor: alpha('#FFFFFF', 0.96),
-    height: 80,
+    height: 76,
     justifyContent: 'center',
+    marginBottom: spacing.xs,
     overflow: 'hidden',
-    width: 80
+    width: 76
   },
   logo: {
-    height: 80,
-    width: 80
-  },
-  brandCopy: {
-    flex: 1,
-    minWidth: 0
+    height: 76,
+    width: 76
   },
   wordmarkRow: {
     flexDirection: 'row',
-    marginBottom: 3
+    marginBottom: spacing.sm,
+    marginTop: spacing.xs
   },
   wordmarkBill: {
     ...fontStyles.bold,
     color: '#FFFFFF',
-    fontSize: 34,
+    fontSize: 30,
     letterSpacing: -1.4,
-    lineHeight: 40
+    lineHeight: 36
   },
   wordmarkJi: {
     ...fontStyles.bold,
-    color: '#FF8A1F',
-    fontSize: 34,
+    color: '#1E7FFF',
+    fontSize: 30,
     letterSpacing: -1.4,
-    lineHeight: 40
+    lineHeight: 36
   },
   tagline: {
     ...fontStyles.semiBold,
-    color: alpha('#FFFFFF', 0.86),
+    color: alpha('#FFFFFF', 0.88),
     fontSize: 14,
-    lineHeight: 20
+    lineHeight: 20,
+    marginBottom: 0
   },
   bubbleLarge: {
     backgroundColor: alpha('#FFFFFF', 0.18),

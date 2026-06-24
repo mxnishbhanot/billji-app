@@ -60,10 +60,13 @@ if (!build) {
 
 const downloadUrl =
   build.artifacts?.applicationArchiveUrl || build.artifacts?.buildUrl || build.buildUrl || null;
-const pageUrl =
-  build.id && build.project?.slug && build.project?.ownerAccount?.name
-    ? `https://expo.dev/accounts/${build.project.ownerAccount.name}/projects/${build.project.slug}/builds/${build.id}`
-    : null;
+// Prefer the account/slug from the build payload; fall back to the known app
+// identity so the Expo build page link is always constructable from build.id.
+const ownerName = build.project?.ownerAccount?.name || "manish.kumar.8467";
+const projectSlug = build.project?.slug || "quickinvoice-mobile";
+const pageUrl = build.id
+  ? `https://expo.dev/accounts/${ownerName}/projects/${projectSlug}/builds/${build.id}`
+  : null;
 const version = build.appVersion || "?";
 const versionCode = build.appBuildVersion ? ` (${build.appBuildVersion})` : "";
 
@@ -91,10 +94,12 @@ if (!notes) notes = "_No commit notes available._";
 if (notes.length > 1800) notes = notes.slice(0, 1800) + "\n…";
 
 // --- build the message ---
-const linkLine = downloadUrl
-  ? `**[⬇️ Download / install APK](${downloadUrl})**`
-  : pageUrl
-    ? `**[Open build page](${pageUrl})**`
+// Direct APK links stall/hang in the Discord in-app browser. Send testers to
+// the Expo build page instead and let them tap "Install" there themselves.
+const linkLine = pageUrl
+  ? `**[📲 Open on Expo & tap Install](${pageUrl})**`
+  : downloadUrl
+    ? `**[⬇️ Download APK](${downloadUrl})**`
     : "_Build link unavailable._";
 
 const embed = {

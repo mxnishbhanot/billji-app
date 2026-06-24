@@ -349,9 +349,8 @@ export function InvoiceItemsEditor({
               </View>
               <View style={styles.itemActions}>
                 <QuantityStepper cardBorder={cardBorder} colors={colors} index={index} quantity={item.quantity} onSetQuantity={onSetQuantity} onUpdateQuantity={onUpdateQuantity} />
-                <Pressable onPress={() => onRemove(index)} style={({ pressed }) => [styles.removeBtn, { backgroundColor: alpha(colors.destructive, pressed ? 0.2 : isDark ? 0.16 : 0.1) }]}>
-                  <Feather name="trash-2" size={14} color={colors.destructive} />
-                  <Text style={[styles.removeBtnLabel, { color: colors.destructive }]}>Remove</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel="Remove item" onPress={() => onRemove(index)} style={({ pressed }) => [styles.removeBtn, { backgroundColor: alpha(colors.destructive, pressed ? 0.2 : isDark ? 0.16 : 0.1) }]}>
+                  <Feather name="trash-2" size={16} color={colors.destructive} />
                 </Pressable>
               </View>
             </View>
@@ -656,8 +655,7 @@ const styles = StyleSheet.create({
   productList: { marginTop: 10, maxHeight: PRODUCT_ROW_HEIGHT * VISIBLE_PRODUCT_ROWS },
   productRow: { borderRadius: radii.md, borderWidth: 1, marginBottom: 8, paddingRight: 12 },
   productTitle: { ...fontStyles.semiBold, fontSize: 14 },
-  removeBtn: { alignItems: 'center', borderRadius: radii.pill, flexDirection: 'row', gap: 4, paddingHorizontal: 10, paddingVertical: 6 },
-  removeBtnLabel: { ...fontStyles.bold, fontSize: 12 },
+  removeBtn: { alignItems: 'center', borderRadius: radii.pill, height: 36, justifyContent: 'center', width: 36 },
   secondaryPick: { alignItems: 'center', borderRadius: radii.input, borderWidth: 1, flex: 1, flexDirection: 'row', gap: 8, justifyContent: 'center', paddingVertical: 10 },
   secondaryPickLabel: { ...fontStyles.bold, fontSize: 13 },
   sectionCard: { borderRadius: radii.lg, borderWidth: 1, marginBottom: 16, padding: 16 },
