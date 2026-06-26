@@ -63,15 +63,19 @@ jobs:
       - name: Pin Gradle 8.13
         run: sed -i 's#gradle-[0-9.]*-bin.zip#gradle-8.13-bin.zip#' android/gradle/wrapper/gradle-wrapper.properties
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug
+      - name: Build release APK
+        run: ./gradlew assembleRelease
         working-directory: android
+        env:
+          EXPO_PUBLIC_API_BASE_URL: https://billji-backend-production.up.railway.app/api
+          EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: 227522456842-ue9c5l3pjsef3qk5vj6s55nio2pech65.apps.googleusercontent.com
+          EXPO_PUBLIC_ANALYTICS_ENABLED: "false"
 
       - name: Stage APK
         id: apk
         run: |
           SHA="${GITHUB_SHA::7}"
-          cp android/app/build/outputs/apk/debug/app-debug.apk "billji-preview-${SHA}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "billji-preview-${SHA}.apk"
           echo "name=billji-preview-${SHA}.apk" >> "$GITHUB_OUTPUT"
           echo "tag=preview-${SHA}" >> "$GITHUB_OUTPUT"
 
