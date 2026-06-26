@@ -16,6 +16,7 @@ import { RecordPaymentSheet } from '@/components/RecordPaymentSheet';
 import { Screen } from '@/components/Screen';
 import { InvoiceDetailScreenProps } from '@/navigation/types';
 import { openOrSharePdf } from '@/services/pdf';
+import { track } from '@/services/analytics';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, statusTone, typeScale } from '@/theme/theme';
@@ -206,7 +207,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   };
   const cancelInvoice = useMutation({ mutationFn: () => invoicesApi.status(id, 'cancelled'), onSuccess: () => { setCancelling(false); invalidateCancel(); query.refetch(); paymentsQuery.refetch(); }, onError: (error) => { setCancelling(false); showDialog({ title: 'Could not cancel invoice', message: apiErrorMessage(error), tone: 'error' }); } });
   const remove = useMutation({ mutationFn: () => invoicesApi.remove(id), onSuccess: () => { setDeleting(false); invalidateStatusChange(); navigation.navigate('InvoiceList'); }, onError: (error) => { setDeleting(false); showDialog({ title: 'Could not delete invoice', message: apiErrorMessage(error), tone: 'error' }); } });
-  const sendEmail = useMutation({ mutationFn: (email: string) => invoicesApi.email(id, email), onSuccess: () => { setEmailOpen(false); query.refetch(); }, onError: (error) => showDialog({ title: 'Could not send email', message: apiErrorMessage(error), tone: 'error' }) });
+  const sendEmail = useMutation({ mutationFn: (email: string) => invoicesApi.email(id, email), onSuccess: () => { track('invoice_shared', { channel: 'email' }); setEmailOpen(false); query.refetch(); }, onError: (error) => showDialog({ title: 'Could not send email', message: apiErrorMessage(error), tone: 'error' }) });
   const recordPayment = useMutation({
     mutationFn: async ({ payload, settlePreviousDues, invoiceIds }: { payload: RecordPaymentPayload; settlePreviousDues: boolean; invoiceIds: string[] }) => {
       if (settlePreviousDues && customerId) {
@@ -260,6 +261,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
     setBusyAction(label);
     try {
       await openOrSharePdf(invoice.pdfUrl, invoice.invoiceNumber);
+      track('invoice_shared', { channel: label.toLowerCase() });
     } catch (error) {
       showDialog({ title: 'Could not share invoice', message: apiErrorMessage(error), tone: 'error' });
     } finally {

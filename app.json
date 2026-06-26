@@ -19,12 +19,14 @@
         "usesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.billji.mobile",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Billji needs photo library access so you can choose a business logo."
       }
     },
     "android": {
       "package": "com.billji.mobile",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 1,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [],
@@ -42,7 +44,23 @@
         }
       ],
       "expo-sharing",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "@react-native-firebase/app",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "REPLACE_WITH_SENTRY_ORG",
+          "project": "REPLACE_WITH_SENTRY_PROJECT"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ]
     ],
     "extra": {
       "apiBaseUrl": "${EXPO_PUBLIC_API_BASE_URL}",

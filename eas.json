@@ -7,7 +7,9 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend-production.up.railway.app/api"
+        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend-production.up.railway.app/api",
+        "EXPO_PUBLIC_SENTRY_DSN": "REPLACE_WITH_SENTRY_DSN",
+        "EXPO_PUBLIC_ANALYTICS_ENABLED": "false"
       },
       "android": {
         "buildType": "apk"
@@ -16,7 +18,9 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend-production.up.railway.app/api"
+        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend-production.up.railway.app/api",
+        "EXPO_PUBLIC_SENTRY_DSN": "REPLACE_WITH_SENTRY_DSN",
+        "EXPO_PUBLIC_ANALYTICS_ENABLED": "false"
       },
       "android": {
         "buildType": "apk"
@@ -24,7 +28,9 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend-production.up.railway.app/api"
+        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend-production.up.railway.app/api",
+        "EXPO_PUBLIC_SENTRY_DSN": "REPLACE_WITH_SENTRY_DSN",
+        "EXPO_PUBLIC_ANALYTICS_ENABLED": "true"
       },
       "android": {
         "buildType": "app-bundle"

@@ -6,6 +6,7 @@ import { useDocumentDraft } from '@/shared/drafts/useDocumentDraft';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { useAuthStore } from '@/store/authStore';
+import { track } from '@/services/analytics';
 import { Customer, DiscountType, InvoiceCreatePayload, InvoiceDraftPayload, InvoiceItem, Product, StockShortage } from '@/types';
 import { calculateClientTotals } from '@/utils/format';
 import {
@@ -116,7 +117,13 @@ export const useInvoiceBuilder = ({
 
   const createInvoiceMutation = useMutation({
     mutationFn: invoicesApi.create,
-    onSuccess: () => {
+    onSuccess: (_invoice, payload) => {
+      // No PII / amounts — counts and booleans only. Covers normal + oversell paths.
+      track('invoice_created', {
+        item_count: payload.items.length,
+        has_discount: payload.discountValue > 0,
+        oversell: Boolean(payload.allowOversell)
+      });
       draft.clearActiveDraft();
       queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.all });

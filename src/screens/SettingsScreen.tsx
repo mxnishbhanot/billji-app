@@ -21,6 +21,7 @@ import { disconnectSocket } from '@/services/socket';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
+import { getAnalyticsConsent, setAnalyticsConsent } from '@/services/analytics';
 import { BusinessProfileFormValues } from '@/types';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { settingsSchema } from '@/validation/schemas';
@@ -213,6 +214,16 @@ export function SettingsScreen() {
   const [brandSheetVisible, setBrandSheetVisible] = useState(false);
   const [sessionsSheetVisible, setSessionsSheetVisible] = useState(false);
   const [themeSaving, setThemeSaving] = useState(false);
+  const [analyticsOn, setAnalyticsOn] = useState(true);
+
+  useEffect(() => {
+    void getAnalyticsConsent().then(setAnalyticsOn);
+  }, []);
+
+  const toggleAnalytics = (enabled: boolean) => {
+    setAnalyticsOn(enabled);
+    void setAnalyticsConsent(enabled);
+  };
   const form = useForm<BusinessProfileFormValues>({ defaultValues: { businessName: '', invoicePrefix: 'INV', theme: 'light', ...(user?.businessProfile || {}) }, resolver: zodResolver(settingsSchema) });
   const selectedTheme = useWatch({ control: form.control, name: 'theme' }) || 'light';
   const logoPreview = useWatch({ control: form.control, name: 'logoUrl' }) || '';
@@ -446,6 +457,14 @@ export function SettingsScreen() {
         <SettingsRow icon="account-circle-outline" title="Login Account" subtitle={user?.email || 'Signed in'} tone={colors.primary} onPress={() => setActivePanel('account')} />
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow icon="shield-key-outline" title="Security & Sessions" subtitle="See where you're signed in" tone={colors.warning} onPress={() => setSessionsSheetVisible(true)} />
+        <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
+        <SettingsRow
+          icon="chart-box-outline"
+          title="Usage analytics"
+          subtitle="Share anonymous usage to improve Billji"
+          tone={colors.accent}
+          trailing={<Switch value={analyticsOn} onValueChange={toggleAnalytics} color={theme.colors.primary} />}
+        />
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow
           icon="logout"

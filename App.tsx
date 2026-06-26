@@ -21,6 +21,7 @@ import { setupNetworkBridge } from '@/query/networkBridge';
 import { reportsApi } from '@/api/endpoints';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
+import { initAnalytics, setAnalyticsUser, wrapApp } from '@/services/analytics';
 import { darkTheme, lightTheme } from '@/theme/theme';
 
 const billjiLogo = require('./assets/main-logo-clean.png');
@@ -30,7 +31,7 @@ const PREFETCH_TIMEOUT_MS = 2500;
 // Safety net in case the persisted-cache restore callback never fires.
 const CACHE_RESTORE_TIMEOUT_MS = 1500;
 
-export default function App() {
+function App() {
   const hydrated = useAuthStore((state) => state.hydrated);
   const hydrate = useAuthStore((state) => state.hydrate);
   const user = useAuthStore((state) => state.user);
@@ -73,6 +74,17 @@ export default function App() {
 
   useEffect(() => { void hydrate(); }, [hydrate]);
   useEffect(() => setupNetworkBridge(), []);
+  useEffect(() => { void initAnalytics(); }, []);
+  // Push the signed-in identity to analytics on login and clear it on logout,
+  // without coupling authStore to the analytics module. Seed once for the
+  // already-hydrated user (subscribe only fires on subsequent changes).
+  useEffect(() => {
+    const seed = useAuthStore.getState().user;
+    setAnalyticsUser(seed ? { id: seed.id, businessId: seed.businessId } : null);
+    return useAuthStore.subscribe((state) =>
+      setAnalyticsUser(state.user ? { id: state.user.id, businessId: state.user.businessId } : null)
+    );
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -97,3 +109,7 @@ export default function App() {
     </GestureHandlerRootView>
   );
 }
+
+// Sentry's error boundary wraps the tree to capture render crashes. No-op until
+// the native SDK is present (Expo Go / web), so this is always safe.
+export default wrapApp(App);
