@@ -39,6 +39,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Write google-services.json
+        run: |
+          if [ -z "$GS_JSON_B64" ]; then
+            echo "::error::GOOGLE_SERVICES_JSON_B64 secret is not set"; exit 1
+          fi
+          echo "$GS_JSON_B64" | base64 -d > "$GITHUB_WORKSPACE/google-services.json"
+        env:
+          GS_JSON_B64: ${{ secrets.GOOGLE_SERVICES_JSON_B64 }}
+
       - name: Prebuild (generate android/)
         run: npx expo prebuild --platform android --no-install
 
