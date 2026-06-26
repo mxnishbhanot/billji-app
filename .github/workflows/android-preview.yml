@@ -70,6 +70,7 @@ jobs:
           EXPO_PUBLIC_API_BASE_URL: https://billji-backend-production.up.railway.app/api
           EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: 227522456842-ue9c5l3pjsef3qk5vj6s55nio2pech65.apps.googleusercontent.com
           EXPO_PUBLIC_ANALYTICS_ENABLED: "false"
+          SENTRY_DISABLE_AUTO_UPLOAD: "true"
 
       - name: Stage APK
         id: apk
