@@ -79,11 +79,12 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           TAG="${{ steps.apk.outputs.tag }}"
           gh release create "$TAG" "${{ steps.apk.outputs.name }}" \
             --title "BillJi preview ${TAG}" \
-            --notes "Auto preview build — commit ${GITHUB_SHA::7}: ${{ github.event.head_commit.message }}" \
+            --notes "Auto preview build — commit ${GITHUB_SHA::7}: ${COMMIT_MSG}" \
             --target "$GITHUB_SHA"
           URL=$(gh release view "$TAG" --json assets -q '.assets[0].browser_download_url')
           echo "url=$URL" >> "$GITHUB_OUTPUT"
@@ -92,9 +93,10 @@ jobs:
         if: success()
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           MSG="📦 **BillJi Android preview** \`${GITHUB_SHA::7}\` ready
-          ${{ github.event.head_commit.message }}
+          ${COMMIT_MSG}
           ⬇️ ${{ steps.release.outputs.url }}"
           curl -sf -H "Content-Type: application/json" \
             -d "$(jq -nc --arg c "$MSG" '{content:$c}')" "$WEBHOOK"
