@@ -15,6 +15,7 @@ import { useAppDialog } from '@/components/AppDialog';
 import { FormTextInput } from '@/components/FormTextInput';
 import { RegisterScreenProps } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
+import { GoogleSignInCancelled, signInWithGoogle } from '@/services/googleAuth';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
 import { registerSchema } from '@/validation/schemas';
 
@@ -159,6 +160,14 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
   }));
   const form = useForm<{ name: string; email: string; password: string }>({ defaultValues: { name: '', email: '', password: '' }, resolver: zodResolver(registerSchema) });
   const mutation = useMutation({ mutationFn: authApi.register, onSuccess: setSession, onError: (error) => showDialog({ title: 'Registration failed', message: apiErrorMessage(error, 'Registration failed'), tone: 'error' }) });
+  const googleMutation = useMutation({
+    mutationFn: async () => authApi.google(await signInWithGoogle()),
+    onSuccess: setSession,
+    onError: (error) => {
+      if (error instanceof GoogleSignInCancelled) return;
+      showDialog({ title: 'Google sign up failed', message: apiErrorMessage(error, 'Google sign up failed'), tone: 'error' });
+    }
+  });
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right']}>
@@ -194,7 +203,9 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
             <Button
               mode="outlined"
               icon="google"
-              onPress={() => showDialog({ title: 'Google sign up', message: 'Google sign up will be available after Google auth is connected.' })}
+              loading={googleMutation.isPending}
+              disabled={googleMutation.isPending}
+              onPress={() => googleMutation.mutate()}
               contentStyle={styles.googleButtonContent}
               labelStyle={[styles.googleButtonLabel, { color: theme.colors.onSurface }]}
               style={[styles.googleButton, { borderColor: theme.colors.outlineVariant }]}

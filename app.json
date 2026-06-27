@@ -46,6 +46,7 @@
       "expo-sharing",
       "@react-native-community/datetimepicker",
       "@react-native-firebase/app",
+      "@react-native-google-signin/google-signin",
       [
         "@sentry/react-native/expo",
         {

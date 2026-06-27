@@ -51,6 +51,7 @@ const idempotencyKey = (scope: string) => `${scope}-${Date.now()}-${Math.random(
 export const authApi = {
   register: (payload: { name: string; email: string; password: string }) => api.post<AuthSession>('/auth/register', payload).then((res) => res.data),
   login: (payload: { email: string; password: string }) => api.post<AuthSession>('/auth/login', payload).then((res) => res.data),
+  google: (idToken: string) => api.post<AuthSession>('/auth/google', { idToken }).then((res) => res.data),
   refresh: (refreshToken: string) => api.post<AuthSession>('/auth/refresh', { refreshToken }).then((res) => res.data),
   logout: () => api.post<{ success: boolean }>('/auth/logout').then((res) => res.data),
   sessions: () => api.get<{ sessions: UserSession[] }>('/auth/sessions').then((res) => res.data.sessions),
