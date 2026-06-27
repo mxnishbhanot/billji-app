@@ -1,0 +1,118 @@
+# ---------------------------------------------------------------------------
+# Reusable EAS Android build (called by android-preview.yml & manual-build.yml)
+#
+# This workflow does the real work so the trigger workflows stay tiny and DRY:
+#   1. Validate required secrets BEFORE doing anything expensive.
+#   2. Set up Node 20 + npm cache and install JS deps.
+#   3. Install + authenticate EAS CLI (via EXPO_TOKEN).
+#   4. Run a single non-interactive EAS cloud build on the given profile.
+#   5. Notify Discord on success OR failure with a rich message.
+#
+# It is intentionally NOT triggered directly — `workflow_call` only.
+# ---------------------------------------------------------------------------
+name: Reusable EAS Build
+
+on:
+  workflow_call:
+    inputs:
+      profile:
+        description: EAS build profile (eas.json)
+        type: string
+        default: preview
+      platform:
+        description: Target platform
+        type: string
+        default: android
+    secrets:
+      EXPO_TOKEN:
+        description: Expo access token used by EAS CLI for non-interactive auth
+        required: true
+      DISCORD_WEBHOOK_URL:
+        description: Discord channel webhook for build notifications
+        required: true
+
+# One build at a time. Don't cancel an in-flight build — EAS minutes are paid.
+concurrency:
+  group: eas-build-${{ inputs.platform }}-${{ inputs.profile }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: EAS ${{ inputs.platform }} (${{ inputs.profile }})
+    runs-on: ubuntu-latest
+    # Read-only token: this workflow does not push commits or create releases.
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Fail fast with a clear message if a secret is missing/empty, instead of
+      # leaking a confusing EAS auth error halfway through the run.
+      - name: Validate required secrets
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: bash scripts/check-secrets.sh EXPO_TOKEN DISCORD_WEBHOOK_URL
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Official Expo action: installs a pinned EAS CLI and authenticates using
+      # EXPO_TOKEN. No interactive login, no token written to disk.
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Single cloud build. --wait blocks until it finishes so we know the real
+      # outcome; --json gives us a machine-readable result to pull the URL from.
+      # We capture to a file (not stdout interpolation) to stay injection-safe.
+      - name: Run EAS build
+        id: eas
+        run: |
+          set -o pipefail
+          echo "Starting EAS build: platform=${{ inputs.platform }} profile=${{ inputs.profile }}"
+          eas build \
+            --platform "${{ inputs.platform }}" \
+            --profile "${{ inputs.profile }}" \
+            --non-interactive \
+            --wait \
+            --json > eas-build.json
+          echo "EAS build finished. Result:"
+          cat eas-build.json
+
+      - name: Notify Discord — success
+        if: success()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          BUILD_STATUS: success
+          EAS_BUILD_JSON: eas-build.json
+          APP_NAME: BillJi
+          GIT_BRANCH: ${{ github.ref_name }}
+          GIT_SHA: ${{ github.sha }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/notify-discord.mjs
+
+      - name: Notify Discord — failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          BUILD_STATUS: failure
+          APP_NAME: BillJi
+          GIT_BRANCH: ${{ github.ref_name }}
+          GIT_SHA: ${{ github.sha }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          FAIL_REASON: "EAS build or a prior step failed. See the GitHub Actions logs."
+        run: node scripts/notify-discord.mjs

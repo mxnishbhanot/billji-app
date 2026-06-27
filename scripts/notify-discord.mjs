@@ -1,135 +1,129 @@
 #!/usr/bin/env node
-// Post a "new dev build" message to Discord via webhook.
-// Includes the install/download link + release notes (commit subjects
-// since the previous preview build tag) so testers know what to test.
+// ---------------------------------------------------------------------------
+// Post a BillJi build notification to Discord via webhook.
 //
-// Usage:
-//   node scripts/notify-discord.mjs --platform android --profile preview
+// Driven entirely by environment variables so it works identically for the
+// success and failure steps, and is reusable from any workflow.
 //
 // Env:
-//   DISCORD_WEBHOOK_URL  (required) — channel webhook
-//   EXPO_TOKEN           (required) — to query the latest build
-//   GITHUB_RUN_NUMBER    (optional) — used to label/tag the build
+//   DISCORD_WEBHOOK_URL  (required) — channel webhook. If unset, exits 0 (no-op).
+//   BUILD_STATUS         (required) — "success" | "failure".
+//   APP_NAME             (optional) — defaults to "BillJi".
+//   GIT_BRANCH           (optional) — branch name (github.ref_name).
+//   GIT_SHA              (optional) — full commit SHA; trimmed to 7 chars.
+//   COMMIT_MSG           (optional) — commit subject/body.
+//   RUN_URL              (optional) — GitHub Actions run URL.
+//   EAS_BUILD_JSON       (success)  — path to `eas build --json` output.
+//   FAIL_REASON          (failure)  — short failure reason text.
+//
+// Notifications are best-effort: a webhook error logs but never fails the job
+// (the build result itself already reflects success/failure).
+// ---------------------------------------------------------------------------
+import { readFileSync } from "node:fs";
 
-import { execFileSync } from "node:child_process";
-
-function arg(name, fallback) {
-  const i = process.argv.indexOf(`--${name}`);
-  return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
-}
-
-const platform = arg("platform", "android");
-const profile = arg("profile", "preview");
 const webhook = process.env.DISCORD_WEBHOOK_URL;
-const runNumber = process.env.GITHUB_RUN_NUMBER || "";
-
 if (!webhook) {
   console.error("DISCORD_WEBHOOK_URL not set — skipping Discord notify.");
-  process.exit(0); // non-fatal: don't fail the build over a notification
-}
-
-const eas = process.platform === "win32" ? "eas.cmd" : "eas";
-
-function sh(cmd, args, opts = {}) {
-  return execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], ...opts }).trim();
-}
-
-// --- newest finished build for this platform/profile ---
-let build;
-try {
-  const raw = sh(eas, [
-    "build:list",
-    "--platform", platform,
-    "--build-profile", profile,
-    "--status", "finished",
-    "--limit", "1",
-    "--json",
-    "--non-interactive",
-  ]);
-  const arr = JSON.parse(raw);
-  build = Array.isArray(arr) ? arr[0] : null;
-} catch {
-  console.error("Could not list builds — skipping notify.");
   process.exit(0);
 }
 
-if (!build) {
-  console.error("No finished build found — skipping notify.");
-  process.exit(0);
-}
+const status = (process.env.BUILD_STATUS || "").toLowerCase();
+const appName = process.env.APP_NAME || "BillJi";
+const branch = process.env.GIT_BRANCH || "unknown";
+const sha = (process.env.GIT_SHA || "").slice(0, 7) || "unknown";
+const commitMsg = (process.env.COMMIT_MSG || "").trim() || "(no commit message)";
+const runUrl = process.env.RUN_URL || "(run URL unavailable)";
+const builtAt = new Date().toISOString().replace("T", " ").replace(/\..+/, " UTC");
 
-const downloadUrl =
-  build.artifacts?.applicationArchiveUrl || build.artifacts?.buildUrl || build.buildUrl || null;
-// Prefer the account/slug from the build payload; fall back to the known app
-// identity so the Expo build page link is always constructable from build.id.
-const ownerName = build.project?.ownerAccount?.name || "manish.kumar.8467";
-const projectSlug = build.project?.slug || "quickinvoice-mobile";
-const pageUrl = build.id
-  ? `https://expo.dev/accounts/${ownerName}/projects/${projectSlug}/builds/${build.id}`
-  : null;
-const version = build.appVersion || "?";
-const versionCode = build.appBuildVersion ? ` (${build.appBuildVersion})` : "";
-
-// --- release notes: commits since previous preview tag ---
-const TAG_PREFIX = `preview-${platform}-`;
-let range = "";
-try {
-  const lastTag = sh("git", ["describe", "--tags", "--abbrev=0", "--match", `${TAG_PREFIX}*`]);
-  if (lastTag) range = `${lastTag}..HEAD`;
-} catch {
-  // no prior tag — fall back to recent history below
-}
-
-let notes;
-try {
-  const args = ["log", "--no-merges", "--pretty=- %s"];
-  if (range) args.push(range);
-  else args.push("-15");
-  notes = sh("git", args);
-} catch {
-  notes = "";
-}
-if (!notes) notes = "_No commit notes available._";
-// Discord embed description cap is 4096; keep it well under.
-if (notes.length > 1800) notes = notes.slice(0, 1800) + "\n…";
-
-// --- build the message ---
-// Direct APK links stall/hang in the Discord in-app browser. Send testers to
-// the Expo build page instead and let them tap "Install" there themselves.
-const linkLine = pageUrl
-  ? `**[📲 Open on Expo & tap Install](${pageUrl})**`
-  : downloadUrl
-    ? `**[⬇️ Download APK](${downloadUrl})**`
-    : "_Build link unavailable._";
-
-const embed = {
-  title: `📱 New Billji ${profile} build — v${version}${versionCode}`,
-  description: `${linkLine}\n\n**What to test:**\n${notes}`,
-  color: 0xfc7a0e,
-  footer: { text: runNumber ? `CI run #${runNumber} · ${platform}/${profile}` : `${platform}/${profile}` },
-};
-
-const res = await fetch(webhook, {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ embeds: [embed] }),
-});
-
-if (!res.ok) {
-  console.error(`Discord webhook failed: ${res.status} ${await res.text()}`);
-  process.exit(0); // non-fatal
-}
-
-console.log("Posted build notice to Discord.");
-
-// --- tag this build so the next run diffs from here ---
-if (runNumber) {
-  const tag = `${TAG_PREFIX}${runNumber}`;
+// --- pull the build URL from the EAS --json result (success only) ----------
+function readBuildUrl() {
+  const path = process.env.EAS_BUILD_JSON;
+  if (!path) return null;
+  let builds;
   try {
-    sh("git", ["tag", tag]);
-    sh("git", ["push", "origin", tag]);
-    console.log(`Tagged ${tag}.`);
+    builds = JSON.parse(readFileSync(path, "utf8"));
   } catch {
-    console.error(`Could not push tag ${tag} (non-fatal).`);
+    console.error(`Could not read/parse ${path} — build URL omitted.`);
+    return null;
   }
+  const build = Array.isArray(builds) ? builds[0] : builds;
+  if (!build) return null;
+
+  // Direct artifact (APK) download if EAS exposes it...
+  const apk =
+    build.artifacts?.applicationArchiveUrl || build.artifacts?.buildUrl || null;
+
+  // ...otherwise the Expo build detail page, constructed from the build's own
+  // project metadata (NEVER a hardcoded account — works for any Expo account).
+  const owner = build.project?.ownerAccount?.name;
+  const slug = build.project?.slug;
+  const page =
+    owner && slug && build.id
+      ? `https://expo.dev/accounts/${owner}/projects/${slug}/builds/${build.id}`
+      : null;
+
+  return apk || page || null;
+}
+
+// --- compose the message ----------------------------------------------------
+let content;
+if (status === "success") {
+  const buildUrl = readBuildUrl() || "(build URL unavailable)";
+  content = [
+    `✅ **${appName} Weekly Android Preview Build**`,
+    ``,
+    `Branch: ${branch}`,
+    `Built: ${builtAt}`,
+    ``,
+    `Commit:`,
+    sha,
+    ``,
+    `Message:`,
+    commitMsg,
+    ``,
+    `Build:`,
+    buildUrl,
+    ``,
+    `GitHub:`,
+    runUrl,
+    ``,
+    `Ready for QA 🚀`,
+  ].join("\n");
+} else {
+  const reason = (process.env.FAIL_REASON || "Unknown error.").trim();
+  content = [
+    `❌ **${appName} Weekly Build Failed**`,
+    ``,
+    `Branch: ${branch}`,
+    `When: ${builtAt}`,
+    ``,
+    `Commit:`,
+    sha,
+    ``,
+    `Reason:`,
+    reason,
+    ``,
+    `GitHub Logs:`,
+    runUrl,
+  ].join("\n");
+}
+
+// Discord hard-caps message content at 2000 chars.
+if (content.length > 1990) content = content.slice(0, 1985) + "\n…";
+
+try {
+  const res = await fetch(webhook, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) {
+    console.error(`Discord webhook failed: ${res.status} ${await res.text()}`);
+    process.exit(0); // non-fatal
+  }
+  console.log(`Posted ${status} notification to Discord.`);
+} catch (err) {
+  // Network/DNS error etc. — never let a notification failure fail the job.
+  console.error(`Discord webhook errored: ${err?.message || err}`);
+  process.exit(0);
 }

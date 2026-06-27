@@ -100,7 +100,7 @@ Build production Android App Bundle:
 eas build --profile production --platform android
 ```
 
-Build profiles use `EXPO_PUBLIC_API_BASE_URL=https://billji-backend-production.up.railway.app/api` from `eas.json`.
+Build profiles read `EXPO_PUBLIC_API_BASE_URL` from `eas.json` — point it at your new Railway backend URL (placeholder `REPLACE_WITH_NEW_RAILWAY_API_BASE_URL`). CI/CD details: see [docs/CICD.md](docs/CICD.md).
 
 ## Backend Requirement
 

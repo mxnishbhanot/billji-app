@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Billji",
-    "slug": "quickinvoice-mobile",
+    "slug": "billji-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -66,9 +66,9 @@
     "extra": {
       "apiBaseUrl": "${EXPO_PUBLIC_API_BASE_URL}",
       "eas": {
-        "projectId": "84b61666-5d34-4f35-b150-b54c640d368a"
+        "projectId": "5e946fc2-16ed-4aa0-af9d-d6f61ea09c3b"
       }
     },
-    "owner": "manish.kumar.8467"
+    "owner": "billji.dev"
   }
 }

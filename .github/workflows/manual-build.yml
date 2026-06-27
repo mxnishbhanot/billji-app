@@ -1,0 +1,30 @@
+# ---------------------------------------------------------------------------
+# Manual Android build — on-demand, off the latest commit of the chosen branch.
+#
+# Run from: GitHub -> Actions -> "Manual Android Build" -> "Run workflow".
+# Use this for ad-hoc QA builds without waiting for the weekly main push.
+# Defaults to the `preview` profile; pick another profile from the dropdown.
+# ---------------------------------------------------------------------------
+name: Manual Android Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: EAS build profile
+        type: choice
+        default: preview
+        options:
+          - preview
+          - production
+
+jobs:
+  manual:
+    name: Build & notify
+    uses: ./.github/workflows/_reusable-eas-build.yml
+    with:
+      platform: android
+      profile: ${{ inputs.profile }}
+    secrets:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
