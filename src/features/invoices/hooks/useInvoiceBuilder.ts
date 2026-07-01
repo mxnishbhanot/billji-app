@@ -210,6 +210,7 @@ export const useInvoiceBuilder = ({
     customersQuery,
     customModal,
     discardRecoveryDraft: draft.discardRecoveryDraft,
+    dismissRecoveryDraft: draft.dismissRecoveryDraft,
     draftHydrated: draft.draftHydrated,
     draftStatus: draft.draftStatus,
     duplicateDraft: draft.duplicateDraft,

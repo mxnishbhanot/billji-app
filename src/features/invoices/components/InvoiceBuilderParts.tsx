@@ -509,6 +509,7 @@ export function InvoiceBuilderDialogs({
   onRecoveryDiscard,
   onRecoveryDuplicate,
   onRecoveryResume,
+  onRecoveryDismiss,
   selectedCustomerId,
   stockWarning
 }: {
@@ -539,6 +540,7 @@ export function InvoiceBuilderDialogs({
   onRecoveryDiscard: () => void;
   onRecoveryDuplicate: () => void;
   onRecoveryResume: () => void;
+  onRecoveryDismiss?: () => void;
   selectedCustomerId?: string;
   stockWarning: { items: StockShortage[] } | null;
 }) {
@@ -568,7 +570,7 @@ export function InvoiceBuilderDialogs({
       onSubmit={customForm.handleSubmit((values) => { onAddCustomItem(customItemFromForm(values)); onCloseCustomModal(); customForm.reset(customItemDefaults); })}
     />
     <Portal>
-      <Dialog visible={Boolean(recoveryDraft)} onDismiss={onRecoveryResume}>
+      <Dialog visible={Boolean(recoveryDraft)} onDismiss={onRecoveryDismiss ?? onRecoveryResume}>
         <Dialog.Title>{recoveryTitle}</Dialog.Title>
         <Dialog.Content>
           <Text style={{ color: theme.colors.onSurfaceVariant }}>

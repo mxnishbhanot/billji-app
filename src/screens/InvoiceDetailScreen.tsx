@@ -305,13 +305,16 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   const canCancel = invoice.eligibility?.canCancel ?? !isCancelled;
   const canDelete = invoice.eligibility?.canDelete ?? (!isCancelled && !hasPayments && !hasProductItems);
 
-  // Cancel keeps the record and reverses stock/accounting, but never refunds.
-  // The warning copy depends on how much was already paid.
+  // Cancel keeps the record, restores stock, and reverses the accounting entries
+  // (so reports adjust). BillJi never moves money — issuing the actual refund is
+  // the user's responsibility. The copy also asks the user to confirm they've
+  // agreed the cancellation with their customer. Wording depends on how much was
+  // already paid.
   const cancelMessage =
     paidAmount > 0 && balanceDue <= 0
-      ? 'This invoice has been fully paid. Cancelling it will restore inventory and cancel the invoice but will not refund or reverse any existing payments.'
+      ? 'This invoice has been fully paid. Cancelling will restore inventory, reverse the accounting entries, and adjust your reports accordingly. BillJi does not move any money — refunding your customer is your responsibility. By continuing you confirm you have agreed this cancellation with your customer; BillJi is not liable for any dispute arising from it.'
       : paidAmount > 0
-        ? 'This invoice has received a partial payment. Cancelling it will restore inventory and cancel the invoice but will not refund or reverse any existing payments.'
+        ? 'This invoice has received a partial payment. Cancelling will restore inventory, reverse the accounting entries, and adjust your reports accordingly. BillJi does not move any money — refunding your customer is your responsibility. By continuing you confirm you have agreed this cancellation with your customer; BillJi is not liable for any dispute arising from it.'
         : 'This voids the invoice, restores stock for product items, and keeps the record for history.';
 
   const requestCancel = () => setCancelling(true);
