@@ -36,6 +36,11 @@ export const useDocumentDraft = <TPayload,>({
   const currentDraftIdRef = useRef(currentDraftId);
   const lastEditedAtRef = useRef<string | null>(null);
   const serverDraftIdRef = useRef<string | null>(null);
+  // Draft ids that have been finalized (document created) or explicitly cleared.
+  // A debounced/late sync for one of these must not re-create it locally or on the
+  // server — otherwise a just-created invoice's draft resurrects and nags on the
+  // next open. Keyed by id so a fresh session (new id) is never blocked.
+  const finalizedDraftIdsRef = useRef<Set<string>>(new Set());
   // Latest payload mirrored into a ref so the NetInfo listener can read it without
   // being in the effect deps (otherwise it re-subscribes on every keystroke).
   const payloadRef = useRef(payload);
@@ -58,6 +63,8 @@ export const useDocumentDraft = <TPayload,>({
   }, []);
 
   const syncDraft = useCallback(async (draft: DraftDocument<TPayload>) => {
+    // A finalized/cleared draft must never be pushed back to the server.
+    if (finalizedDraftIdsRef.current.has(draft.localDraftId)) return;
     try {
       const network = await NetInfo.fetch();
       if (network.isConnected === false || network.isInternetReachable === false) {
@@ -141,6 +148,8 @@ export const useDocumentDraft = <TPayload,>({
 
   useEffect(() => {
     if (!draftHydrated || !hasDraftContent) return undefined;
+    // Don't revive a draft that was just finalized/cleared under this id.
+    if (finalizedDraftIdsRef.current.has(currentDraftId)) return undefined;
 
     const lastEditedAt = new Date().toISOString();
     lastEditedAtRef.current = lastEditedAt;
@@ -227,6 +236,7 @@ export const useDocumentDraft = <TPayload,>({
   const discardRecoveryDraft = () => {
     if (!recoveryDraft) return;
     const draftToDiscard = recoveryDraft;
+    finalizedDraftIdsRef.current.add(draftToDiscard.localDraftId);
     setRecoveryDraft(null);
     setDraftStatus('idle');
     setLastDraftSavedAt(null);
@@ -235,9 +245,20 @@ export const useDocumentDraft = <TPayload,>({
     void clearDraft(draftToDiscard.localDraftId);
   };
 
+  // Hide the recovery prompt without applying or deleting the draft — a neutral
+  // "later" so a stray scrim/back tap can't silently load or destroy saved work.
+  const dismissRecoveryDraft = () => setRecoveryDraft(null);
+
   // Call after the document is created so the now-redundant draft disappears.
   const clearActiveDraft = () => {
-    void clearDraft(currentDraftIdRef.current).catch(() => {});
+    const finalizedId = currentDraftIdRef.current;
+    // Block any in-flight debounced sync from resurrecting this draft, then roll to
+    // a fresh id so continued editing on the same screen starts a clean draft.
+    finalizedDraftIdsRef.current.add(finalizedId);
+    void clearDraft(finalizedId).catch(() => {});
+    serverDraftIdRef.current = null;
+    lastEditedAtRef.current = null;
+    setActiveDraftId(createDraftId(documentType));
     setIsDraftDirty(false);
     setDraftStatus('idle');
     setLastDraftSavedAt(null);
@@ -246,6 +267,7 @@ export const useDocumentDraft = <TPayload,>({
   return {
     clearActiveDraft,
     discardRecoveryDraft,
+    dismissRecoveryDraft,
     draftHydrated,
     draftStatus,
     duplicateDraft,

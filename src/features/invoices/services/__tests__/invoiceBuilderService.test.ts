@@ -90,8 +90,17 @@ describe('invoiceBuilderService', () => {
       notes: ''
     });
     const noteDraft = { ...emptyDraft, notes: 'Remember this' };
+    const itemDraft = { ...emptyDraft, items: [{ productId: 'p1', name: 'Pen', quantity: 1, unitPrice: 10 } as never] };
+    // Incidental state must NOT count as recoverable content.
+    const customerOnlyDraft = { ...emptyDraft, selectedCustomerId: 'cust-1' };
+    const taxOnlyDraft = { ...emptyDraft, taxRate: '18' };
+    const discountOnlyDraft = { ...emptyDraft, discountValue: '5' };
 
     expect(hasInvoiceDraftContent(emptyDraft)).toBe(false);
     expect(hasInvoiceDraftContent(noteDraft)).toBe(true);
+    expect(hasInvoiceDraftContent(itemDraft)).toBe(true);
+    expect(hasInvoiceDraftContent(customerOnlyDraft)).toBe(false);
+    expect(hasInvoiceDraftContent(taxOnlyDraft)).toBe(false);
+    expect(hasInvoiceDraftContent(discountOnlyDraft)).toBe(false);
   });
 });

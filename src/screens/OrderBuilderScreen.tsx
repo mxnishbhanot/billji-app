@@ -161,6 +161,7 @@ export function OrderBuilderScreen({ navigation }: OrderBuilderScreenProps) {
         onRecoveryDiscard={builder.discardRecoveryDraft}
         onRecoveryDuplicate={builder.duplicateDraft}
         onRecoveryResume={builder.resumeDraft}
+        onRecoveryDismiss={builder.dismissRecoveryDraft}
         onSelectCustomer={builder.selectCustomer}
         onStockWarningClose={() => undefined}
         onStockWarningContinue={() => undefined}

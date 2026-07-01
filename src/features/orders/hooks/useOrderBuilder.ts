@@ -152,6 +152,7 @@ export const useOrderBuilder = ({
     customersQuery,
     customModal,
     discardRecoveryDraft: draft.discardRecoveryDraft,
+    dismissRecoveryDraft: draft.dismissRecoveryDraft,
     discountType,
     discountValue,
     draftHydrated: draft.draftHydrated,
