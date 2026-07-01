@@ -177,6 +177,7 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
         onRecoveryDiscard={builder.discardRecoveryDraft}
         onRecoveryDuplicate={builder.duplicateDraft}
         onRecoveryResume={builder.resumeDraft}
+        onRecoveryDismiss={builder.dismissRecoveryDraft}
         onSelectCustomer={builder.selectCustomer}
         onStockWarningClose={() => builder.setStockWarning(null)}
         onStockWarningContinue={builder.continueWithOversell}

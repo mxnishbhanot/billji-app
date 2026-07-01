@@ -129,15 +129,10 @@ export const buildInvoiceDraftPayload = ({
   notes
 });
 
-// defaultTaxRate: the business default pre-filled into a fresh builder — a builder holding
-// only that pre-fill has no user content, so it must not trigger draft autosave.
-export const hasInvoiceDraftContent = (payload: InvoiceDraftPayload, defaultTaxRate = 0) =>
-  Boolean(
-    payload.selectedCustomerId ||
-    payload.selectedCustomer ||
-    payload.items.length ||
-    payload.notes.trim() ||
-    Number(payload.taxRate || 0) !== defaultTaxRate ||
-    payload.discountType !== 'flat' ||
-    Number(payload.discountValue || 0) !== 0
-  );
+// A draft is worth saving/recovering only when it holds real invoice work: at least
+// one line item, or notes. Incidental state — a lone customer selection, or the
+// pre-filled tax/discount defaults — is NOT meaningful on its own, so it must not
+// create a recoverable draft that later nags the user with a recovery prompt.
+// (defaultTaxRate kept for signature compatibility; tax/discount no longer gate content.)
+export const hasInvoiceDraftContent = (payload: InvoiceDraftPayload, _defaultTaxRate = 0) =>
+  Boolean(payload.items.length || payload.notes.trim());
