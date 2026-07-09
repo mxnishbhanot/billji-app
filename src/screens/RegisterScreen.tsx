@@ -16,6 +16,7 @@ import { FormTextInput } from '@/components/FormTextInput';
 import { RegisterScreenProps } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { GoogleSignInCancelled, signInWithGoogle } from '@/services/googleAuth';
+import { LoginResult, isTwoFactorChallenge } from '@/types';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
 import { registerSchema } from '@/validation/schemas';
 
@@ -162,7 +163,14 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
   const mutation = useMutation({ mutationFn: authApi.register, onSuccess: setSession, onError: (error) => showDialog({ title: 'Registration failed', message: apiErrorMessage(error, 'Registration failed'), tone: 'error' }) });
   const googleMutation = useMutation({
     mutationFn: async () => authApi.google(await signInWithGoogle()),
-    onSuccess: setSession,
+    // An existing Google account may already have 2FA on — route to the challenge.
+    onSuccess: (result: LoginResult) => {
+      if (isTwoFactorChallenge(result)) {
+        navigation.navigate('TwoFactorChallenge', { challengeToken: result.challengeToken, method: result.method, email: result.email, devCode: result.devCode });
+        return;
+      }
+      void setSession(result);
+    },
     onError: (error) => {
       if (error instanceof GoogleSignInCancelled) return;
       showDialog({ title: 'Google sign up failed', message: apiErrorMessage(error, 'Google sign up failed'), tone: 'error' });

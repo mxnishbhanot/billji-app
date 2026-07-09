@@ -17,6 +17,7 @@ import { LoginScreenProps } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { GoogleSignInCancelled, signInWithGoogle } from '@/services/googleAuth';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
+import { LoginResult, isTwoFactorChallenge } from '@/types';
 import { loginSchema } from '@/validation/schemas';
 
 const billjiLogo = require('../../assets/main-logo-clean.png');
@@ -169,10 +170,18 @@ export function LoginScreen({ navigation }: LoginScreenProps) {
     ]
   }));
   const form = useForm<{ email: string; password: string }>({ defaultValues: { email: '', password: '' }, resolver: zodResolver(loginSchema) });
-  const mutation = useMutation({ mutationFn: authApi.login, onSuccess: setSession, onError: (error) => showDialog({ title: 'Login failed', message: apiErrorMessage(error, 'Login failed'), tone: 'error' }) });
+  // Login/Google may return a session or, when 2FA is on, a challenge to complete.
+  const handleAuthResult = (result: LoginResult) => {
+    if (isTwoFactorChallenge(result)) {
+      navigation.navigate('TwoFactorChallenge', { challengeToken: result.challengeToken, method: result.method, email: result.email, devCode: result.devCode });
+      return;
+    }
+    void setSession(result);
+  };
+  const mutation = useMutation({ mutationFn: authApi.login, onSuccess: handleAuthResult, onError: (error) => showDialog({ title: 'Login failed', message: apiErrorMessage(error, 'Login failed'), tone: 'error' }) });
   const googleMutation = useMutation({
     mutationFn: async () => authApi.google(await signInWithGoogle()),
-    onSuccess: setSession,
+    onSuccess: handleAuthResult,
     onError: (error) => {
       if (error instanceof GoogleSignInCancelled) return;
       showDialog({ title: 'Google sign in failed', message: apiErrorMessage(error, 'Google sign in failed'), tone: 'error' });

@@ -458,6 +458,8 @@ export function SettingsScreen() {
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow icon="shield-key-outline" title="Security & Sessions" subtitle="See where you're signed in" tone={colors.warning} onPress={() => setSessionsSheetVisible(true)} />
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
+        <SettingsRow icon="shield-lock-outline" title="Two-factor authentication" subtitle="Add a second step at login" tone={colors.accent} onPress={() => navigation.navigate('TwoFactorSetup')} />
+        <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow
           icon="chart-box-outline"
           title="Usage analytics"

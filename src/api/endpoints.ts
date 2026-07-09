@@ -18,6 +18,8 @@ import {
   InvoiceQuery,
   InvoiceTemplate,
   LedgerEntryRow,
+  LoginResult,
+  TwoFactorStatus,
   Order,
   OrderCreatePayload,
   OrderQuery,
@@ -50,8 +52,8 @@ const idempotencyKey = (scope: string) => `${scope}-${Date.now()}-${Math.random(
 
 export const authApi = {
   register: (payload: { name: string; email: string; password: string }) => api.post<AuthSession>('/auth/register', payload).then((res) => res.data),
-  login: (payload: { email: string; password: string }) => api.post<AuthSession>('/auth/login', payload).then((res) => res.data),
-  google: (idToken: string) => api.post<AuthSession>('/auth/google', { idToken }).then((res) => res.data),
+  login: (payload: { email: string; password: string }) => api.post<LoginResult>('/auth/login', payload).then((res) => res.data),
+  google: (idToken: string) => api.post<LoginResult>('/auth/google', { idToken }).then((res) => res.data),
   refresh: (refreshToken: string) => api.post<AuthSession>('/auth/refresh', { refreshToken }).then((res) => res.data),
   logout: () => api.post<{ success: boolean }>('/auth/logout').then((res) => res.data),
   sessions: () => api.get<{ sessions: UserSession[] }>('/auth/sessions').then((res) => res.data.sessions),
@@ -62,6 +64,25 @@ export const authApi = {
   updateSettings: (payload: Partial<BusinessProfile>) => api.patch<{ success: boolean; user: User }>('/settings', payload).then((res) => res.data),
   invoiceTemplatePreview: (payload: Partial<InvoiceTemplate>) =>
     api.post<string>('/settings/invoice-template/preview', payload, { responseType: 'text', transformResponse: (data) => data }).then((res) => res.data)
+};
+
+type SetupResponse = { success: boolean; otpauthUrl?: string; secret?: string; email?: string; devCode?: string };
+type EnableResponse = { success: boolean; method: string; backupCodes: string[] };
+
+// Two-factor authentication. Enrollment/management calls require a live session;
+// verify/resend are the login second step (authorized by the challenge token).
+export const twoFactorApi = {
+  status: () => api.get<{ twoFactor: TwoFactorStatus }>('/auth/2fa/status').then((res) => res.data.twoFactor),
+  totpSetup: () => api.post<SetupResponse>('/auth/2fa/totp/setup').then((res) => res.data),
+  totpEnable: (code: string) => api.post<EnableResponse>('/auth/2fa/totp/enable', { code }).then((res) => res.data),
+  emailSetup: () => api.post<SetupResponse>('/auth/2fa/email/setup').then((res) => res.data),
+  emailEnable: (code: string) => api.post<EnableResponse>('/auth/2fa/email/enable', { code }).then((res) => res.data),
+  sendManageCode: () => api.post<SetupResponse>('/auth/2fa/send-code').then((res) => res.data),
+  disable: (code: string) => api.post<{ success: boolean }>('/auth/2fa/disable', { code }).then((res) => res.data),
+  regenerateBackupCodes: (code: string) => api.post<{ success: boolean; backupCodes: string[] }>('/auth/2fa/backup-codes/regenerate', { code }).then((res) => res.data),
+  verify: (payload: { challengeToken: string; code: string; rememberDevice?: boolean }) =>
+    api.post<AuthSession>('/auth/2fa/verify', payload).then((res) => res.data),
+  resend: (challengeToken: string) => api.post<SetupResponse>('/auth/2fa/resend', { challengeToken }).then((res) => res.data)
 };
 
 export const productsApi = {
