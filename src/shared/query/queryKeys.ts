@@ -5,7 +5,8 @@ export type QueryParams = ApiParams;
 export const queryKeys = {
   auth: {
     me: ['auth', 'me'] as const,
-    sessions: ['auth', 'sessions'] as const
+    sessions: ['auth', 'sessions'] as const,
+    twoFactor: ['auth', '2fa'] as const
   },
   customers: {
     all: ['customers'] as const,

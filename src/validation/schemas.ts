@@ -29,6 +29,8 @@ export const productSchema = z.object({
   lowStockThreshold: z.union([z.literal(''), z.string().trim().regex(/^\d+$/, 'Low stock alert must be a whole number')]).optional()
 });
 export const emailSchema = z.object({ email: z.email('Enter a valid email') });
+// Accepts a 6-digit authenticator/email code or a backup code (e.g. "3f9ac-1b7de").
+export const twoFactorCodeSchema = z.object({ code: z.string().trim().min(6, 'Enter your verification code') });
 export const customItemSchema = z.object({
   name: z.string().trim().min(1, 'Item name is required').max(120),
   price: decimalAmount('Price'),
