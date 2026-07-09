@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { AuthSession, User } from '@/types';
 import { sessionStorage as SecureStore } from '@/store/sessionStorage';
+import { loadTrustedDeviceToken } from '@/store/trustedDevice';
 
 const SESSION_KEY = 'billji-auth-session';
 
@@ -31,6 +32,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logoutReason: null,
   hydrate: async () => {
     try {
+      // Warm the in-memory trusted-device token so the login request can attach it.
+      await loadTrustedDeviceToken();
       const raw = await SecureStore.getItemAsync(SESSION_KEY);
       if (raw) {
         const session = JSON.parse(raw) as AuthSession;

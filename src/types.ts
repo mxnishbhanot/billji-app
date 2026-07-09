@@ -77,6 +77,36 @@ export type AuthSession = {
   refreshToken?: string;
   sessionId?: string;
   user: User;
+  // Present on the /2fa/verify response when the user asked to trust the device.
+  trustedDeviceToken?: string;
+};
+
+export type TwoFactorMethod = 'none' | 'totp' | 'email';
+
+// Returned by /login and /google when the account has 2FA on and the device is
+// not trusted — no session yet, the client must complete /2fa/verify.
+export type TwoFactorChallenge = {
+  success?: boolean;
+  twoFactorRequired: true;
+  method: Exclude<TwoFactorMethod, 'none'>;
+  challengeToken: string;
+  email?: string;
+  // Non-production only: the emailed code echoed for local testing.
+  devCode?: string;
+};
+
+// A credential submit either logs in outright or requires a second factor.
+export type LoginResult = AuthSession | TwoFactorChallenge;
+
+export const isTwoFactorChallenge = (result: LoginResult): result is TwoFactorChallenge =>
+  (result as TwoFactorChallenge).twoFactorRequired === true;
+
+export type TwoFactorStatus = {
+  method: TwoFactorMethod;
+  enabled: boolean;
+  enabledAt?: string | null;
+  pendingMethod?: TwoFactorMethod | null;
+  backupCodesRemaining: number;
 };
 export type UserSession = {
   id: string;
