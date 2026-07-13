@@ -3,7 +3,8 @@ import { NavigationContainer, RouteProp, StackActions, createNavigationContainer
 import { BottomTabNavigationProp, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, useTheme } from 'react-native-paper';
-import { BackHandler, Platform, StyleSheet, View } from 'react-native';
+import { AppState, BackHandler, Platform, StyleSheet, View } from 'react-native';
+import { authApi } from '@/api/endpoints';
 import { ReactNode, Suspense, lazy, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Dashboard and Login stay static — they are the first screens painted after splash.
@@ -37,6 +38,10 @@ const InvoiceTemplateScreen = lazy(() => import('@/screens/InvoiceTemplateScreen
 const NotificationSettingsScreen = lazy(() => import('@/screens/NotificationSettingsScreen').then((m) => ({ default: m.NotificationSettingsScreen })));
 const ActivityLogScreen = lazy(() => import('@/screens/ActivityLogScreen').then((m) => ({ default: m.ActivityLogScreen })));
 const LedgerScreen = lazy(() => import('@/screens/LedgerScreen').then((m) => ({ default: m.LedgerScreen })));
+const TeamScreen = lazy(() => import('@/screens/TeamScreen').then((m) => ({ default: m.TeamScreen })));
+const RolesScreen = lazy(() => import('@/screens/RolesScreen').then((m) => ({ default: m.RolesScreen })));
+const RoleEditorScreen = lazy(() => import('@/screens/RoleEditorScreen').then((m) => ({ default: m.RoleEditorScreen })));
+const AcceptInviteScreen = lazy(() => import('@/screens/AcceptInviteScreen').then((m) => ({ default: m.AcceptInviteScreen })));
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import {
@@ -92,6 +97,7 @@ function AuthNavigator() {
     <AuthStack.Navigator screenOptions={{ headerShown: false }} screenLayout={renderWithSuspense}>
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
+      <AuthStack.Screen name="AcceptInvite" component={AcceptInviteScreen} />
       <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
       <AuthStack.Screen name="ResetPassword" component={ResetPasswordScreen} />
       <AuthStack.Screen name="TwoFactorChallenge" component={TwoFactorChallengeScreen} />
@@ -155,6 +161,10 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="ActivityLog" component={ActivityLogScreen} />
       <SettingsStack.Screen name="Ledger" component={LedgerScreen} />
       <SettingsStack.Screen name="TwoFactorSetup" component={TwoFactorSetupScreen} />
+      <SettingsStack.Screen name="Team" component={TeamScreen} />
+      <SettingsStack.Screen name="Roles" component={RolesScreen} />
+      <SettingsStack.Screen name="RoleEditor" component={RoleEditorScreen} />
+      <SettingsStack.Screen name="AcceptInvite" component={AcceptInviteScreen} />
     </SettingsStack.Navigator>
   );
 }
@@ -261,6 +271,24 @@ function AppShell() {
 
 export function AppNavigator() {
   const token = useAuthStore((state) => state.token);
+
+  // Keep client permissions fresh: a server-side re-role/disable isn't reflected in a
+  // long-lived session otherwise. Refresh the user on launch (once a token exists) and
+  // whenever the app returns to the foreground. Backend still enforces per request.
+  useEffect(() => {
+    if (!token) return undefined;
+    const refresh = () => {
+      authApi
+        .me()
+        .then((user) => useAuthStore.getState().setUser(user))
+        .catch(() => {});
+    };
+    refresh();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+    });
+    return () => subscription.remove();
+  }, [token]);
 
   useEffect(() => {
     if (Platform.OS !== 'android' || !token) return undefined;

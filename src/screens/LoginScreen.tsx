@@ -282,6 +282,10 @@ export function LoginScreen({ navigation }: LoginScreenProps) {
                 Create account
               </Button>
             </View>
+
+            <Button mode="text" compact icon="ticket-confirmation-outline" onPress={() => navigation.navigate('AcceptInvite')} labelStyle={styles.switchButtonLabel}>
+              Have an invite code?
+            </Button>
           </AppCard>
         </View>
       </KeyboardAwareScrollView>

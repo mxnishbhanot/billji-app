@@ -258,13 +258,13 @@ export function ReportsScreen({ navigation }: ReportsScreenProps) {
             const active = preset === p.key;
             return (
               <Pressable key={p.key} onPress={() => selectPreset(p.key)} style={[styles.segChip, active && { backgroundColor: theme.colors.primary }]}>
-                <Text style={[styles.segText, { color: active ? '#FFFFFF' : theme.colors.onSurfaceVariant }]}>{p.label}</Text>
+                <Text style={[styles.segText, { color: active ? theme.colors.onPrimary : theme.colors.onSurfaceVariant }]}>{p.label}</Text>
               </Pressable>
             );
           })}
           <Pressable onPress={openFilters} style={[styles.segChip, styles.segChipCustom, preset === 'custom' && { backgroundColor: theme.colors.primary }]}>
-            <Feather name="calendar" size={12} color={preset === 'custom' ? '#FFFFFF' : theme.colors.onSurfaceVariant} />
-            <Text style={[styles.segText, { color: preset === 'custom' ? '#FFFFFF' : theme.colors.onSurfaceVariant }]}>Custom</Text>
+            <Feather name="calendar" size={12} color={preset === 'custom' ? theme.colors.onPrimary : theme.colors.onSurfaceVariant} />
+            <Text style={[styles.segText, { color: preset === 'custom' ? theme.colors.onPrimary : theme.colors.onSurfaceVariant }]}>Custom</Text>
           </Pressable>
         </View>
         <Pressable onPress={() => void refetch()} style={({ pressed }) => [styles.iconAction, { backgroundColor: alpha(colors.primary, pressed ? 0.22 : 0.12) }]}>

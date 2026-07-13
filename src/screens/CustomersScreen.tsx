@@ -319,7 +319,7 @@ export function CustomersScreen() {
         }
       ]}
     >
-      <MaterialCommunityIcons name="account-plus-outline" size={23} color="#FFFFFF" />
+      <MaterialCommunityIcons name="account-plus-outline" size={23} color={theme.colors.onPrimary} />
     </Pressable>
   );
 

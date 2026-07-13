@@ -3,6 +3,7 @@ import {
   AuditLogEntry,
   AuthSession,
   BusinessProfile,
+  BusinessSummary,
   Customer,
   CustomerFormValues,
   CustomerOutstanding,
@@ -29,6 +30,7 @@ import {
   Page,
   PageQuery,
   Payment,
+  PermissionGroup,
   Product,
   ProductFormValues,
   ProductQuery,
@@ -38,6 +40,9 @@ import {
   RecordPaymentResponse,
   ReportQuery,
   ReportSummary,
+  RoleSummary,
+  TeamInvitation,
+  TeamMember,
   User,
   UserSession
 } from '@/types';
@@ -61,6 +66,8 @@ export const authApi = {
   requestPasswordReset: (email: string) => api.post<{ success: boolean; message: string; resetCode?: string }>('/auth/password-reset/request', { email }).then((res) => res.data),
   confirmPasswordReset: (email: string, code: string, password: string) => api.post<{ success: boolean; message: string }>('/auth/password-reset/confirm', { email, code, password }).then((res) => res.data),
   me: () => api.get<{ success: boolean; user: User }>('/auth/me').then((res) => res.data.user),
+  businesses: () => api.get<{ businesses: BusinessSummary[] }>('/auth/businesses').then((res) => res.data.businesses),
+  switchBusiness: (businessId: string) => api.post<{ success: boolean; user: User }>('/auth/business/switch', { businessId }).then((res) => res.data.user),
   updateSettings: (payload: Partial<BusinessProfile>) => api.patch<{ success: boolean; user: User }>('/settings', payload).then((res) => res.data),
   invoiceTemplatePreview: (payload: Partial<InvoiceTemplate>) =>
     api.post<string>('/settings/invoice-template/preview', payload, { responseType: 'text', transformResponse: (data) => data }).then((res) => res.data)
@@ -83,6 +90,34 @@ export const twoFactorApi = {
   verify: (payload: { challengeToken: string; code: string; rememberDevice?: boolean }) =>
     api.post<AuthSession>('/auth/2fa/verify', payload).then((res) => res.data),
   resend: (challengeToken: string) => api.post<SetupResponse>('/auth/2fa/resend', { challengeToken }).then((res) => res.data)
+};
+
+export const teamApi = {
+  members: () => api.get<{ members: TeamMember[] }>('/team/members').then((res) => res.data.members),
+  invitations: () => api.get<{ invitations: TeamInvitation[] }>('/team/invitations').then((res) => res.data.invitations),
+  invite: (payload: { email: string; roleKey?: string; roleId?: string }) =>
+    api.post<{ success: boolean; invitation: { id: string; email: string; roleKey: string; roleName: string; expiresAt: string } }>('/team/invitations', payload).then((res) => res.data),
+  resendInvite: (id: string) => api.post<{ success: boolean }>(`/team/invitations/${id}/resend`).then((res) => res.data),
+  cancelInvite: (id: string) => api.delete<{ success: boolean }>(`/team/invitations/${id}`).then((res) => res.data),
+  acceptInvite: (payload: { token: string; name?: string; password?: string }) =>
+    api.post<AuthSession & { joined: boolean; message?: string }>('/team/invitations/accept', payload).then((res) => res.data),
+  updateRole: (userId: string, payload: { roleKey?: string; roleId?: string }) =>
+    api.patch<{ success: boolean }>(`/team/members/${userId}/role`, payload).then((res) => res.data),
+  updateStatus: (userId: string, status: 'active' | 'archived') =>
+    api.patch<{ success: boolean }>(`/team/members/${userId}/status`, { status }).then((res) => res.data),
+  removeMember: (userId: string) => api.delete<{ success: boolean }>(`/team/members/${userId}`).then((res) => res.data)
+};
+
+export const rolesApi = {
+  permissionCatalog: () => api.get<{ groups: PermissionGroup[] }>('/roles/permissions').then((res) => res.data.groups),
+  list: () => api.get<{ roles: RoleSummary[] }>('/roles').then((res) => res.data.roles),
+  get: (id: string) => api.get<{ role: RoleSummary }>(`/roles/${id}`).then((res) => res.data.role),
+  create: (payload: { name: string; description?: string; permissions: string[] }) =>
+    api.post<{ role: RoleSummary }>('/roles', payload).then((res) => res.data.role),
+  update: (id: string, payload: { name?: string; description?: string; permissions?: string[] }) =>
+    api.patch<{ role: RoleSummary }>(`/roles/${id}`, payload).then((res) => res.data.role),
+  archive: (id: string) => api.post<{ success: boolean }>(`/roles/${id}/archive`).then((res) => res.data),
+  remove: (id: string) => api.delete<{ success: boolean }>(`/roles/${id}`).then((res) => res.data)
 };
 
 export const productsApi = {

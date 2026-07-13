@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigation } from '@react-navigation/native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
-import { ActivityIndicator, Button, Dialog, Portal, Switch, Text, useTheme } from 'react-native-paper';
+import { ActivityIndicator, Switch, Text, useTheme } from 'react-native-paper';
 import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { authApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
@@ -15,6 +15,7 @@ import { useAppDialog } from '@/components/AppDialog';
 import { BrandLogoSheet } from '@/components/BrandLogoSheet';
 import { BrandMark } from '@/components/BrandMark';
 import { SecuritySessionsSheet } from '@/components/SecuritySessionsSheet';
+import { WorkspaceSwitcherSheet } from '@/components/WorkspaceSwitcherSheet';
 import { Screen } from '@/components/Screen';
 import { AppNavigation } from '@/navigation/types';
 import { disconnectSocket } from '@/services/socket';
@@ -26,7 +27,6 @@ import { BusinessProfileFormValues } from '@/types';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { settingsSchema } from '@/validation/schemas';
 
-type SettingsPanel = 'account' | null;
 type SettingsRowProps = {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   title: string;
@@ -210,9 +210,11 @@ export function SettingsScreen() {
   const { can } = usePermissions();
   const canViewLedger = can(PERMISSION.reportsView);
   const canViewActivity = can(PERMISSION.settingsManage);
-  const [activePanel, setActivePanel] = useState<SettingsPanel>(null);
+  const canViewTeam = can(PERMISSION.teamView);
+  const canViewRoles = can(PERMISSION.rolesView);
   const [brandSheetVisible, setBrandSheetVisible] = useState(false);
   const [sessionsSheetVisible, setSessionsSheetVisible] = useState(false);
+  const [workspaceSheetVisible, setWorkspaceSheetVisible] = useState(false);
   const [themeSaving, setThemeSaving] = useState(false);
   const [analyticsOn, setAnalyticsOn] = useState(true);
 
@@ -328,7 +330,6 @@ export function SettingsScreen() {
   };
 
   const removeLogo = () => form.setValue('logoUrl', '', { shouldDirty: true, shouldTouch: true, shouldValidate: true });
-  const closePanel = () => setActivePanel(null);
   const toggleTheme = (enabled: boolean) => {
     if (themeSaving || save.isPending) return;
 
@@ -343,26 +344,6 @@ export function SettingsScreen() {
         onSettled: () => setThemeSaving(false)
       }
     );
-  };
-
-  const renderPanel = () => {
-    if (activePanel === 'account') {
-      return (
-        <>
-          <Dialog.Title>Account</Dialog.Title>
-          <Dialog.Content>
-            <View style={[styles.readOnlyBox, { backgroundColor: isDark ? colors.surface : alpha(colors.primaryStrong, 0.04), borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]}>
-              <Text style={[styles.readOnlyLabel, { color: theme.colors.onSurfaceVariant }]}>Login email</Text>
-              <Text style={[styles.readOnlyValue, { color: theme.colors.onSurface }]}>{user?.email}</Text>
-              <Text style={[styles.readOnlyHint, { color: theme.colors.onSurfaceVariant }]}>This is only used for signing in. Business email is managed separately.</Text>
-            </View>
-          </Dialog.Content>
-          <Dialog.Actions><Button onPress={closePanel}>Close</Button></Dialog.Actions>
-        </>
-      );
-    }
-
-    return null;
   };
 
   return (
@@ -445,6 +426,20 @@ export function SettingsScreen() {
         </SettingsGroup>
       ) : null}
 
+      <SettingsGroup title="WORKSPACE">
+        {canViewTeam ? (
+          <SettingsRow icon="account-group-outline" title="Team members" subtitle="Invite and manage your team" tone={colors.primary} onPress={() => navigation.navigate('Team')} />
+        ) : null}
+        {canViewTeam ? <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} /> : null}
+        {canViewRoles ? (
+          <SettingsRow icon="shield-account-outline" title="Roles & permissions" subtitle="Control what each role can access" tone={colors.violet} onPress={() => navigation.navigate('Roles')} />
+        ) : null}
+        {canViewRoles ? <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} /> : null}
+        <SettingsRow icon="swap-horizontal" title="Switch business" subtitle="Change your active workspace" tone={colors.accent} onPress={() => setWorkspaceSheetVisible(true)} />
+        <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
+        <SettingsRow icon="ticket-confirmation-outline" title="Join a business" subtitle="Enter an invite code from your email" tone={colors.primary} onPress={() => navigation.navigate('AcceptInvite')} />
+      </SettingsGroup>
+
       <SettingsGroup title="ACCOUNT">
         <SettingsRow
           icon="bell-outline"
@@ -453,8 +448,6 @@ export function SettingsScreen() {
           tone={colors.violet}
           onPress={() => navigation.navigate('NotificationSettings')}
         />
-        <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
-        <SettingsRow icon="account-circle-outline" title="Login Account" subtitle={user?.email || 'Signed in'} tone={colors.primary} onPress={() => setActivePanel('account')} />
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow icon="shield-key-outline" title="Security & Sessions" subtitle="See where you're signed in" tone={colors.warning} onPress={() => setSessionsSheetVisible(true)} />
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
@@ -480,12 +473,6 @@ export function SettingsScreen() {
 
       <Text style={[styles.versionText, { color: theme.colors.onSurfaceVariant }]}>Billji mobile v1.0.0</Text>
 
-      <Portal>
-        <Dialog visible={Boolean(activePanel)} onDismiss={closePanel}>
-          {renderPanel()}
-        </Dialog>
-      </Portal>
-
       <SecuritySessionsSheet
         visible={sessionsSheetVisible}
         sessions={sessionsQuery.data}
@@ -494,6 +481,8 @@ export function SettingsScreen() {
         onRevoke={(id) => revokeSession.mutate(id)}
         onClose={() => setSessionsSheetVisible(false)}
       />
+
+      <WorkspaceSwitcherSheet visible={workspaceSheetVisible} onClose={() => setWorkspaceSheetVisible(false)} />
 
       <BrandLogoSheet
         visible={brandSheetVisible}
@@ -528,10 +517,6 @@ const styles = StyleSheet.create({
   heroBubbleTiny: { backgroundColor: alpha('#FFFFFF', 0.16), borderColor: alpha('#FFFFFF', 0.3), borderRadius: 23, borderWidth: 1, height: 46, position: 'absolute', right: 92, top: 24, width: 46 },
   profileLogo: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, height: 64, justifyContent: 'center', overflow: 'hidden', width: 64 },
   profileName: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 20, letterSpacing: -0.5, lineHeight: 26 },
-  readOnlyBox: { borderRadius: radii.lg, borderWidth: 1, padding: 12 },
-  readOnlyHint: { ...typeScale.caption, fontSize: 12, lineHeight: 18, marginTop: 8 },
-  readOnlyLabel: { ...fontStyles.semiBold, fontSize: 10, letterSpacing: 0.7, textTransform: 'uppercase' },
-  readOnlyValue: { ...fontStyles.bold, fontSize: 14, marginTop: 2 },
   row: { alignItems: 'center', flexDirection: 'row', gap: 12, minHeight: 72, paddingHorizontal: 14, paddingVertical: 10 },
   rowDivider: { height: 1, marginLeft: 64 },
   rowIcon: { alignItems: 'center', borderRadius: radii.md, height: 34, justifyContent: 'center', width: 34 },
