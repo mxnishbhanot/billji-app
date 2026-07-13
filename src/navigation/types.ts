@@ -1,6 +1,6 @@
 import { CompositeNavigationProp, NavigationProp, NavigatorScreenParams, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Customer, InvoiceCreatePayload, InvoiceStatus } from '@/types';
+import { Customer, InvoiceCreatePayload, InvoiceStatus, TwoFactorMethod } from '@/types';
 
 export type InvoiceSortParam = 'newest' | 'oldest' | 'amount-high' | 'amount-low';
 export type ProductSortParam = 'updated' | 'top-sales' | 'name-asc' | 'price-high' | 'price-low' | 'stock-low';
@@ -10,6 +10,12 @@ export type AuthStackParamList = {
   Register: undefined;
   ForgotPassword: undefined;
   ResetPassword: { email: string };
+  TwoFactorChallenge: {
+    challengeToken: string;
+    method: Exclude<TwoFactorMethod, 'none'>;
+    email?: string;
+    devCode?: string;
+  };
 };
 
 export type DashboardStackParamList = {
@@ -60,6 +66,7 @@ export type SettingsStackParamList = {
   NotificationSettings: undefined;
   ActivityLog: undefined;
   Ledger: undefined;
+  TwoFactorSetup: undefined;
 };
 
 export type TabParamList = {
@@ -88,6 +95,7 @@ export type LoginScreenProps = NativeStackScreenProps<AuthStackParamList, 'Login
 export type RegisterScreenProps = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 export type ForgotPasswordScreenProps = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
 export type ResetPasswordScreenProps = NativeStackScreenProps<AuthStackParamList, 'ResetPassword'>;
+export type TwoFactorChallengeScreenProps = NativeStackScreenProps<AuthStackParamList, 'TwoFactorChallenge'>;
 export type DashboardNavigation = CompositeNavigationProp<
   NativeStackNavigationProp<DashboardStackParamList, 'DashboardHome'>,
   NavigationProp<TabParamList>
@@ -123,3 +131,4 @@ export type TaxSettingsScreenProps = NativeStackScreenProps<SettingsStackParamLi
 export type InvoiceTemplateScreenProps = NativeStackScreenProps<SettingsStackParamList, 'InvoiceTemplate'>;
 export type ActivityLogScreenProps = NativeStackScreenProps<SettingsStackParamList, 'ActivityLog'>;
 export type LedgerScreenProps = NativeStackScreenProps<SettingsStackParamList, 'Ledger'>;
+export type TwoFactorSetupScreenProps = NativeStackScreenProps<SettingsStackParamList, 'TwoFactorSetup'>;

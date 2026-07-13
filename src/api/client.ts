@@ -1,6 +1,7 @@
 import { create, isAxiosError } from 'axios';
 import { Platform } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
+import { getTrustedDeviceToken } from '@/store/trustedDevice';
 import { deviceLabel } from '@/utils/deviceInfo';
 import { ApiParams, AuthSession } from '@/types';
 
@@ -19,6 +20,9 @@ api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
   if (token) config.headers.Authorization = `Bearer ${token}`;
   if (deviceLabel) config.headers['X-Device-Name'] = deviceLabel;
+  // Lets the backend skip 2FA on login for a device the user chose to remember.
+  const trustedDevice = getTrustedDeviceToken();
+  if (trustedDevice) config.headers['X-Trusted-Device'] = trustedDevice;
   if (config.params) config.params = removeEmptyParams(config.params as ApiParams);
   return config;
 });
