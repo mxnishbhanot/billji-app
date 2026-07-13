@@ -10,7 +10,7 @@ export function AppCard({ children, style, onPress }: Props) {
   const colors = appColors(isDark);
   return (
     <Card
-      mode="outlined"
+      mode="contained"
       style={[
         styles.card,
         {
