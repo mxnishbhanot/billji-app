@@ -288,7 +288,7 @@ export function OrdersScreen({ navigation }: OrdersScreenProps) {
       onPress={() => navigation.navigate('OrderCreate')}
       style={({ pressed }) => [styles.headerCreateBtn, { backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary, shadowColor: isDark ? '#000000' : colors.primaryStrong }]}
     >
-      <MaterialCommunityIcons name="clipboard-plus-outline" size={23} color="#FFFFFF" />
+      <MaterialCommunityIcons name="clipboard-plus-outline" size={23} color={theme.colors.onPrimary} />
     </Pressable>
   );
 

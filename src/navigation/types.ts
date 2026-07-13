@@ -8,6 +8,7 @@ export type ProductSortParam = 'updated' | 'top-sales' | 'name-asc' | 'price-hig
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
+  AcceptInvite: undefined;
   ForgotPassword: undefined;
   ResetPassword: { email: string };
   TwoFactorChallenge: {
@@ -67,6 +68,10 @@ export type SettingsStackParamList = {
   ActivityLog: undefined;
   Ledger: undefined;
   TwoFactorSetup: undefined;
+  Team: undefined;
+  Roles: undefined;
+  RoleEditor: { roleId?: string };
+  AcceptInvite: undefined;
 };
 
 export type TabParamList = {
@@ -132,3 +137,6 @@ export type InvoiceTemplateScreenProps = NativeStackScreenProps<SettingsStackPar
 export type ActivityLogScreenProps = NativeStackScreenProps<SettingsStackParamList, 'ActivityLog'>;
 export type LedgerScreenProps = NativeStackScreenProps<SettingsStackParamList, 'Ledger'>;
 export type TwoFactorSetupScreenProps = NativeStackScreenProps<SettingsStackParamList, 'TwoFactorSetup'>;
+export type TeamScreenProps = NativeStackScreenProps<SettingsStackParamList, 'Team'>;
+export type RolesScreenProps = NativeStackScreenProps<SettingsStackParamList, 'Roles'>;
+export type RoleEditorScreenProps = NativeStackScreenProps<SettingsStackParamList, 'RoleEditor'>;

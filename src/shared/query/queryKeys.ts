@@ -54,5 +54,19 @@ export const queryKeys = {
   ledger: {
     all: ['ledger'] as const,
     list: (params?: QueryParams) => ['ledger', params ?? {}] as const
+  },
+  team: {
+    all: ['team'] as const,
+    members: ['team', 'members'] as const,
+    invitations: ['team', 'invitations'] as const
+  },
+  roles: {
+    all: ['roles'] as const,
+    list: ['roles', 'list'] as const,
+    permissionCatalog: ['roles', 'permissions'] as const,
+    detail: (id: string) => ['roles', id] as const
+  },
+  businesses: {
+    all: ['businesses'] as const
   }
 } as const;

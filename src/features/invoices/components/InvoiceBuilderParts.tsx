@@ -218,8 +218,8 @@ export function ProductPickerList({
                 // Visual affordance only — the row's onPress is the single add handler so a tap
                 // on the button can't fire onAddProduct twice.
                 <View style={[styles.addBtn, { backgroundColor: theme.colors.primary }]}>
-                  <Feather name="plus" size={14} color="#FFFFFF" />
-                  <Text style={styles.addBtnLabel}>Add</Text>
+                  <Feather name="plus" size={14} color={theme.colors.onPrimary} />
+                  <Text style={[styles.addBtnLabel, { color: theme.colors.onPrimary }]}>Add</Text>
                 </View>
               )}
             />

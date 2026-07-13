@@ -70,6 +70,52 @@ export type User = {
   createdAt?: string;
 };
 
+export type MemberStatus = 'invited' | 'active' | 'archived' | 'removed';
+
+export type TeamMember = {
+  userId: string;
+  name: string;
+  email: string;
+  roleKey: NonNullable<User['roleKey']>;
+  roleName?: string | null;
+  roleId?: string | null;
+  status: MemberStatus;
+  joinedAt?: string;
+};
+
+export type TeamInvitation = {
+  id: string;
+  email: string;
+  roleKey: NonNullable<User['roleKey']>;
+  roleName: string;
+  status: string;
+  expiresAt: string;
+  createdAt: string;
+};
+
+export type RoleSummary = {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  isSystem: boolean;
+  isArchived: boolean;
+  permissions: string[];
+};
+
+export type PermissionGroup = {
+  domain: string;
+  label: string;
+  permissions: { name: string; key: string; label: string }[];
+};
+
+export type BusinessSummary = {
+  businessId: string;
+  businessName: string;
+  roleKey: NonNullable<User['roleKey']>;
+  current: boolean;
+};
+
 export type AuthSession = {
   success?: boolean;
   token: string;
