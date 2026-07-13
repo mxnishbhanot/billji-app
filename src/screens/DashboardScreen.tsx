@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Animated, Easing, LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import Reanimated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Text, useTheme } from 'react-native-paper';
 import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import { CartesianChart, Line, Area } from 'victory-native';
+import { useFont, LinearGradient as SkiaLinearGradient, vec, Circle as SkiaCircle } from '@shopify/react-native-skia';
 import { reportsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
@@ -170,92 +172,46 @@ type TrendChartProps = {
   data: { label: string; value: number }[];
   accent: string;
   gridColor: string;
-  baselineColor: string;
   axisLabelColor: string;
-  dotFill: string;
 };
 
-function TrendChart({ currency, data, accent, gridColor, baselineColor, axisLabelColor, dotFill }: TrendChartProps) {
-  const [width, setWidth] = useState(0);
-  const chartHeight = 144;
-  const padding = 6;
+const CHART_FONT = require('@expo-google-fonts/plus-jakarta-sans/500Medium/PlusJakartaSans_500Medium.ttf');
 
-  const onLayout = (event: LayoutChangeEvent) => {
-    const next = event.nativeEvent.layout.width;
-    if (next && next !== width) setWidth(next);
-  };
-
+function TrendChart({ currency, data, accent, gridColor, axisLabelColor }: TrendChartProps) {
+  const font = useFont(CHART_FONT, 10);
+  const chartHeight = 168;
   const points = data.length ? data : [{ label: '-', value: 0 }];
-  const maxValue = Math.max(...points.map((p) => p.value), 100);
-  const stepX = points.length > 1 && width ? (width - padding * 2) / (points.length - 1) : 0;
-  const coords = points.map((point, index) => ({
-    x: padding + index * stepX,
-    y: chartHeight - padding - (point.value / maxValue) * (chartHeight - padding * 2)
-  }));
-
-  const pathParts: string[] = [];
-  coords.forEach((coord, index) => {
-    if (index === 0) {
-      pathParts.push(`M ${coord.x} ${coord.y}`);
-      return;
-    }
-    const prev = coords[index - 1];
-    const midX = (prev.x + coord.x) / 2;
-    pathParts.push(`C ${midX} ${prev.y}, ${midX} ${coord.y}, ${coord.x} ${coord.y}`);
-  });
-  const linePath = pathParts.join(' ');
-  const lastCoord = coords[coords.length - 1] ?? { x: 0, y: chartHeight };
-  const firstCoord = coords[0] ?? { x: 0, y: chartHeight };
-  const areaPath = `${linePath} L ${lastCoord.x} ${chartHeight} L ${firstCoord.x} ${chartHeight} Z`;
+  const chartData = points.map((point, index) => ({ x: index, y: point.value }));
 
   return (
-    <View style={chartStyles.container} onLayout={onLayout}>
-      {width ? (
-        <Svg width={width} height={chartHeight}>
-          <Defs>
-            <LinearGradient id="splineFill" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={accent} stopOpacity={0.32} />
-              <Stop offset="1" stopColor={accent} stopOpacity={0} />
-            </LinearGradient>
-            <LinearGradient id="splineStroke" x1="0" y1="0" x2="1" y2="0">
-              <Stop offset="0" stopColor={accent} />
-              <Stop offset="0.5" stopColor="#6366F1" />
-              <Stop offset="1" stopColor={accent} />
-            </LinearGradient>
-          </Defs>
-          <Path d={`M 0 ${padding} L ${width} ${padding}`} stroke={gridColor} strokeDasharray="4 6" strokeWidth={1} />
-          <Path d={`M 0 ${chartHeight / 2} L ${width} ${chartHeight / 2}`} stroke={gridColor} strokeDasharray="4 6" strokeWidth={1} />
-          <Path d={`M 0 ${chartHeight - padding} L ${width} ${chartHeight - padding}`} stroke={baselineColor} strokeWidth={1} />
-          <Path d={areaPath} fill="url(#splineFill)" />
-          <Path d={linePath} stroke="url(#splineStroke)" strokeWidth={3.5} strokeLinecap="round" fill="none" />
-          {coords.map((coord, index) => {
-            const isLast = index === coords.length - 1;
-            return (
-              <Circle
-                key={`${coord.x}-${coord.y}-${index}`}
-                cx={coord.x}
-                cy={coord.y}
-                r={isLast ? 5 : 4}
-                fill={isLast ? accent : dotFill}
-                stroke={isLast ? dotFill : accent}
-                strokeWidth={isLast ? 2 : 2.5}
-              />
-            );
-          })}
-        </Svg>
-      ) : (
-        <View style={{ height: chartHeight }} />
-      )}
-      <View style={chartStyles.xAxis}>
-        {points.map((point, index) => (
-          <Text key={`${point.label}-${index}`} style={[chartStyles.axisLabel, { color: axisLabelColor }]}>{point.label}</Text>
-        ))}
-      </View>
-      <View style={chartStyles.yAxis} pointerEvents="none">
-        <Text style={[chartStyles.axisLabel, { color: axisLabelColor }]}>{currency}{maxValue >= 1000 ? `${Math.round(maxValue / 100) / 10}k` : Math.round(maxValue)}</Text>
-        <Text style={[chartStyles.axisLabel, { color: axisLabelColor }]}>{currency}{Math.round(maxValue / 2)}</Text>
-        <Text style={[chartStyles.axisLabel, { color: axisLabelColor }]}>0</Text>
-      </View>
+    <View style={{ height: chartHeight }}>
+      <CartesianChart
+        data={chartData}
+        xKey="x"
+        yKeys={['y']}
+        domainPadding={{ left: 16, right: 16, top: 24, bottom: 8 }}
+        axisOptions={{
+          font,
+          lineColor: gridColor,
+          labelColor: axisLabelColor,
+          tickCount: { x: points.length, y: 3 },
+          formatXLabel: (value) => points[value]?.label ?? '',
+          formatYLabel: (value) => (value >= 1000 ? `${currency}${Math.round(value / 100) / 10}k` : `${currency}${Math.round(value)}`)
+        }}
+      >
+        {({ points: pts, chartBounds }) => {
+          const last = pts.y[pts.y.length - 1];
+          return (
+            <>
+              <Area points={pts.y} y0={chartBounds.bottom} curveType="natural" animate={{ type: 'timing', duration: 500 }}>
+                <SkiaLinearGradient start={vec(0, chartBounds.top)} end={vec(0, chartBounds.bottom)} colors={[alpha(accent, 0.34), alpha(accent, 0)]} />
+              </Area>
+              <Line points={pts.y} color={accent} strokeWidth={3.5} curveType="natural" animate={{ type: 'timing', duration: 500 }} />
+              {last?.y != null ? <SkiaCircle cx={last.x} cy={last.y} r={5} color={accent} /> : null}
+            </>
+          );
+        }}
+      </CartesianChart>
     </View>
   );
 }
@@ -430,9 +386,7 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
           data={trendData}
           accent={isDark ? colors.primary : colors.primaryStrong}
           gridColor={isDark ? alpha(colors.outline, 0.45) : '#E2E1EE'}
-          baselineColor={isDark ? colors.border : '#D9DADE'}
           axisLabelColor={theme.colors.onSurfaceVariant}
-          dotFill={colors.card}
         />
       </View>
 
@@ -470,13 +424,6 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
     </Screen>
   );
 }
-
-const chartStyles = StyleSheet.create({
-  axisLabel: { ...fontStyles.medium, fontSize: 10 },
-  container: { paddingLeft: 28, width: '100%' },
-  xAxis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingHorizontal: 4 },
-  yAxis: { bottom: 22, height: 144, justifyContent: 'space-between', left: 0, position: 'absolute', top: 0 }
-});
 
 const styles = StyleSheet.create({
   activityIcon: { alignItems: 'center', borderRadius: 12, height: 36, justifyContent: 'center', width: 36 },

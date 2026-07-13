@@ -8,6 +8,7 @@ import { Button, Text, useTheme } from 'react-native-paper';
 import { authApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
+import { useAppToast } from '@/components/AppToast';
 import { FormTextInput } from '@/components/FormTextInput';
 import { PhoneInput } from '@/components/PhoneInput';
 import { Screen } from '@/components/Screen';
@@ -57,6 +58,7 @@ export function BusinessProfileScreen() {
   const isDark = theme.dark;
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
+  const { showToast } = useAppToast();
   const form = useForm<BusinessProfileFormValues>({
     defaultValues: profileDefaults(user?.businessProfile),
     resolver: zodResolver(settingsSchema)
@@ -73,7 +75,7 @@ export function BusinessProfileScreen() {
     onSuccess: async (response) => {
       await setUser(response.user);
       queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
-      showDialog({ title: 'Business profile saved', message: 'Your business details have been updated.', tone: 'success' });
+      showToast('Business profile saved', 'success');
     },
     onError: (error) => showDialog({ title: 'Could not save profile', message: apiErrorMessage(error), tone: 'error' })
   });

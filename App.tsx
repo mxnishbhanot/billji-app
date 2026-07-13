@@ -15,6 +15,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider, Text } from 'react-native-paper';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { AppDialogProvider } from '@/components/AppDialog';
+import { AppToastProvider } from '@/components/AppToast';
 import { queryClient } from '@/query/queryClient';
 import { queryPersistOptions } from '@/query/persistence';
 import { setupNetworkBridge } from '@/query/networkBridge';
@@ -93,14 +94,16 @@ function App() {
         <PaperProvider theme={theme}>
           <AppDialogProvider>
             <SafeAreaProvider>
-              <StatusBar style={user?.businessProfile?.theme === 'dark' ? 'light' : 'dark'} />
-              {hydrated && fontsLoaded && prefetched ? <AppNavigator /> : (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background }}>
-                  <Image source={billjiLogo} resizeMode="contain" style={{ width: 96, height: 96 }} />
-                  <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 18 }} />
-                  <Text style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }}>Opening Billji...</Text>
-                </View>
-              )}
+              <AppToastProvider>
+                <StatusBar style={user?.businessProfile?.theme === 'dark' ? 'light' : 'dark'} />
+                {hydrated && fontsLoaded && prefetched ? <AppNavigator /> : (
+                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background }}>
+                    <Image source={billjiLogo} resizeMode="contain" style={{ width: 96, height: 96 }} />
+                    <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 18 }} />
+                    <Text style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }}>Opening Billji...</Text>
+                  </View>
+                )}
+              </AppToastProvider>
             </SafeAreaProvider>
           </AppDialogProvider>
         </PaperProvider>

@@ -10,6 +10,7 @@ import { StatusPill } from '@/components/StatusPill';
 import { InviteMemberSheet } from '@/components/InviteMemberSheet';
 import { RolePickerSheet, RoleOption } from '@/components/RolePickerSheet';
 import { useAppDialog } from '@/components/AppDialog';
+import { useAppToast } from '@/components/AppToast';
 import { apiErrorMessage } from '@/api/client';
 import { rolesApi, teamApi } from '@/api/endpoints';
 import { queryKeys } from '@/shared/query/queryKeys';
@@ -36,6 +37,7 @@ export function TeamScreen() {
   const colors = useMemo(() => appColors(isDark), [isDark]);
   const queryClient = useQueryClient();
   const { showDialog } = useAppDialog();
+  const { showToast } = useAppToast();
   const { can } = usePermissions();
   const canManage = can(PERMISSION.teamManage);
   const currentRoleKey = useAuthStore((state) => state.user?.roleKey);
@@ -57,13 +59,13 @@ export function TeamScreen() {
 
   const invite = useMutation({
     mutationFn: teamApi.invite,
-    onSuccess: () => { setInviteOpen(false); invalidate(); showDialog({ title: 'Invitation sent', tone: 'success' }); },
+    onSuccess: () => { setInviteOpen(false); invalidate(); showToast('Invitation sent', 'success'); },
     onError: onError('Could not send invite')
   });
   const cancelInvite = useMutation({ mutationFn: teamApi.cancelInvite, onSuccess: invalidate, onError: onError('Could not cancel invite') });
   const resendInvite = useMutation({
     mutationFn: teamApi.resendInvite,
-    onSuccess: () => { invalidate(); showDialog({ title: 'Invitation resent', tone: 'success' }); },
+    onSuccess: () => { invalidate(); showToast('Invitation resent', 'success'); },
     onError: onError('Could not resend invite')
   });
   const changeRole = useMutation({

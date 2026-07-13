@@ -36,8 +36,12 @@ export function PaymentMethodChips({
             style={[
               styles.chip,
               {
-                backgroundColor: active ? alpha(theme.colors.primary, isDark ? 0.28 : 0.16) : 'transparent',
-                borderColor: active ? alpha(theme.colors.primary, isDark ? 0.55 : 0.45) : borderColor
+                backgroundColor: active
+                  ? alpha(theme.colors.primary, isDark ? 0.28 : 0.16)
+                  : isDark ? alpha(theme.colors.onSurface, 0.06) : 'transparent',
+                borderColor: active
+                  ? alpha(theme.colors.primary, isDark ? 0.6 : 0.45)
+                  : isDark ? alpha(theme.colors.onSurface, 0.16) : borderColor
               }
             ]}
           >

@@ -19,6 +19,7 @@ export type InvoiceTemplate = {
   showLogo: boolean;
   showNotes: boolean;
   showSignature: boolean;
+  signatureUrl?: string;
   showPaymentRows: boolean;
   notes?: string;
 };

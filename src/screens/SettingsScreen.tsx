@@ -12,6 +12,7 @@ import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-na
 import { authApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
+import { useAppToast } from '@/components/AppToast';
 import { BrandLogoSheet } from '@/components/BrandLogoSheet';
 import { BrandMark } from '@/components/BrandMark';
 import { SecuritySessionsSheet } from '@/components/SecuritySessionsSheet';
@@ -207,6 +208,7 @@ export function SettingsScreen() {
     ]
   }));
   const { showDialog } = useAppDialog();
+  const { showToast } = useAppToast();
   const { can } = usePermissions();
   const canViewLedger = can(PERMISSION.reportsView);
   const canViewActivity = can(PERMISSION.settingsManage);
@@ -217,6 +219,7 @@ export function SettingsScreen() {
   const [workspaceSheetVisible, setWorkspaceSheetVisible] = useState(false);
   const [themeSaving, setThemeSaving] = useState(false);
   const [analyticsOn, setAnalyticsOn] = useState(true);
+
 
   useEffect(() => {
     void getAnalyticsConsent().then(setAnalyticsOn);
@@ -245,7 +248,6 @@ export function SettingsScreen() {
     onSuccess: async (response) => {
       await setUser(response.user);
       queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
-      showDialog({ title: 'Settings saved', message: 'Your business profile has been updated.', tone: 'success' });
     },
     onError: (error) => showDialog({ title: 'Could not save settings', message: apiErrorMessage(error), tone: 'error' })
   });
@@ -266,7 +268,14 @@ export function SettingsScreen() {
     await logout();
   };
 
-  const saveBrand = form.handleSubmit((values) => save.mutate(values, { onSuccess: () => setBrandSheetVisible(false) }));
+  const saveBrand = form.handleSubmit((values) =>
+    save.mutate(values, {
+      onSuccess: () => {
+        setBrandSheetVisible(false);
+        showToast('Settings saved', 'success');
+      }
+    })
+  );
 
   const setLogo = (dataUri: string) => form.setValue('logoUrl', dataUri, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
 
@@ -340,6 +349,8 @@ export function SettingsScreen() {
     save.mutate(
       { ...form.getValues(), theme: nextTheme },
       {
+        // Toast on Android + web; iOS feedback is the switch flip + spinner.
+        onSuccess: () => showToast(`${nextTheme === 'dark' ? 'Dark' : 'Light'} theme on`),
         onError: () => form.setValue('theme', previousTheme, { shouldDirty: false }),
         onSettled: () => setThemeSaving(false)
       }
