@@ -369,7 +369,7 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
                 mode="contained"
                 icon={({ size, color }) => <Feather name="plus" size={size} color={color} strokeWidth={3} />}
                 buttonColor="#FFFFFF"
-                textColor={colors.primaryStrong}
+                textColor="#4338CA"
                 onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceCreate' })}
                 contentStyle={styles.heroButtonContent}
                 labelStyle={styles.heroButtonLabel}

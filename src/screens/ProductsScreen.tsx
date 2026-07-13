@@ -392,7 +392,7 @@ export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
         }
       ]}
     >
-      <MaterialCommunityIcons name="package-variant-plus" size={23} color="#FFFFFF" />
+      <MaterialCommunityIcons name="package-variant-plus" size={23} color={theme.colors.onPrimary} />
     </Pressable>
   );
 
