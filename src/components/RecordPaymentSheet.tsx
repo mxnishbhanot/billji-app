@@ -98,6 +98,11 @@ export function RecordPaymentSheet({ visible, balanceDue, previousDues = 0, load
   };
 
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.1);
+  // Dark mode: lift inputs onto a brighter surface so they don't melt into the sheet.
+  const inputBg = isDark ? colors.surfaceBright : theme.colors.surface;
+  const inputOutline = isDark ? alpha(colors.outline, 0.8) : cardBorder;
+  // Dark: pastel-lavender button reads dull with white text — deep indigo ink gives crisp contrast.
+  const submitInk = isDark ? '#241C67' : '#FFFFFF';
   // Preview how the entered amount splits when settling previous dues (oldest-first), mirroring the server.
   const split = settleDues && hasPreviousDues ? splitDuesPayment(numericAmount, previousDues, balanceDue) : null;
 
@@ -143,7 +148,9 @@ export function RecordPaymentSheet({ visible, balanceDue, previousDues = 0, load
               value={amount}
               onChangeText={onChangeAmount}
               left={<TextInput.Icon icon="currency-inr" />}
-              style={styles.input}
+              outlineColor={inputOutline}
+              activeOutlineColor={theme.colors.primary}
+              style={[styles.input, styles.amountInput, { backgroundColor: inputBg }]}
             />
             {maxAmount > 0 ? (
               <Text style={[styles.amountHint, { color: theme.colors.onSurfaceVariant }]}>Maximum {formatCurrency(maxAmount)}</Text>
@@ -177,8 +184,8 @@ export function RecordPaymentSheet({ visible, balanceDue, previousDues = 0, load
               </View>
             ) : null}
 
-            <TextInput mode="outlined" label="Reference (optional)" value={reference} onChangeText={setReference} style={styles.input} />
-            <TextInput mode="outlined" label="Notes (optional)" value={notes} onChangeText={setNotes} multiline style={styles.input} />
+            <TextInput mode="outlined" label="Reference (optional)" value={reference} onChangeText={setReference} outlineColor={inputOutline} activeOutlineColor={theme.colors.primary} style={[styles.input, { backgroundColor: inputBg }]} />
+            <TextInput mode="outlined" label="Notes (optional)" value={notes} onChangeText={setNotes} multiline outlineColor={inputOutline} activeOutlineColor={theme.colors.primary} style={[styles.input, { backgroundColor: inputBg }]} />
           </ScrollView>
 
           <Pressable
@@ -192,8 +199,8 @@ export function RecordPaymentSheet({ visible, balanceDue, previousDues = 0, load
               }
             ]}
           >
-            <Feather name="check" size={16} color={canSubmit ? '#FFFFFF' : theme.colors.onSurfaceVariant} strokeWidth={3} />
-            <Text style={[styles.submitLabel, { color: canSubmit ? '#FFFFFF' : theme.colors.onSurfaceVariant }]}>
+            <Feather name="check" size={16} color={canSubmit ? submitInk : theme.colors.onSurfaceVariant} strokeWidth={3} />
+            <Text style={[styles.submitLabel, { color: canSubmit ? submitInk : theme.colors.onSurfaceVariant }]}>
               {loading ? 'Saving...' : 'Save payment'}
             </Text>
           </Pressable>
@@ -205,6 +212,7 @@ export function RecordPaymentSheet({ visible, balanceDue, previousDues = 0, load
 
 const styles = StyleSheet.create({
   amountHint: { ...fontStyles.medium, fontSize: 11.5, marginLeft: 4, marginTop: 6 },
+  amountInput: { fontSize: 20 },
   balanceChip: { borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },
   balanceChipText: { ...fontStyles.bold, fontSize: 11.5 },
   fieldLabel: { ...fontStyles.bold, fontSize: 11, letterSpacing: 1.2, marginBottom: 10, marginTop: 16 },

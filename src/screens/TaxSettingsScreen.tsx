@@ -6,6 +6,7 @@ import { Button, Switch, Text, useTheme } from 'react-native-paper';
 import { authApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
+import { useAppToast } from '@/components/AppToast';
 import { Screen } from '@/components/Screen';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
@@ -39,6 +40,7 @@ export function TaxSettingsScreen() {
   const isDark = theme.dark;
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
+  const { showToast } = useAppToast();
   const [settings, setSettings] = useState<TaxSettings>(taxDefaults(user?.businessProfile?.taxSettings));
 
   useEffect(() => {
@@ -50,7 +52,7 @@ export function TaxSettingsScreen() {
     onSuccess: async (response) => {
       await setUser(response.user);
       queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
-      showDialog({ title: 'Tax settings saved', message: 'Your tax preferences have been updated.', tone: 'success' });
+      showToast('Tax settings saved', 'success');
     },
     onError: (error) => showDialog({ title: 'Could not save tax settings', message: apiErrorMessage(error), tone: 'error' })
   });

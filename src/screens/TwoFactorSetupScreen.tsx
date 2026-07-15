@@ -8,6 +8,7 @@ import { twoFactorApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { AppCard } from '@/components/AppCard';
 import { useAppDialog } from '@/components/AppDialog';
+import { useAppToast } from '@/components/AppToast';
 import { Screen } from '@/components/Screen';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { clearTrustedDeviceToken } from '@/store/trustedDevice';
@@ -28,6 +29,7 @@ export function TwoFactorSetupScreen() {
   const isDark = theme.dark;
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
+  const { showToast } = useAppToast();
   const queryClient = useQueryClient();
 
   const statusQuery = useQuery({ queryKey: queryKeys.auth.twoFactor, queryFn: twoFactorApi.status });
@@ -97,7 +99,7 @@ export function TwoFactorSetupScreen() {
       if (result === 'disable') {
         await clearTrustedDeviceToken();
         goHome();
-        showDialog({ title: 'Two-factor turned off', message: 'Your account no longer asks for a second step at login.', tone: 'success' });
+        showToast('Two-factor turned off', 'success');
       } else {
         setBackupCodes(result.backupCodes);
         setCode('');

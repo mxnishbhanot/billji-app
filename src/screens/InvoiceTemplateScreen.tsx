@@ -1,12 +1,14 @@
 import { createElement, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { SignaturePadSheet } from '@/components/SignaturePadSheet';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Button, Switch, Text, TextInput, useTheme } from 'react-native-paper';
 import { authApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
+import { useAppToast } from '@/components/AppToast';
 import { Screen } from '@/components/Screen';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
@@ -19,13 +21,14 @@ const ACCENT_PRESETS = ['#4338CA', '#2563EB', '#0D9488', '#16A34A', '#475569', '
 
 // Mirrors DEFAULT_INVOICE_NOTES in backend invoiceHtml.js — what prints when the
 // business leaves custom notes blank. Shown as the field placeholder.
-const DEFAULT_INVOICE_NOTES = 'Please make payment by the due date. Quote the invoice number when paying.';
+const DEFAULT_INVOICE_NOTES = 'Thank you for your business!';
 
 const templateDefaults = (tpl?: InvoiceTemplate): InvoiceTemplate => ({
   accentColor: tpl?.accentColor || ACCENT_PRESETS[0],
   showLogo: tpl?.showLogo ?? true,
   showNotes: tpl?.showNotes ?? true,
-  showSignature: tpl?.showSignature ?? true,
+  showSignature: tpl?.showSignature ?? false,
+  signatureUrl: tpl?.signatureUrl ?? '',
   showPaymentRows: tpl?.showPaymentRows ?? true,
   notes: tpl?.notes ?? ''
 });
@@ -86,6 +89,7 @@ export function InvoiceTemplateScreen() {
   const isDark = theme.dark;
   const colors = useMemo(() => appColors(isDark), [isDark]);
   const { showDialog } = useAppDialog();
+  const { showToast } = useAppToast();
 
   const profile = user?.businessProfile;
   const [tpl, setTpl] = useState<InvoiceTemplate>(templateDefaults(profile?.invoiceTemplate));
@@ -123,7 +127,7 @@ export function InvoiceTemplateScreen() {
     onSuccess: async (response) => {
       await setUser(response.user);
       queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
-      showDialog({ title: 'Template saved', message: 'New invoices will use this template.', tone: 'success' });
+      showToast('Template saved', 'success');
     },
     onError: (error) => showDialog({ title: 'Could not save template', message: apiErrorMessage(error), tone: 'error' })
   });
@@ -132,6 +136,20 @@ export function InvoiceTemplateScreen() {
   const toggle = (key: ToggleKey) => (value: boolean) => setTpl((prev) => ({ ...prev, [key]: value }));
   const setNotes = (notes: string) => setTpl((prev) => ({ ...prev, notes }));
   const onSave = () => save.mutate({ invoiceTemplate: tpl, invoicePrefix: (prefix || 'INV').trim().toUpperCase().slice(0, 12) });
+
+  // Signature toggle needs a drawn signature. Turning it on opens the draw pad; saving a
+  // signature enables it, cancelling leaves it off. Turning it off keeps the saved drawing.
+  const [padVisible, setPadVisible] = useState(false);
+  const onToggleSignature = (value: boolean) => {
+    if (!value) return setTpl((prev) => ({ ...prev, showSignature: false }));
+    if (tpl.signatureUrl) return setTpl((prev) => ({ ...prev, showSignature: true }));
+    setPadVisible(true);
+  };
+  const onSignatureDrawn = (dataUri: string) => {
+    setPadVisible(false);
+    setTpl((prev) => ({ ...prev, showSignature: true, signatureUrl: dataUri }));
+  };
+  const removeSignature = () => setTpl((prev) => ({ ...prev, showSignature: false, signatureUrl: '' }));
 
   const headerAction = (
     <Button
@@ -191,11 +209,24 @@ export function InvoiceTemplateScreen() {
                 <Text style={[styles.toggleTitle, { color: theme.colors.onSurface }]}>{row.title}</Text>
                 <Text style={[styles.toggleSubtitle, { color: theme.colors.onSurfaceVariant }]}>{row.subtitle}</Text>
               </View>
-              <Switch value={tpl[row.key]} onValueChange={toggle(row.key)} color={theme.colors.primary} />
+              <Switch value={tpl[row.key]} onValueChange={row.key === 'showSignature' ? onToggleSignature : toggle(row.key)} color={theme.colors.primary} />
             </View>
           </View>
         ))}
       </View>
+
+      {tpl.showSignature && tpl.signatureUrl ? (
+        <>
+          <SectionLabel title="SIGNATURE" />
+          <View style={[styles.signatureCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
+            <Image source={{ uri: tpl.signatureUrl }} style={styles.signaturePreview} resizeMode="contain" />
+            <View style={styles.signatureActions}>
+              <Button mode="outlined" compact onPress={() => setPadVisible(true)}>Redraw</Button>
+              <Button mode="text" compact textColor={theme.colors.error} onPress={removeSignature}>Remove</Button>
+            </View>
+          </View>
+        </>
+      ) : null}
 
       <SectionLabel title="NOTES & TERMS" />
       <View style={[styles.notesCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
@@ -226,6 +257,8 @@ export function InvoiceTemplateScreen() {
         </View>
         <TextInput mode="outlined" label="Invoice prefix" value={prefix} onChangeText={setPrefix} autoCapitalize="characters" maxLength={12} dense />
       </View>
+
+      <SignaturePadSheet visible={padVisible} onClose={() => setPadVisible(false)} onSave={onSignatureDrawn} />
     </Screen>
   );
 }
@@ -248,6 +281,9 @@ const styles = StyleSheet.create({
   saveButtonContent: { minHeight: 38, paddingHorizontal: 8 },
   saveButtonLabel: { ...fontStyles.bold, fontSize: 13, marginHorizontal: 8 },
   screenContent: { paddingTop: 8 },
+  signatureActions: { alignItems: 'center', flexDirection: 'row', gap: 8, justifyContent: 'flex-end', marginTop: 10 },
+  signatureCard: { borderRadius: radii.lg, borderWidth: 1, marginBottom: 18, padding: 14 },
+  signaturePreview: { alignSelf: 'center', backgroundColor: '#ffffff', borderRadius: radii.md, height: 90, width: '100%' },
   sectionLabel: { ...fontStyles.bold, fontSize: 11, letterSpacing: 1.1, marginBottom: 8, marginLeft: 2 },
   toggleCard: { borderRadius: radii.lg, borderWidth: 1, marginBottom: 18 },
   toggleIcon: { alignItems: 'center', borderRadius: radii.md, height: 34, justifyContent: 'center', width: 34 },
