@@ -18,7 +18,11 @@ export const PERMISSION = {
   customersManage: 'customers.manage',
   reportsView: 'reports.view',
   settingsView: 'settings.view',
-  settingsManage: 'settings.manage'
+  settingsManage: 'settings.manage',
+  teamView: 'team.view',
+  teamManage: 'team.manage',
+  rolesView: 'roles.view',
+  rolesManage: 'roles.manage'
 } as const;
 
 export type PermissionKey = (typeof PERMISSION)[keyof typeof PERMISSION];
@@ -27,14 +31,18 @@ export type PermissionKey = (typeof PERMISSION)[keyof typeof PERMISSION];
  * UI-level permission gate. The backend remains the source of truth — this only
  * hides/disables controls the current member can't use.
  *
- * When the user has no permissions array (legacy session / missing data) we
- * allow everything, so existing owners are never locked out of the UI.
+ * Fail-open is scoped to owners only: an owner (or a legacy session with no
+ * roleKey, which is always a self-registered owner) is allowed everything so they
+ * are never locked out. Any other role with an empty permissions array is denied —
+ * a non-owner whose permissions failed to load must not see privileged controls.
  */
 export function usePermissions() {
   const permissions = useAuthStore((state) => state.user?.permissions);
+  const roleKey = useAuthStore((state) => state.user?.roleKey);
   return useMemo(() => {
     const list = permissions ?? [];
-    const can = (permission: string) => list.length === 0 || list.includes(permission);
+    const isOwner = !roleKey || roleKey === 'owner';
+    const can = (permission: string) => isOwner || list.includes(permission);
     return { can, permissions: list };
-  }, [permissions]);
+  }, [permissions, roleKey]);
 }

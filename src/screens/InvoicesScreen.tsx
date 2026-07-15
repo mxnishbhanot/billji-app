@@ -333,7 +333,7 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
         }
       ]}
     >
-      <MaterialCommunityIcons name="file-document-plus-outline" size={23} color="#FFFFFF" />
+      <MaterialCommunityIcons name="file-document-plus-outline" size={23} color={theme.colors.onPrimary} />
     </Pressable>
   );
 
