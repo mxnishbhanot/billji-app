@@ -31,7 +31,6 @@ export function RecordPaymentSheet({ visible, balanceDue, previousDues = 0, load
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [reference, setReference] = useState('');
-  const [notes, setNotes] = useState('');
   const [settleDues, setSettleDues] = useState(false);
   const [wasVisible, setWasVisible] = useState(false);
 
@@ -43,7 +42,6 @@ export function RecordPaymentSheet({ visible, balanceDue, previousDues = 0, load
     setAmount(balanceDue > 0 ? String(balanceDue) : '');
     setMethod('cash');
     setReference('');
-    setNotes('');
     setSettleDues(false);
   } else if (!visible && wasVisible) {
     setWasVisible(false);
@@ -94,7 +92,8 @@ export function RecordPaymentSheet({ visible, balanceDue, previousDues = 0, load
 
   const submit = () => {
     if (!canSubmit) return;
-    onSubmit({ amount: numericAmount, method, reference: reference.trim() || undefined, notes: notes.trim() || undefined }, settleDues && hasPreviousDues);
+    // ponytail: single optional field — Notes was collected but never shown after save.
+    onSubmit({ amount: numericAmount, method, reference: reference.trim() || undefined }, settleDues && hasPreviousDues);
   };
 
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.1);
@@ -184,8 +183,15 @@ export function RecordPaymentSheet({ visible, balanceDue, previousDues = 0, load
               </View>
             ) : null}
 
-            <TextInput mode="outlined" label="Reference (optional)" value={reference} onChangeText={setReference} outlineColor={inputOutline} activeOutlineColor={theme.colors.primary} style={[styles.input, { backgroundColor: inputBg }]} />
-            <TextInput mode="outlined" label="Notes (optional)" value={notes} onChangeText={setNotes} multiline outlineColor={inputOutline} activeOutlineColor={theme.colors.primary} style={[styles.input, { backgroundColor: inputBg }]} />
+            <TextInput
+              mode="outlined"
+              label="UPI / cheque / bank ref (optional)"
+              value={reference}
+              onChangeText={setReference}
+              outlineColor={inputOutline}
+              activeOutlineColor={theme.colors.primary}
+              style={[styles.input, { backgroundColor: inputBg }]}
+            />
           </ScrollView>
 
           <Pressable

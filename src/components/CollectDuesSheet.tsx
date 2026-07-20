@@ -15,7 +15,7 @@ type Props = {
   outstanding: CustomerOutstanding;
   loading?: boolean;
   onClose: () => void;
-  onSubmit: (payload: { amount: number; method: PaymentMethod; invoiceIds: string[]; allowCredit: boolean; reference?: string; notes?: string }) => void;
+  onSubmit: (payload: { amount: number; method: PaymentMethod; invoiceIds: string[]; allowCredit: boolean; reference?: string }) => void;
 };
 
 export function CollectDuesSheet({ visible, outstanding, loading, onClose, onSubmit }: Props) {
@@ -28,7 +28,6 @@ export function CollectDuesSheet({ visible, outstanding, loading, onClose, onSub
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [reference, setReference] = useState('');
-  const [notes, setNotes] = useState('');
   // Optionally target specific invoices. Empty = auto-apply oldest-first across all dues.
   const [selected, setSelected] = useState<string[]>([]);
   const [wasVisible, setWasVisible] = useState(false);
@@ -39,7 +38,6 @@ export function CollectDuesSheet({ visible, outstanding, loading, onClose, onSub
     setAmount(outstanding.totalOutstanding > 0 ? String(outstanding.totalOutstanding) : '');
     setMethod('cash');
     setReference('');
-    setNotes('');
     setSelected([]);
   } else if (!visible && wasVisible) {
     setWasVisible(false);
@@ -73,7 +71,7 @@ export function CollectDuesSheet({ visible, outstanding, loading, onClose, onSub
   const submit = () => {
     if (!canSubmit) return;
     // Collecting dues never parks an advance — cap at the targeted invoices' balance.
-    onSubmit({ amount: numericAmount, method, invoiceIds: targetIds, allowCredit: false, reference: reference.trim() || undefined, notes: notes.trim() || undefined });
+    onSubmit({ amount: numericAmount, method, invoiceIds: targetIds, allowCredit: false, reference: reference.trim() || undefined });
   };
 
   return (
@@ -118,8 +116,13 @@ export function CollectDuesSheet({ visible, outstanding, loading, onClose, onSub
             <Text style={[styles.fieldLabel, { color: theme.colors.onSurfaceVariant }]}>METHOD</Text>
             <PaymentMethodChips value={method} onChange={setMethod} borderColor={cardBorder} />
 
-            <TextInput mode="outlined" label="Reference (optional)" value={reference} onChangeText={setReference} style={styles.input} />
-            <TextInput mode="outlined" label="Notes (optional)" value={notes} onChangeText={setNotes} multiline style={styles.input} />
+            <TextInput
+              mode="outlined"
+              label="UPI / cheque / bank ref (optional)"
+              value={reference}
+              onChangeText={setReference}
+              style={styles.input}
+            />
 
             <Text style={[styles.fieldLabel, { color: theme.colors.onSurfaceVariant }]}>APPLY TO</Text>
             <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>

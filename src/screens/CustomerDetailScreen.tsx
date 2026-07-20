@@ -58,7 +58,7 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
   const outstanding: CustomerOutstanding = outstandingQuery.data ?? { invoices: [], totalOutstanding: 0 };
 
   const collectDues = useMutation({
-    mutationFn: (payload: { amount: number; method: PaymentMethod; invoiceIds: string[]; allowCredit: boolean; reference?: string; notes?: string }) =>
+    mutationFn: (payload: { amount: number; method: PaymentMethod; invoiceIds: string[]; allowCredit: boolean; reference?: string }) =>
       paymentsApi.recordCustomerPayment(customer._id, payload),
     onSuccess: () => {
       setCollectVisible(false);
