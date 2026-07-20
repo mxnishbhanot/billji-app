@@ -21,6 +21,7 @@ import {
 import { CustomerFormSheet } from '@/components/CustomerFormSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
+import { useOnboardingOptional } from '@/features/onboarding';
 import { CustomersStackParamList } from '@/navigation/types';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
@@ -151,6 +152,7 @@ export function CustomersScreen() {
   const colors = useMemo(() => appColors(isDark), [isDark]);
   const { showDialog } = useAppDialog();
   const { can } = usePermissions();
+  const onboarding = useOnboardingOptional();
   const canManage = can(PERMISSION.customersManage);
   const [filters, setFilters] = useState<CustomerFilters>(emptyCustomerFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -183,7 +185,10 @@ export function CustomersScreen() {
       }
       return { previous };
     },
-    onSuccess: () => setEditing(undefined),
+    onSuccess: (_data, values) => {
+      setEditing(undefined);
+      if (!editing?._id) onboarding?.completeTask('add_customer', 'action');
+    },
     onError: (error, _values, context) => {
       if (context?.previous) queryClient.setQueryData(activeListKey, context.previous);
       showDialog({ title: 'Could not save customer', message: apiErrorMessage(error), tone: 'error' });

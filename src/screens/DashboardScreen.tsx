@@ -16,6 +16,7 @@ import { StatCard } from '@/components/StatCard';
 import { DashboardScreenProps } from '@/navigation/types';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
+import { GettingStartedSheet, ProgressPill, TourAnchor, ANCHOR, useOnboardingOptional } from '@/features/onboarding';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { formatCurrency, formatDate } from '@/utils/format';
 
@@ -300,8 +301,10 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
   }, [trendData]);
 
   const recent = report?.recentInvoices ?? [];
+  const onboarding = useOnboardingOptional();
 
   return (
+    <>
     <Screen
       title="Dashboard"
       contentStyle={styles.screenContent}
@@ -321,18 +324,20 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
           <Text style={styles.heroBody}>Track invoices, stock, and cash flow without digging through desktop screens.</Text>
           <View style={styles.heroActions}>
             {canCreateInvoice ? (
-              <Button
-                mode="contained"
-                icon={({ size, color }) => <Feather name="plus" size={size} color={color} strokeWidth={3} />}
-                buttonColor="#FFFFFF"
-                textColor="#4338CA"
-                onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceCreate' })}
-                contentStyle={styles.heroButtonContent}
-                labelStyle={styles.heroButtonLabel}
-                style={styles.heroButton}
-              >
-                Create Invoice
-              </Button>
+              <TourAnchor anchorId={ANCHOR.createInvoice}>
+                <Button
+                  mode="contained"
+                  icon={({ size, color }) => <Feather name="plus" size={size} color={color} strokeWidth={3} />}
+                  buttonColor="#FFFFFF"
+                  textColor="#4338CA"
+                  onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceCreate' })}
+                  contentStyle={styles.heroButtonContent}
+                  labelStyle={styles.heroButtonLabel}
+                  style={styles.heroButton}
+                >
+                  Create Invoice
+                </Button>
+              </TourAnchor>
             ) : <View />}
             <Pressable
               onPress={() => void query.refetch()}
@@ -419,9 +424,22 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
           </Pressable>
         );
       }) : (
-        <EmptyState title="No invoices yet" message="Create your first invoice to see recent activity here." />
+        <EmptyState
+          title="No invoices yet"
+          message="Create your first invoice to see recent activity here."
+          actionLabel={canCreateInvoice ? 'Create Invoice' : undefined}
+          onAction={canCreateInvoice ? () => navigation.navigate('InvoicesTab', { screen: 'InvoiceCreate' }) : undefined}
+          hint="Tip: add a customer first so the next invoice is faster."
+        />
       )}
     </Screen>
+    {onboarding ? (
+      <>
+        <ProgressPill />
+        <GettingStartedSheet />
+      </>
+    ) : null}
+    </>
   );
 }
 
