@@ -16,7 +16,7 @@ import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
 import { BusinessProfile, BusinessProfileFormValues } from '@/types';
-import { GSTIN_LENGTH, isValidGstin } from '@/utils/gstin';
+import { GSTIN_LENGTH, PAN_LENGTH, isValidGstin } from '@/utils/gstin';
 import { settingsSchema } from '@/validation/schemas';
 
 const profileDefaults = (profile?: BusinessProfile): BusinessProfileFormValues => ({
@@ -154,6 +154,7 @@ export function BusinessProfileScreen() {
           name="panNumber"
           label="PAN"
           autoCapitalize="characters"
+          maxLength={PAN_LENGTH}
           style={{ backgroundColor: inputBackground }}
         />
       </ProfileSection>
