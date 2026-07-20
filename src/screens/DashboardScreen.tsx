@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
   heroEyebrowBadge: { alignSelf: 'flex-start', borderRadius: radii.pill, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 3 },
   heroGhostButton: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, height: 38, justifyContent: 'center', width: 38 },
   heroInner: { padding: 22 },
-  heroTitle: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 22, letterSpacing: -0.6, lineHeight: 28, marginTop: 10 },
+  heroTitle: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 22, letterSpacing: -0.6, lineHeight: 30, marginTop: 10 },
   quickAction: { alignItems: 'center', borderRadius: 18, borderWidth: 1, flex: 1, gap: 8, paddingHorizontal: 6, paddingVertical: 14 },
   quickIconTile: { alignItems: 'center', borderRadius: 12, elevation: 3, height: 44, justifyContent: 'center', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, width: 44 },
   quickLabel: { ...fontStyles.bold, fontSize: 12 },

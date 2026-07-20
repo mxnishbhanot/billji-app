@@ -111,7 +111,14 @@ export function PaymentHistorySheet({ visible, payments, loading, onClose }: Pro
                         <StatusPill label={payment.status} tone={recordTone(payment.status)} />
                       </View>
                       {payment.reference ? (
-                        <Text style={[styles.rowRef, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>Ref: {payment.reference}</Text>
+                        <Text style={[styles.rowRef, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
+                          Ref: {payment.reference}
+                        </Text>
+                      ) : null}
+                      {payment.notes ? (
+                        <Text style={[styles.rowRef, { color: theme.colors.onSurfaceVariant }]} numberOfLines={2}>
+                          {payment.notes}
+                        </Text>
                       ) : null}
                     </View>
                   </View>

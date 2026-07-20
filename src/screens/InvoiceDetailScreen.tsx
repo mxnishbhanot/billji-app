@@ -215,7 +215,6 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
           amount: payload.amount,
           method: payload.method,
           reference: payload.reference,
-          notes: payload.notes,
           invoiceIds
         });
         return;
