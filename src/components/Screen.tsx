@@ -97,8 +97,8 @@ const styles = StyleSheet.create({
     marginRight: 12,
     width: 48
   },
-  subtitle: { ...typeScale.bodyPrimaryMedium, fontSize: 14, lineHeight: 18 },
-  title: { ...typeScale.screenTitle, flexShrink: 1, fontSize: 26, lineHeight: 30, letterSpacing: -0.52 },
+  subtitle: { ...typeScale.bodyPrimaryMedium, fontSize: 14, lineHeight: 20 },
+  title: { ...typeScale.screenTitle, flexShrink: 1, fontSize: 26, lineHeight: 34, letterSpacing: -0.52 },
   titleBlock: { flex: 1, minWidth: 0 },
   titleRow: { alignItems: 'center', flexDirection: 'row', gap: 8, minWidth: 0 }
 });

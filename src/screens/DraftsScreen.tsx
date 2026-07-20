@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   listContent: { paddingBottom: 24 },
   meta: { ...typeScale.caption, fontSize: 12, marginTop: 2 },
   noteCard: { alignItems: 'center', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: 8, marginBottom: 14, paddingHorizontal: 12, paddingVertical: 10 },
-  noteText: { ...typeScale.caption, flex: 1, fontSize: 12 },
+  noteText: { ...typeScale.caption, flex: 1, flexShrink: 1, fontSize: 12, lineHeight: 18 },
   screenContent: { flex: 1 },
   title: { ...fontStyles.bold, fontSize: 15 }
 });
