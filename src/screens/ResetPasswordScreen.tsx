@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   wordmarkRow: { flexDirection: 'row', marginBottom: 3 },
   wordmarkBill: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 34, letterSpacing: -1.4, lineHeight: 40 },
   wordmarkJi: { ...fontStyles.bold, color: '#FF8A1F', fontSize: 34, letterSpacing: -1.4, lineHeight: 40 },
-  tagline: { ...fontStyles.semiBold, color: alpha('#FFFFFF', 0.86), fontSize: 14, lineHeight: 20 },
+  tagline: { ...fontStyles.semiBold, color: alpha('#FFFFFF', 0.86), fontSize: 14, lineHeight: 20, marginBottom: 2 },
   formCard: { borderRadius: radii.xl, marginBottom: 0 },
   formHeader: { marginBottom: spacing.md },
   formTitle: { ...fontStyles.bold, letterSpacing: -0.7, marginBottom: 4 },

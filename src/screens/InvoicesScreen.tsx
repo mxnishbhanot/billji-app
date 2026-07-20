@@ -101,8 +101,9 @@ const InvoiceCard = memo(function InvoiceCard({
   const paymentMeta =
     !isCancelled && item.paymentStatus !== 'paid' ? paymentStatusMeta(item.paymentStatus) : null;
   // Cancelled invoice owes nothing (balance void). If money was received before
-  // cancellation it's awaiting refund — surface that instead of a stale "Due".
-  const refundDue = isCancelled && typeof item.paidAmount === 'number' && item.paidAmount > 0;
+  // cancellation, flag that a manual refund may still be needed — BillJi does not
+  // move money, so avoid "due" language that implies a system payable.
+  const refundPending = isCancelled && typeof item.paidAmount === 'number' && item.paidAmount > 0;
   const hasBalance = !isCancelled && typeof item.balanceDue === 'number' && item.balanceDue > 0;
   const fromOrder = Boolean(item.sourceOrder);
   const orderChip = useMemo(() => ({
@@ -127,8 +128,8 @@ const InvoiceCard = memo(function InvoiceCard({
         </View>
         <View style={styles.amountBlock}>
           <Text style={[styles.invoiceAmount, { color: onSurface }]}>{formatCurrency(item.total)}</Text>
-          {refundDue ? (
-            <Text style={[styles.balanceDue, { color: colors.warning }]}>Refund due {formatCurrency(item.paidAmount)}</Text>
+          {refundPending ? (
+            <Text style={[styles.balanceDue, { color: colors.warning }]}>Refund pending {formatCurrency(item.paidAmount)}</Text>
           ) : hasBalance ? (
             <Text style={[styles.balanceDue, { color: colors.warning }]}>Due {formatCurrency(item.balanceDue)}</Text>
           ) : null}

@@ -321,21 +321,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 30,
     letterSpacing: -1.4,
-    lineHeight: 36
+    lineHeight: 38
   },
   wordmarkJi: {
     ...fontStyles.bold,
     color: '#1E7FFF',
     fontSize: 30,
     letterSpacing: -1.4,
-    lineHeight: 36
+    lineHeight: 38
   },
   tagline: {
     ...fontStyles.semiBold,
     color: alpha('#FFFFFF', 0.88),
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: 0
+    marginBottom: spacing.xs
   },
   bubbleLarge: {
     backgroundColor: alpha('#FFFFFF', 0.18),

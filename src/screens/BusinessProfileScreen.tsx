@@ -1,4 +1,4 @@
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,13 +10,15 @@ import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
 import { useAppToast } from '@/components/AppToast';
 import { FormTextInput } from '@/components/FormTextInput';
+import { IndiaAddressFields } from '@/components/IndiaAddressFields';
 import { PhoneInput } from '@/components/PhoneInput';
 import { Screen } from '@/components/Screen';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
 import { BusinessProfile, BusinessProfileFormValues } from '@/types';
-import { GSTIN_LENGTH, isValidGstin } from '@/utils/gstin';
+import { GSTIN_LENGTH, PAN_LENGTH, isValidGstin } from '@/utils/gstin';
+import { stateFromGstin } from '@/utils/indiaAddress';
 import { settingsSchema } from '@/validation/schemas';
 
 const profileDefaults = (profile?: BusinessProfile): BusinessProfileFormValues => ({
@@ -65,10 +67,24 @@ export function BusinessProfileScreen() {
   });
   const gstNumber = useWatch({ control: form.control, name: 'gstNumber' }) || '';
   const gstinValid = isValidGstin(gstNumber);
+  const gstStateApplied = useRef('');
 
   useEffect(() => {
     form.reset(profileDefaults(user?.businessProfile));
+    gstStateApplied.current = '';
   }, [user, form]);
+
+  // When GSTIN becomes valid, fill empty state from the GST state code (once per GSTIN).
+  useEffect(() => {
+    if (!gstinValid) return;
+    const inferred = stateFromGstin(gstNumber);
+    if (!inferred || gstStateApplied.current === gstNumber) return;
+    const current = form.getValues('state')?.trim();
+    if (!current) {
+      form.setValue('state', inferred, { shouldDirty: true });
+    }
+    gstStateApplied.current = gstNumber;
+  }, [gstinValid, gstNumber, form]);
 
   const save = useMutation({
     mutationFn: authApi.updateSettings,
@@ -154,6 +170,7 @@ export function BusinessProfileScreen() {
           name="panNumber"
           label="PAN"
           autoCapitalize="characters"
+          maxLength={PAN_LENGTH}
           style={{ backgroundColor: inputBackground }}
         />
       </ProfileSection>
@@ -166,31 +183,10 @@ export function BusinessProfileScreen() {
           multiline
           style={[styles.addressInput, { backgroundColor: inputBackground }]}
         />
-        <View style={styles.inlineRow}>
-          <View style={styles.inlineField}>
-            <FormTextInput
-              control={form.control}
-              name="city"
-              label="City"
-              style={{ backgroundColor: inputBackground }}
-            />
-          </View>
-          <View style={styles.inlineField}>
-            <FormTextInput
-              control={form.control}
-              name="pinCode"
-              label="PIN code"
-              keyboardType="number-pad"
-              maxLength={6}
-              style={{ backgroundColor: inputBackground }}
-            />
-          </View>
-        </View>
-        <FormTextInput
+        <IndiaAddressFields
           control={form.control}
-          name="state"
-          label="State"
-          style={{ backgroundColor: inputBackground }}
+          setValue={form.setValue}
+          inputStyle={{ backgroundColor: inputBackground }}
         />
       </ProfileSection>
     </Screen>
@@ -199,8 +195,6 @@ export function BusinessProfileScreen() {
 
 const styles = StyleSheet.create({
   addressInput: { minHeight: 72 },
-  inlineField: { flex: 1, minWidth: 0 },
-  inlineRow: { flexDirection: 'row', gap: 8 },
   saveButton: { borderRadius: radii.pill },
   saveButtonContent: { minHeight: 38, paddingHorizontal: 8 },
   saveButtonLabel: { ...fontStyles.bold, fontSize: 13, marginHorizontal: 8 },
