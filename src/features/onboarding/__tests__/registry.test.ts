@@ -23,8 +23,8 @@ describe('onboarding registry', () => {
     expect(tasks).toHaveLength(0);
   });
 
-  it('orientation has at most 4 steps', () => {
-    expect(ORIENTATION_TOUR.steps.length).toBeLessThanOrEqual(4);
+  it('orientation has at most 7 steps', () => {
+    expect(ORIENTATION_TOUR.steps.length).toBeLessThanOrEqual(7);
   });
 
   it('every checklist task has an icon', () => {
@@ -45,7 +45,7 @@ describe('onboarding registry', () => {
 
   it('every step has a navigate target unless its anchor is always mounted', () => {
     // Tab-bar icons are the only anchors present on every screen.
-    const alwaysMounted = new Set<string>([ANCHOR.tabInvoices, ANCHOR.tabCustomers]);
+    const alwaysMounted = new Set<string>([ANCHOR.tabInvoices, ANCHOR.tabCustomers, ANCHOR.tabCatalog, ANCHOR.tabSettings]);
     for (const tour of TOUR_REGISTRY) {
       for (const step of tour.steps) {
         if (alwaysMounted.has(step.anchorId)) continue;

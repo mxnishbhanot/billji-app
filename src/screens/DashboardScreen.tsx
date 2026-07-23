@@ -273,11 +273,11 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
     }
   ];
 
-  const quickActions: { label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; onPress: () => void }[] = [
+  const quickActions: { label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; onPress: () => void; anchorId?: string }[] = [
     { label: 'Invoices', icon: 'file-document', onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList' }) },
     { label: 'Orders', icon: 'clipboard-list-outline', onPress: () => navigation.navigate('InvoicesTab', { screen: 'OrderList' }) },
     { label: 'Products', icon: 'package-variant-closed', onPress: () => navigation.navigate('CatalogTab', { screen: 'Products' }) },
-    { label: 'Reports', icon: 'chart-box', onPress: () => navigation.navigate('Reports') }
+    { label: 'Reports', icon: 'chart-box', onPress: () => navigation.navigate('Reports'), anchorId: ANCHOR.reportsButton }
   ];
   const viewAllRecentActivity = () => {
     navigation.navigate('InvoicesTab', {
@@ -307,9 +307,14 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
   // The Create Invoice button is at the top of this screen. If the tour targets it
   // while the user is scrolled down, snap to top so the spotlight lands on it.
   const activeTour = onboarding?.activeTour;
+  const quickRailY = useRef(0);
   useEffect(() => {
-    if (activeTour?.tour.steps[activeTour.stepIndex]?.anchorId === ANCHOR.createInvoice) {
+    const anchorId = activeTour?.tour.steps[activeTour.stepIndex]?.anchorId;
+    if (anchorId === ANCHOR.createInvoice) {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
+    } else if (anchorId === ANCHOR.reportsButton) {
+      // Reports lives in the quick-action rail further down; bring it into view.
+      scrollRef.current?.scrollTo({ y: quickRailY.current, animated: true });
     }
   }, [activeTour]);
 
@@ -363,25 +368,29 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
       <View style={styles.statRow}>{stats.slice(0, 2).map((item) => <StatCard key={item.label} {...item} />)}</View>
       <View style={styles.statRow}>{stats.slice(2).map((item) => <StatCard key={item.label} {...item} />)}</View>
 
-      <View style={styles.quickRail}>
-        {quickActions.map((item) => (
-          <Pressable
-            key={item.label}
-            onPress={item.onPress}
-            style={({ pressed }) => [
-              styles.quickAction,
-              {
-                backgroundColor: pressed ? alpha(colors.primary, isDark ? 0.22 : 0.12) : alpha(colors.primary, isDark ? 0.14 : 0.06),
-                borderColor: alpha(colors.primary, isDark ? 0.24 : 0.12)
-              }
-            ]}
-          >
-            <View style={[styles.quickIconTile, { backgroundColor: isDark ? colors.surfaceBright : colors.card, shadowColor: isDark ? '#000000' : colors.primaryStrong }]}>
-              <MaterialCommunityIcons name={item.icon} size={24} color={isDark ? colors.primary : colors.primaryStrong} />
-            </View>
-            <Text style={[styles.quickLabel, { color: theme.colors.onSurface }]}>{item.label}</Text>
-          </Pressable>
-        ))}
+      <View style={styles.quickRail} onLayout={(e) => { quickRailY.current = e.nativeEvent.layout.y; }}>
+        {quickActions.map((item) => {
+          const action = (
+            <Pressable
+              onPress={item.onPress}
+              style={({ pressed }) => [
+                styles.quickAction,
+                {
+                  backgroundColor: pressed ? alpha(colors.primary, isDark ? 0.22 : 0.12) : alpha(colors.primary, isDark ? 0.14 : 0.06),
+                  borderColor: alpha(colors.primary, isDark ? 0.24 : 0.12)
+                }
+              ]}
+            >
+              <View style={[styles.quickIconTile, { backgroundColor: isDark ? colors.surfaceBright : colors.card, shadowColor: isDark ? '#000000' : colors.primaryStrong }]}>
+                <MaterialCommunityIcons name={item.icon} size={24} color={isDark ? colors.primary : colors.primaryStrong} />
+              </View>
+              <Text style={[styles.quickLabel, { color: theme.colors.onSurface }]}>{item.label}</Text>
+            </Pressable>
+          );
+          return item.anchorId
+            ? <TourAnchor key={item.label} anchorId={item.anchorId} style={styles.quickCell}>{action}</TourAnchor>
+            : <View key={item.label} style={styles.quickCell}>{action}</View>;
+        })}
       </View>
 
       <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) }]}>
@@ -483,6 +492,7 @@ const styles = StyleSheet.create({
   heroInner: { padding: 22 },
   heroTitle: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 22, letterSpacing: -0.6, lineHeight: 30, marginTop: 10 },
   quickAction: { alignItems: 'center', borderRadius: 18, borderWidth: 1, flex: 1, gap: 8, paddingHorizontal: 6, paddingVertical: 14 },
+  quickCell: { flex: 1 },
   quickIconTile: { alignItems: 'center', borderRadius: 12, elevation: 3, height: 44, justifyContent: 'center', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, width: 44 },
   quickLabel: { ...fontStyles.bold, fontSize: 12 },
   quickRail: { flexDirection: 'row', gap: 10, marginBottom: 20, marginTop: 10 },

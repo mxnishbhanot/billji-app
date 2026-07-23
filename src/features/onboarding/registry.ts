@@ -8,6 +8,9 @@ export const ANCHOR = {
   createInvoice: 'anchor-create-invoice',
   tabInvoices: 'anchor-tab-invoices',
   tabCustomers: 'anchor-tab-customers',
+  tabCatalog: 'anchor-tab-catalog',
+  tabSettings: 'anchor-tab-settings',
+  reportsButton: 'anchor-reports-button',
   checklist: 'anchor-checklist',
   ordersHeader: 'anchor-orders-header',
   teamInvite: 'anchor-team-invite',
@@ -158,6 +161,28 @@ export const ORIENTATION_TOUR: TourDefinition = {
       title: 'Save customers once',
       description: 'Add a customer one time and reuse their details on every invoice.',
       placement: 'top'
+    },
+    {
+      id: 'tab-inventory',
+      anchorId: ANCHOR.tabCatalog,
+      title: 'Stock your inventory',
+      description: 'Save products once and they fill in your line items on every invoice.',
+      placement: 'top'
+    },
+    {
+      id: 'tab-settings',
+      anchorId: ANCHOR.tabSettings,
+      title: 'Make BillJi yours',
+      description: 'Business details, tax defaults, and your invoice template all live here.',
+      placement: 'top'
+    },
+    {
+      id: 'reports',
+      anchorId: ANCHOR.reportsButton,
+      title: 'See how you’re doing',
+      description: 'Tap Reports for sales, dues, and payment trends over any period.',
+      placement: 'top',
+      navigate: { tab: 'DashboardTab', screen: 'DashboardHome' }
     },
     {
       id: 'checklist',

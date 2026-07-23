@@ -240,6 +240,12 @@ function AppTabs() {
             if (route.name === 'CustomersTab') {
               return <TourAnchor anchorId={ANCHOR.tabCustomers}>{pill}</TourAnchor>;
             }
+            if (route.name === 'CatalogTab') {
+              return <TourAnchor anchorId={ANCHOR.tabCatalog}>{pill}</TourAnchor>;
+            }
+            if (route.name === 'SettingsTab') {
+              return <TourAnchor anchorId={ANCHOR.tabSettings}>{pill}</TourAnchor>;
+            }
             return pill;
           }
         })}
