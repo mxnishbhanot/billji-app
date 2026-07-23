@@ -49,3 +49,4 @@ backend/
 
 # Firebase Android config — injected via CI (GOOGLE_SERVICES_JSON_B64)
 google-services.json
+.onboarding-shots/

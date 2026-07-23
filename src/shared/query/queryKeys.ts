@@ -68,5 +68,8 @@ export const queryKeys = {
   },
   businesses: {
     all: ['businesses'] as const
+  },
+  onboarding: {
+    progress: ['onboarding', 'progress'] as const
   }
 } as const;

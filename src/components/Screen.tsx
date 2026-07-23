@@ -1,5 +1,5 @@
-import { ReactNode } from 'react';
-import { ScrollViewProps, StyleSheet, View, ViewStyle } from 'react-native';
+import { ReactNode, RefObject } from 'react';
+import { ScrollView, ScrollViewProps, StyleSheet, View, ViewStyle } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Appbar, Text, useTheme } from 'react-native-paper';
@@ -10,10 +10,10 @@ import { AppNavigation } from '@/navigation/types';
 import { BrandMark } from './BrandMark';
 import { NotificationButton } from './NotificationButton';
 
-type Props = { title: string; children: ReactNode; scroll?: boolean; showNotifications?: boolean; headerAction?: ReactNode; titleAccessory?: ReactNode; contentStyle?: ViewStyle; scrollViewProps?: ScrollViewProps };
+type Props = { title: string; children: ReactNode; scroll?: boolean; showNotifications?: boolean; headerAction?: ReactNode; titleAccessory?: ReactNode; contentStyle?: ViewStyle; scrollViewProps?: ScrollViewProps; scrollRef?: RefObject<ScrollView | null> };
 const CONTENT_BOTTOM_PADDING = 96;
 
-export function Screen({ title, children, scroll = true, showNotifications = true, headerAction, titleAccessory, contentStyle, scrollViewProps }: Props) {
+export function Screen({ title, children, scroll = true, showNotifications = true, headerAction, titleAccessory, contentStyle, scrollViewProps, scrollRef }: Props) {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
@@ -58,6 +58,7 @@ export function Screen({ title, children, scroll = true, showNotifications = tru
         </View>
         {scroll ? (
           <KeyboardAwareScrollView
+            ref={scrollRef as never}
             bottomOffset={24}
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"

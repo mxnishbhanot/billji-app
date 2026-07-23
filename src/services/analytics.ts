@@ -10,7 +10,20 @@ import { sessionStorage } from '@/store/sessionStorage';
 // The user id we set is the opaque Mongo ObjectId only.
 
 // Allowed event names. Firebase caps event names at 40 chars / params at 25.
-export type AnalyticsEvent = 'invoice_created' | 'invoice_shared';
+export type AnalyticsEvent =
+  | 'invoice_created'
+  | 'invoice_shared'
+  | 'onboarding_orientation_started'
+  | 'onboarding_orientation_step'
+  | 'onboarding_orientation_completed'
+  | 'onboarding_orientation_dismissed'
+  | 'onboarding_checklist_shown'
+  | 'onboarding_checklist_item_completed'
+  | 'onboarding_checklist_completed'
+  | 'onboarding_checklist_dismissed'
+  | 'onboarding_coachmark_shown'
+  | 'onboarding_coachmark_dismissed'
+  | 'onboarding_help_replay';
 type AnalyticsParams = Record<string, string | number | boolean>;
 
 const CONSENT_KEY = 'billji-analytics-consent';
