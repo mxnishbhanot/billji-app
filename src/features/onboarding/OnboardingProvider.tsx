@@ -5,13 +5,13 @@ import { track } from '@/services/analytics';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { useAuthStore } from '@/store/authStore';
 import { sessionStorage } from '@/store/sessionStorage';
+import { navigateToTarget } from '@/navigation/navigationRef';
 import { onboardingApi } from './api';
 import { detectCompletedTasks, mergeDetectedIntoProgress, requiredTasksComplete } from './completionDetect';
 import {
   ANCHOR,
   checklistTasksForRole,
   FEATURE_TOURS,
-  featureGuidesForPermissions,
   getTourById,
   ORIENTATION_TOUR_ID
 } from './registry';
@@ -58,9 +58,6 @@ type OnboardingContextValue = {
   acceptWelcome: () => void;
   declineWelcome: () => void;
   activeTour: ActiveTourState | null;
-  registerAnchor: (id: string, ref: RefObject<View | null>) => void;
-  unregisterAnchor: (id: string) => void;
-  measureAnchor: (id: string) => Promise<AnchorRect | null>;
   completeTask: (key: ChecklistTaskKey, method?: 'action' | 'skipped') => void;
   dismissChecklist: () => void;
   showChecklist: () => void;
@@ -70,8 +67,6 @@ type OnboardingContextValue = {
   dismissTour: () => void;
   replayOrientation: () => void;
   replayChecklist: () => void;
-  replayFeatureGuide: (tourId: string) => void;
-  featureGuides: TourDefinition[];
   notifyRouteFocus: (routeName: string) => void;
   markLocalFlag: (flag: keyof LocalFlags, value?: boolean | number) => void;
   celebration: CelebrationState;
@@ -79,6 +74,19 @@ type OnboardingContextValue = {
 };
 
 const OnboardingContext = createContext<OnboardingContextValue | null>(null);
+
+/**
+ * Anchor registry lives in its own context. Its three functions are []-dep stable,
+ * so consumers (TourAnchor on every tab icon + screen, and TourHost's measure poll)
+ * never re-render when onboarding progress mutates — which happens on every tour step.
+ */
+type OnboardingAnchorsValue = {
+  registerAnchor: (id: string, ref: RefObject<View | null>) => void;
+  unregisterAnchor: (id: string) => void;
+  measureAnchor: (id: string) => Promise<AnchorRect | null>;
+};
+
+const OnboardingAnchorsContext = createContext<OnboardingAnchorsValue | null>(null);
 
 const queryKey = ['onboarding', 'progress'] as const;
 
@@ -134,6 +142,15 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const welcomeHandledRef = useRef(false);
   const syncingDetectionRef = useRef(false);
   const checklistCompletedRef = useRef(false);
+  const routeTipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirrors of state so event handlers can read the current value and run their
+  // side effects (mutate/track/navigate) OUTSIDE the setState updater. Updaters
+  // must be pure — React double-invokes them in StrictMode/dev, which would
+  // otherwise double-fire PATCH requests and analytics events. Synced in an
+  // effect (not during render — the compiler forbids ref writes in the body);
+  // handlers only read these after commit, in response to user events.
+  const activeTourRef = useRef<ActiveTourState | null>(null);
+  const localFlagsRef = useRef<LocalFlags>(localFlags);
 
   const progressQuery = useQuery({
     queryKey: [...queryKey, businessId],
@@ -157,6 +174,18 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     void loadLocalFlags(user.businessId).then(setLocalFlags);
   }, [user?.businessId]);
 
+  useEffect(() => () => {
+    if (routeTipTimerRef.current) clearTimeout(routeTipTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    activeTourRef.current = activeTour;
+  }, [activeTour]);
+
+  useEffect(() => {
+    localFlagsRef.current = localFlags;
+  }, [localFlags]);
+
   const progress = progressQuery.data?.progress ?? null;
   const hints = progressQuery.data?.hints ?? null;
 
@@ -177,7 +206,6 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   });
 
   const checklistTasks = useMemo(() => checklistTasksForRole(roleKey, can), [roleKey, can]);
-  const featureGuides = useMemo(() => featureGuidesForPermissions(can), [can]);
 
   const checklistVisible = Boolean(
     progress &&
@@ -282,6 +310,11 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const anchorsValue = useMemo<OnboardingAnchorsValue>(
+    () => ({ registerAnchor, unregisterAnchor, measureAnchor }),
+    [registerAnchor, unregisterAnchor, measureAnchor]
+  );
+
   const completeTask = useCallback(
     (key: ChecklistTaskKey, method: 'action' | 'skipped' = 'action') => {
       if (!progress) return;
@@ -326,6 +359,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       setWelcomeVisible(false);
       setChecklistSheetOpen(false);
       setActiveTour({ tour, stepIndex: 0, source, mode: tourMode(tourId) });
+      // Bring the screen hosting the first step's anchor on screen; TourHost polls
+      // for the anchor to mount before measuring.
+      navigateToTarget(tour.steps[0]?.navigate);
       if (tourId === ORIENTATION_TOUR_ID) {
         patchMutation.mutate({
           orientation: { status: 'in_progress', tourId, version: tour.version, currentStep: tour.steps[0]?.id }
@@ -354,61 +390,62 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   }, [patchMutation]);
 
   const nextTourStep = useCallback(() => {
-    setActiveTour((current) => {
-      if (!current) return null;
-      const step = current.tour.steps[current.stepIndex];
-      track('onboarding_orientation_step', {
-        tourId: current.tour.id,
-        stepId: step?.id || '',
-        action: 'next'
-      });
-      if (current.stepIndex >= current.tour.steps.length - 1) {
-        if (current.tour.id === ORIENTATION_TOUR_ID) {
-          patchMutation.mutate({ orientation: { status: 'completed', currentStep: step?.id } });
-          track('onboarding_orientation_completed', {
-            tourId: current.tour.id,
-            stepsCompleted: current.tour.steps.length
-          });
-        } else {
-          patchMutation.mutate({ tips: { [current.tour.id]: { status: 'completed' } } });
-        }
-        return null;
-      }
-      const nextIndex = current.stepIndex + 1;
-      if (current.tour.id === ORIENTATION_TOUR_ID) {
-        patchMutation.mutate({
-          orientation: { status: 'in_progress', currentStep: current.tour.steps[nextIndex]?.id }
-        });
-      }
-      return { ...current, stepIndex: nextIndex };
+    const current = activeTourRef.current;
+    if (!current) return;
+    const step = current.tour.steps[current.stepIndex];
+    track('onboarding_orientation_step', {
+      tourId: current.tour.id,
+      stepId: step?.id || '',
+      action: 'next'
     });
+    if (current.stepIndex >= current.tour.steps.length - 1) {
+      if (current.tour.id === ORIENTATION_TOUR_ID) {
+        patchMutation.mutate({ orientation: { status: 'completed', currentStep: step?.id } });
+        track('onboarding_orientation_completed', {
+          tourId: current.tour.id,
+          stepsCompleted: current.tour.steps.length
+        });
+      } else {
+        patchMutation.mutate({ tips: { [current.tour.id]: { status: 'completed' } } });
+      }
+      setActiveTour(null);
+      return;
+    }
+    const nextIndex = current.stepIndex + 1;
+    navigateToTarget(current.tour.steps[nextIndex]?.navigate);
+    if (current.tour.id === ORIENTATION_TOUR_ID) {
+      patchMutation.mutate({
+        orientation: { status: 'in_progress', currentStep: current.tour.steps[nextIndex]?.id }
+      });
+    }
+    setActiveTour({ ...current, stepIndex: nextIndex });
   }, [patchMutation]);
 
   const prevTourStep = useCallback(() => {
-    setActiveTour((current) => {
-      if (!current || current.stepIndex <= 0) return current;
-      track('onboarding_orientation_step', {
-        tourId: current.tour.id,
-        stepId: current.tour.steps[current.stepIndex]?.id || '',
-        action: 'back'
-      });
-      return { ...current, stepIndex: current.stepIndex - 1 };
+    const current = activeTourRef.current;
+    if (!current || current.stepIndex <= 0) return;
+    track('onboarding_orientation_step', {
+      tourId: current.tour.id,
+      stepId: current.tour.steps[current.stepIndex]?.id || '',
+      action: 'back'
     });
+    const prevIndex = current.stepIndex - 1;
+    navigateToTarget(current.tour.steps[prevIndex]?.navigate);
+    setActiveTour({ ...current, stepIndex: prevIndex });
   }, []);
 
   const dismissTour = useCallback(() => {
-    setActiveTour((current) => {
-      if (!current) return null;
-      const stepId = current.tour.steps[current.stepIndex]?.id || '';
-      if (current.tour.id === ORIENTATION_TOUR_ID) {
-        patchMutation.mutate({ orientation: { status: 'dismissed', currentStep: stepId } });
-        track('onboarding_orientation_dismissed', { tourId: current.tour.id, stepId });
-      } else {
-        patchMutation.mutate({ tips: { [current.tour.id]: { status: 'dismissed' } } });
-        track('onboarding_coachmark_dismissed', { tipId: current.tour.id });
-      }
-      return null;
-    });
+    const current = activeTourRef.current;
+    if (!current) return;
+    const stepId = current.tour.steps[current.stepIndex]?.id || '';
+    if (current.tour.id === ORIENTATION_TOUR_ID) {
+      patchMutation.mutate({ orientation: { status: 'dismissed', currentStep: stepId } });
+      track('onboarding_orientation_dismissed', { tourId: current.tour.id, stepId });
+    } else {
+      patchMutation.mutate({ tips: { [current.tour.id]: { status: 'dismissed' } } });
+      track('onboarding_coachmark_dismissed', { tipId: current.tour.id });
+    }
+    setActiveTour(null);
   }, [patchMutation]);
 
   const replayOrientation = useCallback(() => {
@@ -427,43 +464,32 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     showChecklist();
   }, [showChecklist]);
 
-  const replayFeatureGuide = useCallback(
-    (tourId: string) => {
-      replayMutation.mutate(
-        { orientation: false, tipIds: [tourId] },
-        { onSuccess: () => startTour(tourId, 'replay') }
-      );
-    },
-    [replayMutation, startTour]
-  );
-
   const markLocalFlag = useCallback(
     (flag: keyof LocalFlags, value: boolean | number = true) => {
-      setLocalFlags((prev) => {
-        let nextValue: boolean | number = value;
-        if (flag === 'invoiceCreateCount') {
-          const current = typeof prev.invoiceCreateCount === 'number' ? prev.invoiceCreateCount : 0;
-          nextValue = typeof value === 'number' && value > 1 ? value : current + 1;
-        }
-        // Bail out on no-op writes — route-focus notifications repeat, and a new
-        // object here would re-render the provider and loop the route listener.
-        if (prev[flag] === nextValue) return prev;
+      const prev = localFlagsRef.current;
+      let nextValue: boolean | number = value;
+      if (flag === 'invoiceCreateCount') {
+        const current = typeof prev.invoiceCreateCount === 'number' ? prev.invoiceCreateCount : 0;
+        nextValue = typeof value === 'number' && value > 1 ? value : current + 1;
+      }
+      // Bail out on no-op writes — route-focus notifications repeat, and a new
+      // object here would re-render the provider and loop the route listener.
+      if (prev[flag] !== nextValue) {
         const next = { ...prev, [flag]: nextValue };
+        localFlagsRef.current = next;
+        setLocalFlags(next);
         if (user?.businessId) void saveLocalFlags(user.businessId, next);
 
         if (flag === 'invoiceCreateCount' && typeof nextValue === 'number' && nextValue >= 3) {
-          queueMicrotask(() => {
-            if (!activeTour && progress && can(PERMISSION.productsManage)) {
-              const tip = getTourById('products-speed-v1');
-              const tipState = progress.tips['products-speed-v1'];
-              if (tip && (!tipState || tipState.status === 'pending') && requiredTasksComplete(progress, tip.requiredTasks)) {
-                startTour('products-speed-v1', 'auto');
-              }
+          if (!activeTour && progress && can(PERMISSION.productsManage)) {
+            const tip = getTourById('products-speed-v1');
+            const tipState = progress.tips['products-speed-v1'];
+            if (tip && (!tipState || tipState.status === 'pending') && requiredTasksComplete(progress, tip.requiredTasks)) {
+              startTour('products-speed-v1', 'auto');
             }
-          });
+          }
         }
-        return next;
-      });
+      }
       if (flag === 'sharedInvoice' && value === true) completeTask('share_invoice', 'action');
     },
     [completeTask, activeTour, progress, can, startTour, user?.businessId]
@@ -471,6 +497,11 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
   const notifyRouteFocus = useCallback(
     (routeName: string) => {
+      // Any route change cancels a pending tip — it was armed for the previous screen.
+      if (routeTipTimerRef.current) {
+        clearTimeout(routeTipTimerRef.current);
+        routeTipTimerRef.current = null;
+      }
       if (activeTour || welcomeVisible || !progress) return;
 
       if (routeName === 'Reports') {
@@ -490,7 +521,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       if (tipState && tipState.status !== 'pending') return;
       if (tipState?.snoozedUntil && new Date(tipState.snoozedUntil) > new Date()) return;
 
-      setTimeout(() => startTour(tip.id, 'auto'), 1000);
+      routeTipTimerRef.current = setTimeout(() => startTour(tip.id, 'auto'), 1000);
     },
     [activeTour, welcomeVisible, progress, can, completeTask, markLocalFlag, startTour]
   );
@@ -508,9 +539,6 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       acceptWelcome,
       declineWelcome,
       activeTour,
-      registerAnchor,
-      unregisterAnchor,
-      measureAnchor,
       completeTask,
       dismissChecklist,
       showChecklist,
@@ -520,8 +548,6 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       dismissTour,
       replayOrientation,
       replayChecklist,
-      replayFeatureGuide,
-      featureGuides,
       notifyRouteFocus,
       markLocalFlag,
       celebration,
@@ -539,9 +565,6 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       acceptWelcome,
       declineWelcome,
       activeTour,
-      registerAnchor,
-      unregisterAnchor,
-      measureAnchor,
       completeTask,
       dismissChecklist,
       showChecklist,
@@ -551,15 +574,22 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       dismissTour,
       replayOrientation,
       replayChecklist,
-      replayFeatureGuide,
-      featureGuides,
       notifyRouteFocus,
       markLocalFlag,
       celebration
     ]
   );
 
-  return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;
+  return (
+    <OnboardingAnchorsContext.Provider value={anchorsValue}>
+      <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>
+    </OnboardingAnchorsContext.Provider>
+  );
+}
+
+/** Anchor registry only — stable across progress mutations. Use in TourAnchor / measure paths. */
+export function useOnboardingAnchors() {
+  return useContext(OnboardingAnchorsContext);
 }
 
 export function useOnboarding() {

@@ -24,7 +24,7 @@ import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { getAnalyticsConsent, setAnalyticsConsent } from '@/services/analytics';
-import { FeatureGuidesSheet, useOnboardingOptional } from '@/features/onboarding';
+import { useOnboardingOptional } from '@/features/onboarding';
 import { BusinessProfileFormValues } from '@/types';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { settingsSchema } from '@/validation/schemas';
@@ -221,7 +221,6 @@ export function SettingsScreen() {
   const [themeSaving, setThemeSaving] = useState(false);
   const [analyticsOn, setAnalyticsOn] = useState(true);
   const onboarding = useOnboardingOptional();
-  const [guidesOpen, setGuidesOpen] = useState(false);
 
 
   useEffect(() => {
@@ -458,7 +457,7 @@ export function SettingsScreen() {
       <SettingsGroup title="HELP & SUPPORT">
         <SettingsRow
           icon="compass-outline"
-          title="Replay orientation tour"
+          title="Take the app tour again"
           subtitle="Quick walkthrough of Home, Invoices, and Customers"
           tone={colors.primary}
           onPress={() => onboarding?.replayOrientation()}
@@ -466,21 +465,13 @@ export function SettingsScreen() {
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow
           icon="checkbox-marked-circle-outline"
-          title="Show Getting Started"
+          title="Show my setup checklist"
           subtitle="Reopen the setup checklist on Home"
           tone={colors.accent}
           onPress={() => {
             onboarding?.replayChecklist();
             navigation.navigate('DashboardTab', { screen: 'DashboardHome' });
           }}
-        />
-        <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
-        <SettingsRow
-          icon="lightbulb-on-outline"
-          title="Feature guides"
-          subtitle="Orders, Team, Template tips"
-          tone={colors.violet}
-          onPress={() => setGuidesOpen(true)}
         />
       </SettingsGroup>
 
@@ -528,7 +519,6 @@ export function SettingsScreen() {
 
       <WorkspaceSwitcherSheet visible={workspaceSheetVisible} onClose={() => setWorkspaceSheetVisible(false)} />
 
-      <FeatureGuidesSheet visible={guidesOpen} onClose={() => setGuidesOpen(false)} />
 
       <BrandLogoSheet
         visible={brandSheetVisible}

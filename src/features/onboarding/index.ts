@@ -5,6 +5,5 @@ export { WelcomeSheet } from './WelcomeSheet';
 export { ProgressPill } from './ProgressPill';
 export { GettingStartedSheet } from './GettingStartedSheet';
 export { CelebrationOverlay } from './CelebrationOverlay';
-export { FeatureGuidesSheet } from './FeatureGuidesSheet';
-export { ORIENTATION_TOUR_ID, featureGuidesForPermissions } from './registry';
+export { ORIENTATION_TOUR_ID } from './registry';
 export { onboardingApi } from './api';

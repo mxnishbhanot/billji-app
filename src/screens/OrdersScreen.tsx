@@ -296,7 +296,7 @@ export function OrdersScreen({ navigation }: OrdersScreenProps) {
   );
 
   return (
-    <Screen title="Orders" scroll={false} headerAction={canCreate ? headerCreateAction : <TourAnchor anchorId={ANCHOR.ordersHeader}><View /></TourAnchor>} contentStyle={styles.screenContent}>
+    <Screen title="Orders" scroll={false} headerAction={canCreate ? headerCreateAction : undefined} contentStyle={styles.screenContent}>
       {stickyHeader}
       <FlatList
         data={orders}

@@ -1,4 +1,4 @@
-import { checklistTasksForRole, ORIENTATION_TOUR, featureGuidesForPermissions } from '../registry';
+import { ANCHOR, checklistTasksForRole, ORIENTATION_TOUR, TOUR_REGISTRY, featureGuidesForPermissions } from '../registry';
 import { PERMISSION } from '@/shared/hooks/usePermissions';
 
 describe('onboarding registry', () => {
@@ -31,6 +31,26 @@ describe('onboarding registry', () => {
     for (const role of ['owner', 'admin', 'accountant', 'staff', 'viewer']) {
       const tasks = checklistTasksForRole(role, allowAll);
       expect(tasks.every((t) => typeof t.icon === 'string' && t.icon.length > 0)).toBe(true);
+    }
+  });
+
+  it('every tour step targets a known anchor', () => {
+    const anchorIds = new Set(Object.values(ANCHOR));
+    for (const tour of TOUR_REGISTRY) {
+      for (const step of tour.steps) {
+        expect(anchorIds.has(step.anchorId as (typeof ANCHOR)[keyof typeof ANCHOR])).toBe(true);
+      }
+    }
+  });
+
+  it('every step has a navigate target unless its anchor is always mounted', () => {
+    // Tab-bar icons are the only anchors present on every screen.
+    const alwaysMounted = new Set<string>([ANCHOR.tabInvoices, ANCHOR.tabCustomers]);
+    for (const tour of TOUR_REGISTRY) {
+      for (const step of tour.steps) {
+        if (alwaysMounted.has(step.anchorId)) continue;
+        expect(step.navigate?.screen).toBeTruthy();
+      }
     }
   });
 

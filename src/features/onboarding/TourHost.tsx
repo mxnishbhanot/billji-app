@@ -16,7 +16,7 @@ import Svg, { Defs, Mask, Rect } from 'react-native-svg';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
-import { useOnboarding, useOnboardingOptional } from './OnboardingProvider';
+import { useOnboarding, useOnboardingAnchors, useOnboardingOptional } from './OnboardingProvider';
 import type { AnchorRect } from './types';
 
 const PAD = 8;
@@ -43,28 +43,54 @@ function computeHole(rect: AnchorRect): Hole {
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
-/** Measure an anchor with a couple of retries so late layouts (tab bar, lazy content) settle in. */
+/**
+ * Poll for an anchor until it measures, then stop. A step may navigate to another
+ * (lazily-mounted) screen before its anchor exists, so fixed retries aren't enough —
+ * we poll every 150ms up to ~4s. rect is cleared on anchor change so the previous
+ * step's cutout doesn't linger.
+ */
+const ANCHOR_POLL_MS = 150;
+const ANCHOR_POLL_TRIES = 26; // ~4s
+
 function useAnchorRect(anchorId: string | undefined, winW: number, winH: number) {
-  const onboarding = useOnboardingOptional();
-  const [rect, setRect] = useState<AnchorRect | null>(null);
+  // measureAnchor lives in the stable anchors context — reading it here (not the main
+  // onboarding context) keeps this effect from tearing down the poll and resetting rect
+  // to null on every progress mutation, before the first measure resolves.
+  const measureAnchor = useOnboardingAnchors()?.measureAnchor;
+  // Tag the measured rect with its anchorId so a stale rect from the previous step is
+  // dropped by derivation (below) instead of a synchronous setState(null) in the effect,
+  // which would trigger a cascading render on every step change.
+  const [measured, setMeasured] = useState<{ id: string; rect: AnchorRect } | null>(null);
 
   useEffect(() => {
-    if (!onboarding || !anchorId) return undefined;
+    if (!measureAnchor || !anchorId) return undefined;
     let cancelled = false;
-    const measure = async () => {
-      const measured = await onboarding.measureAnchor(anchorId);
-      if (!cancelled && measured) setRect(measured);
+    let tries = 0;
+    let last: AnchorRect | null = null;
+    const same = (a: AnchorRect | null, b: AnchorRect) =>
+      !!a && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+    // Keep measuring and let the cutout follow — the target may still be scrolling
+    // into view when the tour opens. Lock in only once the position stops changing
+    // (two identical reads), so we never freeze onto a mid-scroll frame.
+    const attempt = async () => {
+      const result = await measureAnchor(anchorId);
+      if (cancelled) return;
+      if (result) {
+        setMeasured({ id: anchorId, rect: result });
+        if (same(last, result)) clearInterval(id);
+        last = result;
+      }
+      if (++tries > ANCHOR_POLL_TRIES) clearInterval(id); // hard cap ~4s
     };
-    void measure();
-    // Retries let late layouts settle (tab bar, lazily mounted screens after a deep link).
-    const timers = [260, 720, 1500].map((ms) => setTimeout(() => void measure(), ms));
+    const id = setInterval(() => void attempt(), ANCHOR_POLL_MS);
+    void attempt(); // don't wait 150ms for the first try
     return () => {
       cancelled = true;
-      timers.forEach(clearTimeout);
+      clearInterval(id);
     };
-  }, [onboarding, anchorId, winW, winH]);
+  }, [measureAnchor, anchorId, winW, winH]);
 
-  return rect;
+  return measured && measured.id === anchorId ? measured.rect : null;
 }
 
 function useWindowSize() {
@@ -341,9 +367,10 @@ function SoftTip() {
     return () => clearTimeout(auto);
   }, [dismissTour]);
 
+  // Give the anchor poll (~4s) time to find a screen the step navigated to before bailing.
   useEffect(() => {
     if (rect) return undefined;
-    const bail = setTimeout(dismissTour, 2500);
+    const bail = setTimeout(dismissTour, 4500);
     return () => clearTimeout(bail);
   }, [rect, dismissTour]);
 

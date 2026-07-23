@@ -133,7 +133,6 @@ export const useInvoiceBuilder = ({
       queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
-      queryClient.invalidateQueries({ queryKey: ['onboarding', 'progress'] });
     },
     onError: (error) => {
       const shortages = stockShortagesFromError(error);

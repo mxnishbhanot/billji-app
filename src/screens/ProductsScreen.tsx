@@ -11,7 +11,7 @@ import { useAppDialog } from '@/components/AppDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { ProductFormSheet } from '@/components/ProductFormSheet';
-import { useOnboardingOptional } from '@/features/onboarding';
+import { useOnboardingOptional, TourAnchor, ANCHOR } from '@/features/onboarding';
 import { DEFAULT_UNIT } from '@/constants/units';
 import { ProductHistorySheet } from '@/components/ProductHistorySheet';
 import {
@@ -385,20 +385,22 @@ export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
   ), [isDark, colors, theme.colors.primary, theme.colors.onSurface, theme.colors.onSurfaceVariant, theme.colors.error, canManage, highlighted, showSales, startEdit, openHistory, startDelete]);
 
   const headerCreateAction = (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Add product"
-      onPress={() => setEditing(null)}
-      style={({ pressed }) => [
-        styles.headerCreateBtn,
-        {
-          backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary,
-          shadowColor: isDark ? '#000000' : colors.primaryStrong
-        }
-      ]}
-    >
-      <MaterialCommunityIcons name="package-variant-plus" size={23} color={theme.colors.onPrimary} />
-    </Pressable>
+    <TourAnchor anchorId={ANCHOR.productsHeader}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Add product"
+        onPress={() => setEditing(null)}
+        style={({ pressed }) => [
+          styles.headerCreateBtn,
+          {
+            backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary,
+            shadowColor: isDark ? '#000000' : colors.primaryStrong
+          }
+        ]}
+      >
+        <MaterialCommunityIcons name="package-variant-plus" size={23} color={theme.colors.onPrimary} />
+      </Pressable>
+    </TourAnchor>
   );
 
   return (

@@ -12,7 +12,8 @@ export const ANCHOR = {
   ordersHeader: 'anchor-orders-header',
   teamInvite: 'anchor-team-invite',
   invoiceTemplate: 'anchor-invoice-template',
-  shareInvoice: 'anchor-share-invoice'
+  shareInvoice: 'anchor-share-invoice',
+  productsHeader: 'anchor-products-header'
 } as const;
 
 const ALL_TASKS: Record<ChecklistTaskKey, ChecklistTaskDef> = {
@@ -141,7 +142,8 @@ export const ORIENTATION_TOUR: TourDefinition = {
       anchorId: ANCHOR.createInvoice,
       title: 'Everything starts here',
       description: 'Tap Create Invoice to bill your first customer — it takes about a minute.',
-      placement: 'bottom'
+      placement: 'bottom',
+      navigate: { tab: 'DashboardTab', screen: 'DashboardHome' }
     },
     {
       id: 'tab-invoices',
@@ -162,7 +164,8 @@ export const ORIENTATION_TOUR: TourDefinition = {
       anchorId: ANCHOR.checklist,
       title: 'Your setup guide',
       description: 'This tracks your first steps. Tap it anytime to pick up where you left off.',
-      placement: 'top'
+      placement: 'top',
+      navigate: { tab: 'DashboardTab', screen: 'DashboardHome' }
     }
   ]
 };
@@ -184,7 +187,8 @@ export const FEATURE_TOURS: TourDefinition[] = [
         anchorId: ANCHOR.ordersHeader,
         title: 'Plan sales with orders',
         description: 'Sketch the sale as an order first — turn it into an invoice when it\u2019s ready.',
-        placement: 'bottom'
+        placement: 'bottom',
+        navigate: { tab: 'InvoicesTab', screen: 'OrderList' }
       }
     ]
   },
@@ -204,7 +208,8 @@ export const FEATURE_TOURS: TourDefinition[] = [
         anchorId: ANCHOR.teamInvite,
         title: 'Bring your team in',
         description: 'Invite teammates with roles so everyone sees exactly what they need.',
-        placement: 'bottom'
+        placement: 'bottom',
+        navigate: { tab: 'SettingsTab', screen: 'Team' }
       }
     ]
   },
@@ -224,7 +229,8 @@ export const FEATURE_TOURS: TourDefinition[] = [
         anchorId: ANCHOR.invoiceTemplate,
         title: 'Make invoices yours',
         description: 'Add your logo, colors, and notes so PDFs look like your business.',
-        placement: 'bottom'
+        placement: 'bottom',
+        navigate: { tab: 'SettingsTab', screen: 'InvoiceTemplate' }
       }
     ]
   },
@@ -233,6 +239,7 @@ export const FEATURE_TOURS: TourDefinition[] = [
     version: 1,
     priority: 13,
     trigger: 'after_activation',
+    route: 'Products',
     requiredPermissions: [PERMISSION.productsManage],
     requiredTasks: ['create_invoice'],
     title: 'Products catalog',
@@ -240,10 +247,11 @@ export const FEATURE_TOURS: TourDefinition[] = [
     steps: [
       {
         id: 'products-tip',
-        anchorId: ANCHOR.createInvoice,
+        anchorId: ANCHOR.productsHeader,
         title: 'Speed up your line items',
         description: 'Save products to Inventory and your next invoice fills itself in.',
-        placement: 'bottom'
+        placement: 'bottom',
+        navigate: { tab: 'CatalogTab', screen: 'Products' }
       }
     ]
   }

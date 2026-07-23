@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef } from 'react';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Reanimated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -302,11 +302,22 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
 
   const recent = report?.recentInvoices ?? [];
   const onboarding = useOnboardingOptional();
+  const scrollRef = useRef<ScrollView>(null);
+
+  // The Create Invoice button is at the top of this screen. If the tour targets it
+  // while the user is scrolled down, snap to top so the spotlight lands on it.
+  const activeTour = onboarding?.activeTour;
+  useEffect(() => {
+    if (activeTour?.tour.steps[activeTour.stepIndex]?.anchorId === ANCHOR.createInvoice) {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    }
+  }, [activeTour]);
 
   return (
     <>
     <Screen
       title="Dashboard"
+      scrollRef={scrollRef}
       contentStyle={styles.screenContent}
       scrollViewProps={{
         scrollEventThrottle: 16,

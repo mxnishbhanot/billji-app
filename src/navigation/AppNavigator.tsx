@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { NavigationContainer, RouteProp, StackActions, createNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer, RouteProp, StackActions } from '@react-navigation/native';
 import { BottomTabNavigationProp, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, useTheme } from 'react-native-paper';
@@ -45,6 +45,7 @@ const AcceptInviteScreen = lazy(() => import('@/screens/AcceptInviteScreen').the
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { CelebrationOverlay, OnboardingProvider, TourAnchor, TourHost, WelcomeSheet, ANCHOR, useOnboardingOptional } from '@/features/onboarding';
+import { navigationRef } from './navigationRef';
 import {
   AuthStackParamList,
   CatalogStackParamList,
@@ -64,7 +65,6 @@ const CatalogStack = createNativeStackNavigator<CatalogStackParamList>();
 const CustomersStack = createNativeStackNavigator<CustomersStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 const Tabs = createBottomTabNavigator<TabParamList>();
-const navigationRef = createNavigationContainerRef<RootStackParamList>();
 const TAB_BAR_HEIGHT = 72;
 const TAB_BAR_BOTTOM_PADDING = 10;
 const tabIcons: Record<keyof TabParamList, { active: keyof typeof MaterialCommunityIcons.glyphMap; inactive: keyof typeof MaterialCommunityIcons.glyphMap }> = {

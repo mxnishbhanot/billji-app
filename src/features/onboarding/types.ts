@@ -97,6 +97,12 @@ export type TourStepDef = {
   title: string;
   description: string;
   placement?: 'top' | 'bottom' | 'left' | 'right';
+  /** Screen the anchor lives on; the tour navigates here before measuring. Omit for always-mounted anchors (e.g. tab-bar icons). */
+  navigate?: {
+    tab?: 'DashboardTab' | 'InvoicesTab' | 'CatalogTab' | 'CustomersTab' | 'SettingsTab';
+    screen: string;
+    params?: Record<string, unknown>;
+  };
 };
 
 export type TourDefinition = {
