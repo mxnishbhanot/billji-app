@@ -17,6 +17,7 @@ import { Screen } from '@/components/Screen';
 import { InvoiceDetailScreenProps } from '@/navigation/types';
 import { openOrSharePdf } from '@/services/pdf';
 import { track } from '@/services/analytics';
+import { TourAnchor, ANCHOR, useOnboardingOptional } from '@/features/onboarding';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, statusTone, typeScale } from '@/theme/theme';
@@ -160,6 +161,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
   const { can } = usePermissions();
+  const onboarding = useOnboardingOptional();
   const canRecordPayment = can(PERMISSION.paymentsRecord);
   const canUpdateInvoice = can(PERMISSION.invoicesUpdate);
   const canDeleteInvoice = can(PERMISSION.invoicesDelete);
@@ -207,7 +209,17 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   };
   const cancelInvoice = useMutation({ mutationFn: () => invoicesApi.status(id, 'cancelled'), onSuccess: () => { setCancelling(false); invalidateCancel(); query.refetch(); paymentsQuery.refetch(); }, onError: (error) => { setCancelling(false); showDialog({ title: 'Could not cancel invoice', message: apiErrorMessage(error), tone: 'error' }); } });
   const remove = useMutation({ mutationFn: () => invoicesApi.remove(id), onSuccess: () => { setDeleting(false); invalidateStatusChange(); navigation.navigate('InvoiceList'); }, onError: (error) => { setDeleting(false); showDialog({ title: 'Could not delete invoice', message: apiErrorMessage(error), tone: 'error' }); } });
-  const sendEmail = useMutation({ mutationFn: (email: string) => invoicesApi.email(id, email), onSuccess: () => { track('invoice_shared', { channel: 'email' }); setEmailOpen(false); query.refetch(); }, onError: (error) => showDialog({ title: 'Could not send email', message: apiErrorMessage(error), tone: 'error' }) });
+  const sendEmail = useMutation({
+    mutationFn: (email: string) => invoicesApi.email(id, email),
+    onSuccess: () => {
+      track('invoice_shared', { channel: 'email' });
+      onboarding?.markLocalFlag('sharedInvoice', true);
+      onboarding?.completeTask('share_invoice', 'action');
+      setEmailOpen(false);
+      query.refetch();
+    },
+    onError: (error) => showDialog({ title: 'Could not send email', message: apiErrorMessage(error), tone: 'error' })
+  });
   const recordPayment = useMutation({
     mutationFn: async ({ payload, settlePreviousDues, invoiceIds }: { payload: RecordPaymentPayload; settlePreviousDues: boolean; invoiceIds: string[] }) => {
       if (settlePreviousDues && customerId) {
@@ -261,6 +273,8 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
     try {
       await openOrSharePdf(invoice.pdfUrl, invoice.invoiceNumber);
       track('invoice_shared', { channel: label.toLowerCase() });
+      onboarding?.markLocalFlag('sharedInvoice', true);
+      onboarding?.completeTask('share_invoice', 'action');
     } catch (error) {
       showDialog({ title: 'Could not share invoice', message: apiErrorMessage(error), tone: 'error' });
     } finally {
@@ -448,6 +462,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
           </View>
         </View>
       ) : (
+      <TourAnchor anchorId={ANCHOR.shareInvoice}>
       <View style={styles.actionRow}>
         {actions.map((action) => {
           const isBusy = busyAction === action.label;
@@ -478,6 +493,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
           );
         })}
       </View>
+      </TourAnchor>
       )}
 
       <View style={styles.footerActions}>

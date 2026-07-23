@@ -1,11 +1,11 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { NavigationContainer, RouteProp, StackActions, createNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer, RouteProp, StackActions } from '@react-navigation/native';
 import { BottomTabNavigationProp, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, useTheme } from 'react-native-paper';
 import { AppState, BackHandler, Platform, StyleSheet, View } from 'react-native';
 import { authApi } from '@/api/endpoints';
-import { ReactNode, Suspense, lazy, useEffect } from 'react';
+import { ReactNode, Suspense, lazy, useEffect, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Dashboard and Login stay static — they are the first screens painted after splash.
 import { DashboardScreen } from '@/screens/DashboardScreen';
@@ -44,6 +44,8 @@ const RoleEditorScreen = lazy(() => import('@/screens/RoleEditorScreen').then((m
 const AcceptInviteScreen = lazy(() => import('@/screens/AcceptInviteScreen').then((m) => ({ default: m.AcceptInviteScreen })));
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
+import { CelebrationOverlay, OnboardingProvider, TourAnchor, TourHost, WelcomeSheet, ANCHOR, useOnboardingOptional } from '@/features/onboarding';
+import { navigationRef } from './navigationRef';
 import {
   AuthStackParamList,
   CatalogStackParamList,
@@ -63,7 +65,6 @@ const CatalogStack = createNativeStackNavigator<CatalogStackParamList>();
 const CustomersStack = createNativeStackNavigator<CustomersStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 const Tabs = createBottomTabNavigator<TabParamList>();
-const navigationRef = createNavigationContainerRef<RootStackParamList>();
 const TAB_BAR_HEIGHT = 72;
 const TAB_BAR_BOTTOM_PADDING = 10;
 const tabIcons: Record<keyof TabParamList, { active: keyof typeof MaterialCommunityIcons.glyphMap; inactive: keyof typeof MaterialCommunityIcons.glyphMap }> = {
@@ -228,11 +229,24 @@ function AppTabs() {
           tabBarItemStyle: styles.tabItem,
           tabBarIcon: ({ color, focused }) => {
             const icon = tabIcons[route.name as keyof TabParamList];
-            return (
+            const pill = (
               <View style={[styles.iconPill, focused && { backgroundColor: alpha(theme.colors.primary, isDark ? 0.2 : 0.14) }]}>
                 <MaterialCommunityIcons name={focused ? icon.active : icon.inactive} size={focused ? 22 : 21} color={color} />
               </View>
             );
+            if (route.name === 'InvoicesTab') {
+              return <TourAnchor anchorId={ANCHOR.tabInvoices}>{pill}</TourAnchor>;
+            }
+            if (route.name === 'CustomersTab') {
+              return <TourAnchor anchorId={ANCHOR.tabCustomers}>{pill}</TourAnchor>;
+            }
+            if (route.name === 'CatalogTab') {
+              return <TourAnchor anchorId={ANCHOR.tabCatalog}>{pill}</TourAnchor>;
+            }
+            if (route.name === 'SettingsTab') {
+              return <TourAnchor anchorId={ANCHOR.tabSettings}>{pill}</TourAnchor>;
+            }
+            return pill;
           }
         })}
       >
@@ -261,11 +275,39 @@ function AppTabs() {
   );
 }
 
+function OnboardingRouteListener() {
+  const onboarding = useOnboardingOptional();
+  // The onboarding context value changes whenever progress mutates, which re-runs
+  // this effect. Dedupe by route name (in a ref that survives re-subscription) so
+  // a notify that mutates progress can't loop back into another notify.
+  const lastRouteRef = useRef<string | null>(null);
+  const notifyRef = useRef(onboarding?.notifyRouteFocus);
+  notifyRef.current = onboarding?.notifyRouteFocus;
+  useEffect(() => {
+    if (!onboarding || !navigationRef.isReady()) return undefined;
+    const notify = () => {
+      const name = navigationRef.getCurrentRoute()?.name;
+      if (!name || name === lastRouteRef.current) return;
+      lastRouteRef.current = name;
+      notifyRef.current?.(name);
+    };
+    notify();
+    return navigationRef.addListener('state', notify);
+  }, [onboarding]);
+  return null;
+}
+
 function AppShell() {
   return (
-    <RootStack.Navigator screenOptions={{ headerShown: false }}>
-      <RootStack.Screen name="MainTabs" component={AppTabs} />
-    </RootStack.Navigator>
+    <OnboardingProvider>
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+        <RootStack.Screen name="MainTabs" component={AppTabs} />
+      </RootStack.Navigator>
+      <WelcomeSheet />
+      <TourHost />
+      <CelebrationOverlay />
+      <OnboardingRouteListener />
+    </OnboardingProvider>
   );
 }
 

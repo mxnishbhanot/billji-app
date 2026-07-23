@@ -7,6 +7,7 @@ import { queryKeys } from '@/shared/query/queryKeys';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { useAuthStore } from '@/store/authStore';
 import { track } from '@/services/analytics';
+import { useOnboardingOptional } from '@/features/onboarding';
 import { Customer, DiscountType, InvoiceCreatePayload, InvoiceDraftPayload, InvoiceItem, Product, StockShortage } from '@/types';
 import { calculateClientTotals } from '@/utils/format';
 import {
@@ -37,6 +38,7 @@ export const useInvoiceBuilder = ({
   showDialog: (dialog: { title: string; message?: string; tone?: 'default' | 'success' | 'error' | 'warning' }) => void;
 }) => {
   const queryClient = useQueryClient();
+  const onboarding = useOnboardingOptional();
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerPicker, setCustomerPicker] = useState(false);
@@ -108,6 +110,7 @@ export const useInvoiceBuilder = ({
     mutationFn: customersApi.create,
     onSuccess: (customer) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      onboarding?.completeTask('add_customer', 'action');
       setSelectedCustomerId(customer._id);
       setSelectedCustomer(customer);
       setCustomerModal(false);
@@ -124,6 +127,8 @@ export const useInvoiceBuilder = ({
         has_discount: payload.discountValue > 0,
         oversell: Boolean(payload.allowOversell)
       });
+      onboarding?.completeTask('create_invoice', 'action');
+      onboarding?.markLocalFlag('invoiceCreateCount');
       draft.clearActiveDraft();
       queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.all });

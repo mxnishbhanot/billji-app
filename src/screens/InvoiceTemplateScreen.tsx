@@ -10,6 +10,7 @@ import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
 import { useAppToast } from '@/components/AppToast';
 import { Screen } from '@/components/Screen';
+import { TourAnchor, ANCHOR } from '@/features/onboarding';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { InvoiceTemplate } from '@/types';
@@ -170,17 +171,19 @@ export function InvoiceTemplateScreen() {
 
   return (
     <Screen title="Invoice Template" headerAction={headerAction} contentStyle={styles.screenContent}>
-      <SectionLabel title="PREVIEW" />
-      <View style={[styles.previewFrame, { borderColor: cardBorder }]} onLayout={(e) => setFrameWidth(e.nativeEvent.layout.width)}>
-        {previewHtml ? (
-          <PreviewSurface html={previewHtml} frameWidth={frameWidth} />
-        ) : (
-          <View style={styles.previewLoading}>
-            <ActivityIndicator color={theme.colors.primary} />
-          </View>
-        )}
-      </View>
-      <Text style={[styles.previewHint, { color: theme.colors.onSurfaceVariant }]}>Live preview · exactly matches the generated PDF</Text>
+      <TourAnchor anchorId={ANCHOR.invoiceTemplate}>
+        <SectionLabel title="PREVIEW" />
+        <View style={[styles.previewFrame, { borderColor: cardBorder }]} onLayout={(e) => setFrameWidth(e.nativeEvent.layout.width)}>
+          {previewHtml ? (
+            <PreviewSurface html={previewHtml} frameWidth={frameWidth} />
+          ) : (
+            <View style={styles.previewLoading}>
+              <ActivityIndicator color={theme.colors.primary} />
+            </View>
+          )}
+        </View>
+        <Text style={[styles.previewHint, { color: theme.colors.onSurfaceVariant }]}>Live preview · exactly matches the generated PDF</Text>
+      </TourAnchor>
 
       <SectionLabel title="ACCENT COLOR" />
       <View style={[styles.colorCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>

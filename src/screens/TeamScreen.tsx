@@ -16,6 +16,7 @@ import { rolesApi, teamApi } from '@/api/endpoints';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { useAuthStore } from '@/store/authStore';
+import { TourAnchor, ANCHOR } from '@/features/onboarding';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import type { TeamMember } from '@/types';
 
@@ -100,10 +101,16 @@ export function TeamScreen() {
   }, [inviteRoleOptions, rolesQuery.data]);
 
   const headerAction = canManage ? (
-    <Pressable onPress={() => setInviteOpen(true)} style={[styles.addBtn, { backgroundColor: theme.colors.primary }]} hitSlop={8}>
-      <Feather name="user-plus" size={18} color={theme.colors.onPrimary} />
-    </Pressable>
-  ) : undefined;
+    <TourAnchor anchorId={ANCHOR.teamInvite}>
+      <Pressable onPress={() => setInviteOpen(true)} style={[styles.addBtn, { backgroundColor: theme.colors.primary }]} hitSlop={8}>
+        <Feather name="user-plus" size={18} color={theme.colors.onPrimary} />
+      </Pressable>
+    </TourAnchor>
+  ) : (
+    <TourAnchor anchorId={ANCHOR.teamInvite}>
+      <View />
+    </TourAnchor>
+  );
 
   const members = membersQuery.data ?? [];
   const invitations = invitationsQuery.data ?? [];

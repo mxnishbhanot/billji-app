@@ -24,6 +24,7 @@ import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { getAnalyticsConsent, setAnalyticsConsent } from '@/services/analytics';
+import { useOnboardingOptional } from '@/features/onboarding';
 import { BusinessProfileFormValues } from '@/types';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { settingsSchema } from '@/validation/schemas';
@@ -219,6 +220,7 @@ export function SettingsScreen() {
   const [workspaceSheetVisible, setWorkspaceSheetVisible] = useState(false);
   const [themeSaving, setThemeSaving] = useState(false);
   const [analyticsOn, setAnalyticsOn] = useState(true);
+  const onboarding = useOnboardingOptional();
 
 
   useEffect(() => {
@@ -248,6 +250,7 @@ export function SettingsScreen() {
     onSuccess: async (response) => {
       await setUser(response.user);
       queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.onboarding.progress });
     },
     onError: (error) => showDialog({ title: 'Could not save settings', message: apiErrorMessage(error), tone: 'error' })
   });
@@ -451,6 +454,27 @@ export function SettingsScreen() {
         <SettingsRow icon="ticket-confirmation-outline" title="Join a business" subtitle="Enter an invite code from your email" tone={colors.primary} onPress={() => navigation.navigate('AcceptInvite')} />
       </SettingsGroup>
 
+      <SettingsGroup title="HELP & SUPPORT">
+        <SettingsRow
+          icon="compass-outline"
+          title="Take the app tour again"
+          subtitle="Quick walkthrough of Home, Invoices, and Customers"
+          tone={colors.primary}
+          onPress={() => onboarding?.replayOrientation()}
+        />
+        <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
+        <SettingsRow
+          icon="checkbox-marked-circle-outline"
+          title="Show my setup checklist"
+          subtitle="Reopen the setup checklist on Home"
+          tone={colors.accent}
+          onPress={() => {
+            onboarding?.replayChecklist();
+            navigation.navigate('DashboardTab', { screen: 'DashboardHome' });
+          }}
+        />
+      </SettingsGroup>
+
       <SettingsGroup title="ACCOUNT">
         <SettingsRow
           icon="bell-outline"
@@ -494,6 +518,7 @@ export function SettingsScreen() {
       />
 
       <WorkspaceSwitcherSheet visible={workspaceSheetVisible} onClose={() => setWorkspaceSheetVisible(false)} />
+
 
       <BrandLogoSheet
         visible={brandSheetVisible}

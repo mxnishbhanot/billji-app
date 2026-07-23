@@ -17,6 +17,7 @@ import {
 } from '@/components/OrderFilterSheet';
 import { Screen } from '@/components/Screen';
 import { StatusPill, paymentStatusMeta } from '@/components/StatusPill';
+import { TourAnchor, ANCHOR } from '@/features/onboarding';
 import { OrdersScreenProps } from '@/navigation/types';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
@@ -282,14 +283,16 @@ export function OrdersScreen({ navigation }: OrdersScreenProps) {
   ), [isDark, colors, theme.colors.onSurface, theme.colors.onSurfaceVariant, theme.colors.primary, openOrder]);
 
   const headerCreateAction = (
-    <Pressable
-      accessibilityLabel="Create order"
-      accessibilityRole="button"
-      onPress={() => navigation.navigate('OrderCreate')}
-      style={({ pressed }) => [styles.headerCreateBtn, { backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary, shadowColor: isDark ? '#000000' : colors.primaryStrong }]}
-    >
-      <MaterialCommunityIcons name="clipboard-plus-outline" size={23} color={theme.colors.onPrimary} />
-    </Pressable>
+    <TourAnchor anchorId={ANCHOR.ordersHeader}>
+      <Pressable
+        accessibilityLabel="Create order"
+        accessibilityRole="button"
+        onPress={() => navigation.navigate('OrderCreate')}
+        style={({ pressed }) => [styles.headerCreateBtn, { backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary, shadowColor: isDark ? '#000000' : colors.primaryStrong }]}
+      >
+        <MaterialCommunityIcons name="clipboard-plus-outline" size={23} color={theme.colors.onPrimary} />
+      </Pressable>
+    </TourAnchor>
   );
 
   return (
