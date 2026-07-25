@@ -3,10 +3,9 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput as RNTe
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { UseFormReturn } from 'react-hook-form';
 import { Button, Dialog, List, Portal, Text, TextInput, Tooltip, useTheme } from 'react-native-paper';
+import { CustomerFormSheet } from '@/components/CustomerFormSheet';
 import { CustomerPickerSheet } from '@/components/CustomerPickerSheet';
 import { CustomItemSheet } from '@/components/CustomItemSheet';
-import { FormTextInput } from '@/components/FormTextInput';
-import { PhoneInput } from '@/components/PhoneInput';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
 import { Customer, CustomerFormValues, CustomItemFormValues, DiscountType, DraftDocument, InvoiceDraftPayload, InvoiceItem, Product, StockShortage } from '@/types';
 import { formatCurrency } from '@/utils/format';
@@ -563,6 +562,14 @@ export function InvoiceBuilderDialogs({
       onQuickAdd={onQuickAddCustomer}
       onClose={onCloseCustomerPicker}
     />
+    <CustomerFormSheet
+      visible={customerModal}
+      isEdit={false}
+      form={customerForm}
+      saving={addCustomerLoading}
+      onSubmit={customerForm.handleSubmit(onCustomerSubmit)}
+      onClose={onCloseCustomerModal}
+    />
     <CustomItemSheet
       visible={customModal}
       form={customForm}
@@ -581,20 +588,6 @@ export function InvoiceBuilderDialogs({
           <Button textColor={theme.colors.error} onPress={onRecoveryDiscard}>Discard</Button>
           <Button onPress={onRecoveryDuplicate}>Duplicate</Button>
           <Button onPress={onRecoveryResume}>Resume</Button>
-        </Dialog.Actions>
-      </Dialog>
-
-      <Dialog visible={customerModal} onDismiss={onCloseCustomerModal}>
-        <Dialog.Title>Quick add customer</Dialog.Title>
-        <Dialog.Content>
-          <FormTextInput control={customerForm.control} name="name" label="Name" />
-          <PhoneInput control={customerForm.control} name="phone" />
-          <FormTextInput control={customerForm.control} name="email" label="Email" />
-          <FormTextInput control={customerForm.control} name="address" label="Address" />
-        </Dialog.Content>
-        <Dialog.Actions>
-          <Button onPress={onCloseCustomerModal}>Cancel</Button>
-          <Button loading={addCustomerLoading} onPress={customerForm.handleSubmit(onCustomerSubmit)}>Save</Button>
         </Dialog.Actions>
       </Dialog>
 

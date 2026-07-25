@@ -56,7 +56,7 @@ function SuggestionList({
         {items.map((item) => (
           <Pressable
             key={item}
-            onPressIn={() => onPick(item)}
+            onPress={() => onPick(item)}
             style={({ pressed }) => [
               styles.suggestion,
               { backgroundColor: pressed ? alpha(colors.primary, isDark ? 0.18 : 0.08) : 'transparent' }
@@ -156,8 +156,10 @@ export function IndiaAddressFields<T extends FieldValues>({
                 label="State"
                 value={text}
                 onChangeText={(next) => { onChange(next); setStateFocused(true); }}
-                onFocus={() => setStateFocused(true)}
-                onBlur={() => { setStateFocused(false); onBlur(); }}
+                onFocus={() => { setStateFocused(true); setCityFocused(false); }}
+                // Not closed on blur: Android blurs on touch-down, so unmounting the
+                // list here cancels the suggestion press. Closes on pick / other field.
+                onBlur={onBlur}
                 error={Boolean(error)}
                 autoCapitalize="words"
                 right={<TextInput.Icon icon="chevron-down" />}
@@ -194,6 +196,7 @@ export function IndiaAddressFields<T extends FieldValues>({
               label="PIN code"
               value={value == null ? '' : String(value)}
               onChangeText={(next) => onChange(next.replace(/\D/g, '').slice(0, 6))}
+              onFocus={() => { setStateFocused(false); setCityFocused(false); }}
               onBlur={onBlur}
               error={Boolean(error)}
               keyboardType="number-pad"
@@ -234,8 +237,8 @@ export function IndiaAddressFields<T extends FieldValues>({
                 label="City"
                 value={text}
                 onChangeText={(next) => { onChange(next); setCityFocused(true); }}
-                onFocus={() => setCityFocused(true)}
-                onBlur={() => { setCityFocused(false); onBlur(); }}
+                onFocus={() => { setCityFocused(true); setStateFocused(false); }}
+                onBlur={onBlur}
                 error={Boolean(error)}
                 autoCapitalize="words"
                 style={inputBase}

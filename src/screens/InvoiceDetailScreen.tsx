@@ -265,6 +265,14 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
       outstandingQuery.refetch();
     }
   });
+  // Mark a cancelled invoice's refund-pending receipts as refunded manually.
+  // Flag-only on the server (cancel already reversed ledger/balance) — just clears
+  // the "Refund pending" flag and stamps who/when for the audit trail.
+  const markRefund = useMutation({
+    mutationFn: () => paymentsApi.markRefundProcessed(id),
+    onSuccess: () => { invalidatePayment(); paymentsQuery.refetch(); },
+    onError: (error) => showDialog({ title: 'Could not mark refund', message: apiErrorMessage(error), tone: 'error' })
+  });
   // Run a share action with a busy lock so the tile can show a spinner and ignore
   // repeat taps until the (possibly slow) PDF download/share resolves.
   const runShare = async (label: string) => {
@@ -547,6 +555,8 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
         payments={paymentsQuery.data ?? []}
         loading={paymentsQuery.isLoading}
         onClose={() => setHistoryOpen(false)}
+        onMarkRefunded={() => markRefund.mutate()}
+        marking={markRefund.isPending}
       />
 
       <ConfirmDialog visible={cancelling} title="Cancel invoice?" message={cancelMessage} confirmLabel="Cancel invoice" onCancel={() => setCancelling(false)} onConfirm={() => cancelInvoice.mutate()} />
