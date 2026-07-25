@@ -38,6 +38,7 @@ const InvoiceTemplateScreen = lazy(() => import('@/screens/InvoiceTemplateScreen
 const NotificationSettingsScreen = lazy(() => import('@/screens/NotificationSettingsScreen').then((m) => ({ default: m.NotificationSettingsScreen })));
 const ActivityLogScreen = lazy(() => import('@/screens/ActivityLogScreen').then((m) => ({ default: m.ActivityLogScreen })));
 const LedgerScreen = lazy(() => import('@/screens/LedgerScreen').then((m) => ({ default: m.LedgerScreen })));
+const DataExportScreen = lazy(() => import('@/screens/DataExportScreen').then((m) => ({ default: m.DataExportScreen })));
 const TeamScreen = lazy(() => import('@/screens/TeamScreen').then((m) => ({ default: m.TeamScreen })));
 const RolesScreen = lazy(() => import('@/screens/RolesScreen').then((m) => ({ default: m.RolesScreen })));
 const RoleEditorScreen = lazy(() => import('@/screens/RoleEditorScreen').then((m) => ({ default: m.RoleEditorScreen })));
@@ -161,6 +162,7 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
       <SettingsStack.Screen name="ActivityLog" component={ActivityLogScreen} />
       <SettingsStack.Screen name="Ledger" component={LedgerScreen} />
+      <SettingsStack.Screen name="DataExport" component={DataExportScreen} />
       <SettingsStack.Screen name="TwoFactorSetup" component={TwoFactorSetupScreen} />
       <SettingsStack.Screen name="Team" component={TeamScreen} />
       <SettingsStack.Screen name="Roles" component={RolesScreen} />

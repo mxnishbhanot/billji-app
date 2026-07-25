@@ -71,5 +71,9 @@ export const queryKeys = {
   },
   onboarding: {
     progress: ['onboarding', 'progress'] as const
+  },
+  exports: {
+    all: ['exports'] as const,
+    detail: (id: string) => ['exports', id] as const
   }
 } as const;

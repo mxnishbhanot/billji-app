@@ -234,7 +234,7 @@ export type InvoiceEligibility = {
 export type Invoice = {
   _id: string; invoiceNumber: string; date: string; dueDate?: string | null; customer?: string | null; customerSnapshot: Customer;
   items: InvoiceItem[]; subtotal: number; tax: { rate: number; amount: number }; discount: { type: DiscountType; value: number; amount: number };
-  total: number; paidAmount?: number; balanceDue?: number; status: InvoiceStatus; documentStatus?: string; paymentStatus?: InvoicePaymentStatus; fulfillmentStatus?: string; sourceOrder?: string | null; notes?: string; pdfUrl: string; shareToken?: string; shareExpiresAt?: string | null; shareRevokedAt?: string | null; emailedAt?: string | null; cancelledAt?: string | null; cancelledBy?: string | null; cancelReason?: string; eligibility?: InvoiceEligibility; createdAt?: string; updatedAt?: string;
+  total: number; paidAmount?: number; balanceDue?: number; status: InvoiceStatus; documentStatus?: string; paymentStatus?: InvoicePaymentStatus; fulfillmentStatus?: string; sourceOrder?: string | null; notes?: string; pdfUrl: string; shareToken?: string; shareExpiresAt?: string | null; shareRevokedAt?: string | null; emailedAt?: string | null; cancelledAt?: string | null; cancelledBy?: string | null; cancelReason?: string; refundResolvedAt?: string | null; eligibility?: InvoiceEligibility; createdAt?: string; updatedAt?: string;
 };
 
 export type OrderStatus = 'draft' | 'confirmed' | 'fulfilled' | 'cancelled';
@@ -380,8 +380,27 @@ export type LedgerEntryRow = {
   createdAt?: string;
 };
 
+export type DataExportStatus = 'queued' | 'processing' | 'completed' | 'failed';
+
+export type DataExport = {
+  id: string;
+  status: DataExportStatus;
+  fileName: string;
+  sizeBytes: number;
+  counts: Record<string, number>;
+  requestedAt?: string;
+  completedAt?: string | null;
+  expiresAt?: string | null;
+  emailedAt?: string | null;
+  downloadCount: number;
+  isExpired: boolean;
+  error?: string;
+};
+
+export type DataExportDownload = { url: string; fileName: string; sizeBytes: number };
+
 export type NotificationItem = {
-  id: string; type: string; resourceType: 'product' | 'invoice' | 'customer' | 'payment' | 'draft' | 'activity'; resourceId: string; tone: 'danger' | 'warning' | 'info';
+  id: string; type: string; resourceType: 'product' | 'invoice' | 'customer' | 'payment' | 'draft' | 'activity' | 'data_export'; resourceId: string; tone: 'danger' | 'warning' | 'info';
   title: string; description: string; to: string; read: boolean; sortDate?: string;
 };
 

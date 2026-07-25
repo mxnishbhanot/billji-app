@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Text, useTheme } from 'react-native-paper';
+import { Button, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusPill } from '@/components/StatusPill';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
@@ -26,9 +26,12 @@ type Props = {
   payments: Payment[];
   loading?: boolean;
   onClose: () => void;
+  /** When set and any receipt is refund-pending, a "Mark refunded manually" action is shown. */
+  onMarkRefunded?: () => void;
+  marking?: boolean;
 };
 
-export function PaymentHistorySheet({ visible, payments, loading, onClose }: Props) {
+export function PaymentHistorySheet({ visible, payments, loading, onClose, onMarkRefunded, marking }: Props) {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
@@ -54,6 +57,7 @@ export function PaymentHistorySheet({ visible, payments, loading, onClose }: Pro
   const totalReceived = payments
     .filter((p) => p.type === 'receipt' && p.status === 'completed')
     .reduce((sum, p) => sum + p.amount, 0);
+  const hasPendingRefund = payments.some((p) => p.refundStatus === 'pending');
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
@@ -108,7 +112,11 @@ export function PaymentHistorySheet({ visible, payments, loading, onClose }: Pro
                       </View>
                       <View style={styles.rowMetaLine}>
                         <Text style={[styles.rowDate, { color: theme.colors.onSurfaceVariant }]}>{formatDate(payment.receivedAt ?? payment.createdAt ?? '')}</Text>
-                        <StatusPill label={payment.status} tone={recordTone(payment.status)} />
+                        <View style={styles.rowPills}>
+                          {payment.refundStatus === 'pending' ? <StatusPill label="Refund pending" tone="pending" /> : null}
+                          {payment.refundStatus === 'processed' ? <StatusPill label="Refunded" tone="refunded" /> : null}
+                          <StatusPill label={payment.status} tone={recordTone(payment.status)} />
+                        </View>
                       </View>
                       {payment.reference ? (
                         <Text style={[styles.rowRef, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
@@ -126,6 +134,17 @@ export function PaymentHistorySheet({ visible, payments, loading, onClose }: Pro
               })
             )}
           </ScrollView>
+
+          {hasPendingRefund && onMarkRefunded ? (
+            <View style={styles.footer}>
+              <Text style={[styles.footerHint, { color: theme.colors.onSurfaceVariant }]}>
+                BillJi doesn't move money. Once you've refunded your customer, mark it here to clear the pending flag.
+              </Text>
+              <Button mode="contained" icon="cash-refund" loading={marking} disabled={marking} onPress={onMarkRefunded}>
+                Mark refunded manually
+              </Button>
+            </View>
+          ) : null}
         </Animated.View>
       </View>
     </Modal>
@@ -136,6 +155,8 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', gap: 10, paddingVertical: 36 },
   emptyText: { ...fontStyles.medium, fontSize: 13 },
   fill: { flex: 1, justifyContent: 'flex-end' },
+  footer: { gap: 10, paddingHorizontal: 18, paddingTop: 12 },
+  footerHint: { ...fontStyles.regular, fontSize: 12, lineHeight: 17 },
   grabber: { alignItems: 'center', paddingTop: 8 },
   grabberBar: { borderRadius: radii.pill, height: 4, width: 38 },
   header: { alignItems: 'center', flexDirection: 'row', gap: 10, justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 8 },
@@ -146,6 +167,7 @@ const styles = StyleSheet.create({
   rowDate: { ...fontStyles.regular, fontSize: 12 },
   rowMetaLine: { alignItems: 'center', flexDirection: 'row', gap: 8, justifyContent: 'space-between' },
   rowMethod: { ...fontStyles.semiBold, fontSize: 14 },
+  rowPills: { alignItems: 'center', flexDirection: 'row', flexShrink: 1, flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' },
   rowRef: { ...fontStyles.regular, fontSize: 12 },
   rowTop: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   scrollContent: { paddingBottom: 8, paddingHorizontal: 18, paddingTop: 4 },

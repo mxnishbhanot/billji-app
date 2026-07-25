@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Image, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import {
   useFonts,
   PlusJakartaSans_400Regular,
@@ -12,8 +12,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { PaperProvider, Text } from 'react-native-paper';
+import { PaperProvider } from 'react-native-paper';
+import Reanimated, { FadeOut } from 'react-native-reanimated';
 import { AppNavigator } from '@/navigation/AppNavigator';
+import { AppSplash } from '@/components/AppSplash';
 import { AppDialogProvider } from '@/components/AppDialog';
 import { AppToastProvider } from '@/components/AppToast';
 import { queryClient } from '@/query/queryClient';
@@ -24,8 +26,6 @@ import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { initAnalytics, setAnalyticsUser, wrapApp } from '@/services/analytics';
 import { darkTheme, lightTheme } from '@/theme/theme';
-
-const billjiLogo = require('./assets/main-logo-clean.png');
 
 // Don't let a slow first-install network call hold the splash hostage.
 const PREFETCH_TIMEOUT_MS = 2500;
@@ -87,6 +87,8 @@ function App() {
     );
   }, []);
 
+  const ready = hydrated && fontsLoaded && prefetched;
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
@@ -96,12 +98,13 @@ function App() {
             <SafeAreaProvider>
               <AppToastProvider>
                 <StatusBar style={user?.businessProfile?.theme === 'dark' ? 'light' : 'dark'} />
-                {hydrated && fontsLoaded && prefetched ? <AppNavigator /> : (
-                  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background }}>
-                    <Image source={billjiLogo} resizeMode="contain" style={{ width: 96, height: 96 }} />
-                    <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 18 }} />
-                    <Text style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }}>Opening Billji...</Text>
-                  </View>
+                {ready ? <AppNavigator /> : null}
+                {ready ? null : (
+                  // Absolute + exiting FadeOut: the navigator mounts underneath and the
+                  // splash fades off the top of it instead of cutting away.
+                  <Reanimated.View style={StyleSheet.absoluteFill} exiting={FadeOut.duration(320)}>
+                    <AppSplash />
+                  </Reanimated.View>
                 )}
               </AppToastProvider>
             </SafeAreaProvider>

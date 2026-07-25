@@ -103,7 +103,7 @@ const InvoiceCard = memo(function InvoiceCard({
   // Cancelled invoice owes nothing (balance void). If money was received before
   // cancellation, flag that a manual refund may still be needed — BillJi does not
   // move money, so avoid "due" language that implies a system payable.
-  const refundPending = isCancelled && typeof item.paidAmount === 'number' && item.paidAmount > 0;
+  const refundPending = isCancelled && typeof item.paidAmount === 'number' && item.paidAmount > 0 && !item.refundResolvedAt;
   const hasBalance = !isCancelled && typeof item.balanceDue === 'number' && item.balanceDue > 0;
   const fromOrder = Boolean(item.sourceOrder);
   const orderChip = useMemo(() => ({

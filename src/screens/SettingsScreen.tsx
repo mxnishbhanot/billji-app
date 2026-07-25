@@ -215,6 +215,7 @@ export function SettingsScreen() {
   const canViewActivity = can(PERMISSION.settingsManage);
   const canViewTeam = can(PERMISSION.teamView);
   const canViewRoles = can(PERMISSION.rolesView);
+  const canExportData = can(PERMISSION.settingsExport);
   const [brandSheetVisible, setBrandSheetVisible] = useState(false);
   const [sessionsSheetVisible, setSessionsSheetVisible] = useState(false);
   const [workspaceSheetVisible, setWorkspaceSheetVisible] = useState(false);
@@ -428,7 +429,7 @@ export function SettingsScreen() {
         />
       </SettingsGroup>
 
-      {canViewLedger || canViewActivity ? (
+      {canViewLedger || canViewActivity || canExportData ? (
         <SettingsGroup title="RECORDS">
           {canViewLedger ? (
             <SettingsRow icon="book-open-outline" title="Ledger" subtitle="Accounting entries" tone={colors.primary} onPress={() => navigation.navigate('Ledger')} />
@@ -436,6 +437,10 @@ export function SettingsScreen() {
           {canViewLedger && canViewActivity ? <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} /> : null}
           {canViewActivity ? (
             <SettingsRow icon="history" title="Activity log" subtitle="Recent account actions" tone={colors.accent} onPress={() => navigation.navigate('ActivityLog')} />
+          ) : null}
+          {(canViewLedger || canViewActivity) && canExportData ? <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} /> : null}
+          {canExportData ? (
+            <SettingsRow icon="database-export-outline" title="Export my data" subtitle="Download everything as CSV and JSON" tone={colors.violet} onPress={() => navigation.navigate('DataExport')} />
           ) : null}
         </SettingsGroup>
       ) : null}
