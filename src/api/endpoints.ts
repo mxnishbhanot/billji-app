@@ -10,6 +10,8 @@ import {
   CustomerPaymentPayload,
   CustomerPaymentResponse,
   CustomerQuery,
+  DataExport,
+  DataExportDownload,
   DocumentType,
   DraftDocument,
   DraftUpsertPayload,
@@ -210,6 +212,14 @@ export const auditApi = {
 
 export const ledgerApi = {
   page: (params: PageQuery) => api.get<Page<LedgerEntryRow, 'ledgerEntries'>>('/ledger', { params }).then((res) => res.data)
+};
+
+export const exportsApi = {
+  list: () => api.get<DataExport[]>('/exports').then((res) => res.data),
+  get: (id: string) => api.get<DataExport>(`/exports/${id}`).then((res) => res.data),
+  request: () => api.post<DataExport>('/exports').then((res) => res.data),
+  // Returns a short-lived presigned URL; download it without the auth header.
+  downloadUrl: (id: string) => api.get<DataExportDownload>(`/exports/${id}/download-url`).then((res) => res.data)
 };
 
 export const notificationsApi = {

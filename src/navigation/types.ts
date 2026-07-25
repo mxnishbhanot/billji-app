@@ -67,6 +67,7 @@ export type SettingsStackParamList = {
   NotificationSettings: undefined;
   ActivityLog: undefined;
   Ledger: undefined;
+  DataExport: undefined;
   TwoFactorSetup: undefined;
   Team: undefined;
   Roles: undefined;

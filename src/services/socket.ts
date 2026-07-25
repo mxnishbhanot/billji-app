@@ -12,7 +12,7 @@ export const connectSocket = (token: string, onChanged: (event: string) => void)
     activeToken = token;
     socket = io(socketBaseUrl(), { auth: { token }, transports: ['websocket', 'polling'] });
   }
-  const events = ['customers:changed', 'products:changed', 'invoices:changed', 'notifications:changed'];
+  const events = ['customers:changed', 'products:changed', 'invoices:changed', 'notifications:changed', 'exports:changed'];
   events.forEach((event) => socket?.on(event, () => onChanged(event)));
   return () => events.forEach((event) => socket?.off(event));
 };

@@ -39,6 +39,7 @@ export const NotificationButton = memo(function NotificationButton() {
       if (event === 'notifications:changed') void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
       if (event === 'products:changed') void queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
       if (event === 'customers:changed') void queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      if (event === 'exports:changed') void queryClient.invalidateQueries({ queryKey: queryKeys.exports.all });
       if (event === 'invoices:changed') {
         void queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
         void queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
@@ -110,6 +111,7 @@ export const NotificationButton = memo(function NotificationButton() {
     if (notification.resourceType === 'invoice') navigation.navigate('InvoicesTab', { screen: 'InvoiceDetail', params: { id: notification.resourceId } });
     else if (notification.resourceType === 'product') navigation.navigate('CatalogTab', { screen: 'Products', params: { highlight: notification.resourceId } });
     else if (notification.resourceType === 'customer') navigation.navigate('CustomersTab', { screen: 'Customers' });
+    else if (notification.resourceType === 'data_export') navigation.navigate('SettingsTab', { screen: 'DataExport' });
   };
   return (
     <>

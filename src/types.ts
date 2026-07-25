@@ -380,8 +380,27 @@ export type LedgerEntryRow = {
   createdAt?: string;
 };
 
+export type DataExportStatus = 'queued' | 'processing' | 'completed' | 'failed';
+
+export type DataExport = {
+  id: string;
+  status: DataExportStatus;
+  fileName: string;
+  sizeBytes: number;
+  counts: Record<string, number>;
+  requestedAt?: string;
+  completedAt?: string | null;
+  expiresAt?: string | null;
+  emailedAt?: string | null;
+  downloadCount: number;
+  isExpired: boolean;
+  error?: string;
+};
+
+export type DataExportDownload = { url: string; fileName: string; sizeBytes: number };
+
 export type NotificationItem = {
-  id: string; type: string; resourceType: 'product' | 'invoice' | 'customer' | 'payment' | 'draft' | 'activity'; resourceId: string; tone: 'danger' | 'warning' | 'info';
+  id: string; type: string; resourceType: 'product' | 'invoice' | 'customer' | 'payment' | 'draft' | 'activity' | 'data_export'; resourceId: string; tone: 'danger' | 'warning' | 'info';
   title: string; description: string; to: string; read: boolean; sortDate?: string;
 };
 

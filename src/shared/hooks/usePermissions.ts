@@ -19,6 +19,7 @@ export const PERMISSION = {
   reportsView: 'reports.view',
   settingsView: 'settings.view',
   settingsManage: 'settings.manage',
+  settingsExport: 'settings.export',
   teamView: 'team.view',
   teamManage: 'team.manage',
   rolesView: 'roles.view',
