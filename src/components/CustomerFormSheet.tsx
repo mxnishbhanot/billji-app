@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { UseFormReturn } from 'react-hook-form';
+import { AddressInput } from '@/components/AddressInput';
 import { FormTextInput } from '@/components/FormTextInput';
 import { PhoneInput } from '@/components/PhoneInput';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
@@ -80,7 +81,7 @@ export function CustomerFormSheet({ visible, isEdit, form, saving, onSubmit, onC
             <FormTextInput control={form.control} name="name" label="Name" autoCapitalize="words" />
             <PhoneInput control={form.control} name="phone" />
             <FormTextInput control={form.control} name="email" label="Email" keyboardType="email-address" />
-            <FormTextInput control={form.control} name="address" label="Address" multiline />
+            <AddressInput form={form} name="address" />
           </ScrollView>
 
           <Pressable

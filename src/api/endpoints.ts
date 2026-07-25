@@ -186,6 +186,12 @@ export const paymentsApi = {
       .then((res) => res.data),
   customerOutstanding: (customerId: string) =>
     api.get<CustomerOutstanding>(`/payments/customers/${customerId}/outstanding`).then((res) => res.data),
+  markRefundProcessed: (invoiceId: string) =>
+    api
+      .post<{ payments: Payment[] }>(`/payments/invoices/${invoiceId}/refund-processed`, {}, {
+        headers: { 'Idempotency-Key': idempotencyKey(`refund-${invoiceId}`) }
+      })
+      .then((res) => res.data.payments),
   recordCustomerPayment: (customerId: string, payload: CustomerPaymentPayload) =>
     api
       .post<CustomerPaymentResponse>(`/payments/customers/${customerId}/record`, payload, {

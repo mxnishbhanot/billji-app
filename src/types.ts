@@ -234,7 +234,7 @@ export type InvoiceEligibility = {
 export type Invoice = {
   _id: string; invoiceNumber: string; date: string; dueDate?: string | null; customer?: string | null; customerSnapshot: Customer;
   items: InvoiceItem[]; subtotal: number; tax: { rate: number; amount: number }; discount: { type: DiscountType; value: number; amount: number };
-  total: number; paidAmount?: number; balanceDue?: number; status: InvoiceStatus; documentStatus?: string; paymentStatus?: InvoicePaymentStatus; fulfillmentStatus?: string; sourceOrder?: string | null; notes?: string; pdfUrl: string; shareToken?: string; shareExpiresAt?: string | null; shareRevokedAt?: string | null; emailedAt?: string | null; cancelledAt?: string | null; cancelledBy?: string | null; cancelReason?: string; eligibility?: InvoiceEligibility; createdAt?: string; updatedAt?: string;
+  total: number; paidAmount?: number; balanceDue?: number; status: InvoiceStatus; documentStatus?: string; paymentStatus?: InvoicePaymentStatus; fulfillmentStatus?: string; sourceOrder?: string | null; notes?: string; pdfUrl: string; shareToken?: string; shareExpiresAt?: string | null; shareRevokedAt?: string | null; emailedAt?: string | null; cancelledAt?: string | null; cancelledBy?: string | null; cancelReason?: string; refundResolvedAt?: string | null; eligibility?: InvoiceEligibility; createdAt?: string; updatedAt?: string;
 };
 
 export type OrderStatus = 'draft' | 'confirmed' | 'fulfilled' | 'cancelled';
