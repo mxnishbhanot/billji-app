@@ -8,10 +8,6 @@ export type PatchOnboardingBody = {
     status: string;
     currentStep: string;
   }>;
-  checklist?: {
-    status?: string;
-    items?: Record<string, { status: string; method?: string | null; completedAt?: string | null }>;
-  };
   tips?: Record<
     string,
     { status: string; seenAt?: string | null; dismissedAt?: string | null; snoozedUntil?: string | null }
@@ -20,8 +16,6 @@ export type PatchOnboardingBody = {
 
 export type ReplayOnboardingBody = {
   orientation?: boolean;
-  checklist?: boolean;
-  resetChecklist?: boolean;
   tipIds?: string[];
 };
 

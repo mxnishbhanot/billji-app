@@ -8,7 +8,6 @@ import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
 import { useAppToast } from '@/components/AppToast';
 import { Screen } from '@/components/Screen';
-import { useOnboardingOptional } from '@/features/onboarding';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { TaxSettings } from '@/types';
@@ -42,7 +41,6 @@ export function TaxSettingsScreen() {
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
   const { showToast } = useAppToast();
-  const onboarding = useOnboardingOptional();
   const [settings, setSettings] = useState<TaxSettings>(taxDefaults(user?.businessProfile?.taxSettings));
 
   useEffect(() => {
@@ -55,8 +53,6 @@ export function TaxSettingsScreen() {
       await setUser(response.user);
       queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.onboarding.progress });
-      onboarding?.completeTask('set_tax', 'action');
-      onboarding?.completeTask('review_tax', 'action');
       showToast('Tax settings saved', 'success');
     },
     onError: (error) => showDialog({ title: 'Could not save tax settings', message: apiErrorMessage(error), tone: 'error' })

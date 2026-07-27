@@ -467,17 +467,6 @@ export function SettingsScreen() {
           tone={colors.primary}
           onPress={() => onboarding?.replayOrientation()}
         />
-        <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
-        <SettingsRow
-          icon="checkbox-marked-circle-outline"
-          title="Show my setup checklist"
-          subtitle="Reopen the setup checklist on Home"
-          tone={colors.accent}
-          onPress={() => {
-            onboarding?.replayChecklist();
-            navigation.navigate('DashboardTab', { screen: 'DashboardHome' });
-          }}
-        />
       </SettingsGroup>
 
       <SettingsGroup title="ACCOUNT">

@@ -11,7 +11,7 @@ import { useAppDialog } from '@/components/AppDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { ProductFormSheet } from '@/components/ProductFormSheet';
-import { useOnboardingOptional, TourAnchor, ANCHOR } from '@/features/onboarding';
+import { TourAnchor, ANCHOR } from '@/features/onboarding';
 import { DEFAULT_UNIT } from '@/constants/units';
 import { ProductHistorySheet } from '@/components/ProductHistorySheet';
 import {
@@ -170,7 +170,6 @@ export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
   const colors = useMemo(() => appColors(isDark), [isDark]);
   const { showDialog } = useAppDialog();
   const { can } = usePermissions();
-  const onboarding = useOnboardingOptional();
   const canManage = can(PERMISSION.productsManage);
   const routeFrom = route?.params?.from || '';
   const routeTo = route?.params?.to || '';
@@ -232,7 +231,6 @@ export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
       return { previous };
     },
     onSuccess: () => {
-      if (!editing?._id) onboarding?.completeTask('add_product', 'action');
       setEditing(undefined);
     },
     onError: (error, _values, context) => {

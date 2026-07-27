@@ -15,7 +15,6 @@ import { Feather } from '@expo/vector-icons';
 import { useAppToast } from '@/components/AppToast';
 import { alpha, appColors, billjiPalette, fontStyles, radii, typeScale } from '@/theme/theme';
 import { useOnboardingOptional } from './OnboardingProvider';
-import type { CelebrationState } from './OnboardingProvider';
 
 const AUTO_DISMISS_MS = 4000;
 const PARTICLE_COUNT = 14;
@@ -81,7 +80,7 @@ function Particle({ spec, winH }: { spec: ParticleSpec; winH: number }) {
   );
 }
 
-function CelebrationView({ kind, onDone }: { kind: NonNullable<CelebrationState>['kind']; onDone: () => void }) {
+function CelebrationView({ onDone }: { onDone: () => void }) {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
@@ -112,29 +111,18 @@ function CelebrationView({ kind, onDone }: { kind: NonNullable<CelebrationState>
         <Particle key={i} spec={spec} winH={winH} />
       ))}
 
-      {kind === 'activation' ? (
-        <View style={styles.centerWrap} pointerEvents="box-none">
-          <Reanimated.View style={[styles.card, { backgroundColor: colors.card, borderColor: cardBorder }, cardStyle]}>
-            <View style={[styles.badge, { backgroundColor: alpha(colors.accent, isDark ? 0.2 : 0.14) }]}>
-              <Feather name="check" size={26} color={colors.accent} />
-            </View>
-            <Text style={[styles.title, { color: theme.colors.onSurface }]}>Your first invoice is out the door</Text>
-            <Text style={[styles.body, { color: theme.colors.onSurfaceVariant }]}>That's the hard part done.</Text>
-            <Button mode="contained" onPress={onDone} style={styles.continueBtn} contentStyle={styles.continueBtnContent}>
-              Continue
-            </Button>
-          </Reanimated.View>
-        </View>
-      ) : (
-        <View style={styles.toastWrap} pointerEvents="box-none">
-          <Reanimated.View style={[styles.toastCard, { backgroundColor: colors.card, borderColor: cardBorder }, cardStyle]}>
-            <View style={[styles.toastBadge, { backgroundColor: alpha(colors.accent, isDark ? 0.2 : 0.14) }]}>
-              <Feather name="check" size={14} color={colors.accent} />
-            </View>
-            <Text style={[styles.toastText, { color: theme.colors.onSurface }]}>Setup complete — you're all set</Text>
-          </Reanimated.View>
-        </View>
-      )}
+      <View style={styles.centerWrap} pointerEvents="box-none">
+        <Reanimated.View style={[styles.card, { backgroundColor: colors.card, borderColor: cardBorder }, cardStyle]}>
+          <View style={[styles.badge, { backgroundColor: alpha(colors.accent, isDark ? 0.2 : 0.14) }]}>
+            <Feather name="check" size={26} color={colors.accent} />
+          </View>
+          <Text style={[styles.title, { color: theme.colors.onSurface }]}>Your first invoice is out the door</Text>
+          <Text style={[styles.body, { color: theme.colors.onSurfaceVariant }]}>That's the hard part done.</Text>
+          <Button mode="contained" onPress={onDone} style={styles.continueBtn} contentStyle={styles.continueBtnContent}>
+            Continue
+          </Button>
+        </Reanimated.View>
+      </View>
     </View>
   );
 }
@@ -150,13 +138,13 @@ export function CelebrationOverlay() {
   // Under reduced motion, skip confetti entirely and fall back to a plain toast.
   useEffect(() => {
     if (!celebration || !reduceMotion || !clearCelebration) return;
-    showToast(celebration.kind === 'activation' ? 'Your first invoice is out the door!' : 'Setup complete — you\u2019re all set');
+    showToast('Your first invoice is out the door!');
     clearCelebration();
   }, [celebration, reduceMotion, clearCelebration, showToast]);
 
   if (!onboarding || !celebration || reduceMotion) return null;
 
-  return <CelebrationView kind={celebration.kind} onDone={onboarding.clearCelebration} />;
+  return <CelebrationView onDone={onboarding.clearCelebration} />;
 }
 
 const styles = StyleSheet.create({
@@ -179,22 +167,5 @@ const styles = StyleSheet.create({
   continueBtn: { alignSelf: 'stretch', borderRadius: radii.input, marginTop: 20 },
   continueBtnContent: { paddingVertical: 2 },
   particle: { left: 0, position: 'absolute', top: 0 },
-  title: { ...fontStyles.bold, fontSize: 19, letterSpacing: -0.3, textAlign: 'center' },
-  toastBadge: { alignItems: 'center', borderRadius: radii.pill, height: 26, justifyContent: 'center', width: 26 },
-  toastCard: {
-    alignItems: 'center',
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    elevation: 10,
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 14
-  },
-  toastText: { ...fontStyles.semiBold, fontSize: 14 },
-  toastWrap: { alignItems: 'center', bottom: 120, left: 0, position: 'absolute', right: 0 }
+  title: { ...fontStyles.bold, fontSize: 19, letterSpacing: -0.3, textAlign: 'center' }
 });

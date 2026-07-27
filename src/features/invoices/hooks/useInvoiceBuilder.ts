@@ -110,7 +110,6 @@ export const useInvoiceBuilder = ({
     mutationFn: customersApi.create,
     onSuccess: (customer) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
-      onboarding?.completeTask('add_customer', 'action');
       setSelectedCustomerId(customer._id);
       setSelectedCustomer(customer);
       setCustomerModal(false);
@@ -127,7 +126,6 @@ export const useInvoiceBuilder = ({
         has_discount: payload.discountValue > 0,
         oversell: Boolean(payload.allowOversell)
       });
-      onboarding?.completeTask('create_invoice', 'action');
       onboarding?.markLocalFlag('invoiceCreateCount');
       draft.clearActiveDraft();
       queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });

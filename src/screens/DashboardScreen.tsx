@@ -16,7 +16,7 @@ import { StatCard } from '@/components/StatCard';
 import { DashboardScreenProps } from '@/navigation/types';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
-import { GettingStartedSheet, ProgressPill, TourAnchor, ANCHOR, useOnboardingOptional } from '@/features/onboarding';
+import { TourAnchor, ANCHOR, useOnboardingOptional } from '@/features/onboarding';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { formatCurrency, formatDate } from '@/utils/format';
 
@@ -453,12 +453,6 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
         />
       )}
     </Screen>
-    {onboarding ? (
-      <>
-        <ProgressPill />
-        <GettingStartedSheet />
-      </>
-    ) : null}
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { PERMISSION } from '@/shared/hooks/usePermissions';
-import type { ChecklistTaskDef, ChecklistTaskKey, TourDefinition } from './types';
+import type { TourDefinition } from './types';
 
 export const ORIENTATION_TOUR_ID = 'orientation-v1';
 
@@ -11,126 +11,12 @@ export const ANCHOR = {
   tabCatalog: 'anchor-tab-catalog',
   tabSettings: 'anchor-tab-settings',
   reportsButton: 'anchor-reports-button',
-  checklist: 'anchor-checklist',
   ordersHeader: 'anchor-orders-header',
   teamInvite: 'anchor-team-invite',
   invoiceTemplate: 'anchor-invoice-template',
   shareInvoice: 'anchor-share-invoice',
   productsHeader: 'anchor-products-header'
 } as const;
-
-const ALL_TASKS: Record<ChecklistTaskKey, ChecklistTaskDef> = {
-  complete_profile: {
-    key: 'complete_profile',
-    title: 'Add your business details',
-    subtitle: 'Your name, address, and phone make invoices look professional',
-    icon: 'storefront-outline',
-    requiredPermissions: [PERMISSION.settingsManage],
-    navigate: { tab: 'SettingsTab', screen: 'BusinessProfile' }
-  },
-  set_tax: {
-    key: 'set_tax',
-    title: 'Set your tax defaults',
-    subtitle: 'Set GST once and every invoice calculates itself',
-    icon: 'percent-outline',
-    requiredPermissions: [PERMISSION.settingsManage],
-    navigate: { tab: 'SettingsTab', screen: 'TaxSettings' }
-  },
-  add_customer: {
-    key: 'add_customer',
-    title: 'Add your first customer',
-    subtitle: 'Save their details once, reuse them forever',
-    icon: 'account-plus-outline',
-    requiredPermissions: [PERMISSION.customersManage],
-    navigate: { tab: 'CustomersTab', screen: 'Customers' }
-  },
-  create_invoice: {
-    key: 'create_invoice',
-    title: 'Create your first invoice',
-    subtitle: 'The fastest way to see BillJi in action',
-    icon: 'file-document-edit-outline',
-    requiredPermissions: [PERMISSION.invoicesCreate],
-    navigate: { tab: 'InvoicesTab', screen: 'InvoiceCreate' }
-  },
-  share_invoice: {
-    key: 'share_invoice',
-    title: 'Share an invoice',
-    subtitle: 'Send it over WhatsApp, email, or as a PDF',
-    icon: 'share-variant-outline',
-    requiredPermissions: [PERMISSION.invoicesView],
-    navigate: { tab: 'InvoicesTab', screen: 'InvoiceList' }
-  },
-  review_tax: {
-    key: 'review_tax',
-    title: 'Review tax settings',
-    subtitle: 'Make sure GST rates match your books',
-    icon: 'percent-outline',
-    requiredPermissions: [PERMISSION.settingsView],
-    navigate: { tab: 'SettingsTab', screen: 'TaxSettings' }
-  },
-  record_payment: {
-    key: 'record_payment',
-    title: 'Record a payment',
-    subtitle: 'Mark invoices paid as the money comes in',
-    icon: 'cash-check',
-    requiredPermissions: [PERMISSION.paymentsRecord],
-    navigate: { tab: 'DashboardTab', screen: 'Payments' }
-  },
-  open_reports: {
-    key: 'open_reports',
-    title: 'Peek at Reports',
-    subtitle: 'Sales, dues, and trends at a glance',
-    icon: 'chart-line',
-    requiredPermissions: [PERMISSION.reportsView],
-    navigate: { tab: 'DashboardTab', screen: 'Reports' }
-  },
-  add_product: {
-    key: 'add_product',
-    title: 'Add a product',
-    subtitle: 'Line items fill themselves in on your next invoice',
-    icon: 'package-variant-closed',
-    requiredPermissions: [PERMISSION.productsManage],
-    optional: true,
-    navigate: { tab: 'CatalogTab', screen: 'Products' }
-  },
-  view_invoices: {
-    key: 'view_invoices',
-    title: 'Browse invoices',
-    subtitle: 'See everything your team has billed',
-    icon: 'file-document-multiple-outline',
-    requiredPermissions: [PERMISSION.invoicesView],
-    navigate: { tab: 'InvoicesTab', screen: 'InvoiceList' }
-  },
-  viewer_tip: {
-    key: 'viewer_tip',
-    title: 'Need to create invoices?',
-    subtitle: 'Ask an admin for invoice or customer permissions',
-    icon: 'key-outline',
-    optional: true
-  }
-};
-
-const ROLE_PRESETS: Record<string, ChecklistTaskKey[]> = {
-  owner: ['complete_profile', 'set_tax', 'add_customer', 'create_invoice', 'share_invoice'],
-  admin: ['complete_profile', 'set_tax', 'add_customer', 'create_invoice', 'share_invoice'],
-  accountant: ['review_tax', 'create_invoice', 'record_payment', 'open_reports'],
-  staff: ['add_customer', 'create_invoice', 'add_product'],
-  viewer: ['view_invoices', 'open_reports', 'viewer_tip']
-};
-
-export function checklistTasksForRole(
-  roleKey: string | undefined,
-  can: (permission: string) => boolean
-): ChecklistTaskDef[] {
-  const keys = ROLE_PRESETS[roleKey || 'owner'] ?? ROLE_PRESETS.owner;
-  return keys
-    .map((key) => ALL_TASKS[key])
-    .filter((task) => {
-      if (!task.requiredPermissions?.length) return true;
-      return task.requiredPermissions.every((p) => can(p));
-    })
-    .slice(0, 5);
-}
 
 export const ORIENTATION_TOUR: TourDefinition = {
   id: ORIENTATION_TOUR_ID,
@@ -183,14 +69,6 @@ export const ORIENTATION_TOUR: TourDefinition = {
       description: 'Tap Reports for sales, dues, and payment trends over any period.',
       placement: 'top',
       navigate: { tab: 'DashboardTab', screen: 'DashboardHome' }
-    },
-    {
-      id: 'checklist',
-      anchorId: ANCHOR.checklist,
-      title: 'Your setup guide',
-      description: 'This tracks your first steps. Tap it anytime to pick up where you left off.',
-      placement: 'top',
-      navigate: { tab: 'DashboardTab', screen: 'DashboardHome' }
     }
   ]
 };
@@ -203,7 +81,7 @@ export const FEATURE_TOURS: TourDefinition[] = [
     trigger: 'route_focus',
     route: 'OrderList',
     requiredPermissions: [PERMISSION.ordersCreate],
-    requiredTasks: ['create_invoice'],
+    requiresInvoice: true,
     title: 'Orders',
     description: 'Plan a sale as an order before invoicing.',
     steps: [
@@ -224,7 +102,7 @@ export const FEATURE_TOURS: TourDefinition[] = [
     trigger: 'route_focus',
     route: 'Team',
     requiredPermissions: [PERMISSION.teamManage],
-    requiredTasks: ['create_invoice'],
+    requiresInvoice: true,
     title: 'Team',
     description: 'Invite office staff with roles.',
     steps: [
@@ -245,7 +123,7 @@ export const FEATURE_TOURS: TourDefinition[] = [
     trigger: 'route_focus',
     route: 'InvoiceTemplate',
     requiredPermissions: [PERMISSION.settingsManage],
-    requiredTasks: ['create_invoice'],
+    requiresInvoice: true,
     title: 'Invoice template',
     description: 'Match PDF look to your brand.',
     steps: [
@@ -266,7 +144,7 @@ export const FEATURE_TOURS: TourDefinition[] = [
     trigger: 'after_activation',
     route: 'Products',
     requiredPermissions: [PERMISSION.productsManage],
-    requiredTasks: ['create_invoice'],
+    requiresInvoice: true,
     title: 'Products catalog',
     description: 'Save products to speed line items.',
     steps: [

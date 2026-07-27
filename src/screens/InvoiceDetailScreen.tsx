@@ -214,7 +214,6 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
     onSuccess: () => {
       track('invoice_shared', { channel: 'email' });
       onboarding?.markLocalFlag('sharedInvoice', true);
-      onboarding?.completeTask('share_invoice', 'action');
       setEmailOpen(false);
       query.refetch();
     },
@@ -282,7 +281,6 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
       await openOrSharePdf(invoice.pdfUrl, invoice.invoiceNumber);
       track('invoice_shared', { channel: label.toLowerCase() });
       onboarding?.markLocalFlag('sharedInvoice', true);
-      onboarding?.completeTask('share_invoice', 'action');
     } catch (error) {
       showDialog({ title: 'Could not share invoice', message: apiErrorMessage(error), tone: 'error' });
     } finally {
