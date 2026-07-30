@@ -38,10 +38,38 @@ export type BusinessProfile = {
   state?: string;
   invoicePrefix?: string;
   panNumber?: string;
+  // GST state code of the place of business; derived from the GSTIN when one is set.
+  stateCode?: string;
   taxSettings?: TaxSettings;
   invoiceTemplate?: InvoiceTemplate;
+  // WhatsApp payment-reminder text. Empty = server default. Tokens: {name} {invoice}
+  // {amount} {link} {business} {days}.
+  reminderTemplate?: string;
   theme?: 'light' | 'dark';
 };
+
+export type PendingReminder = {
+  invoiceId: string;
+  invoiceNumber: string;
+  customerId: string | null;
+  customerName: string;
+  phone: string;
+  countryCode: string;
+  total: number;
+  balanceDue: number;
+  dueDate: string | null;
+  daysOverdue: number;
+  reason: 'overdue' | 'pending';
+};
+
+export type PendingReminderList = {
+  reminders: PendingReminder[];
+  totalOutstanding: number;
+  skippedWithoutPhone: number;
+  template: string;
+};
+
+export type PreparedReminder = PendingReminder & { message: string; pdfUrl: string; whatsappUrl: string };
 
 export type BusinessProfileFormValues = {
   businessName: string;
@@ -170,7 +198,7 @@ export type PageQuery = ApiParams & { page?: number; limit?: number; paginated?:
 
 export type Product = {
   _id: string; id?: string; name: string; price: number; stockQuantity: number; sku?: string; category?: string;
-  salePrice?: number; purchasePrice?: number; unit?: string; taxRate?: number; trackStock?: boolean; isActive?: boolean;
+  salePrice?: number; purchasePrice?: number; unit?: string; taxRate?: number; hsn?: string; barcode?: string; trackStock?: boolean; isActive?: boolean;
   lowStockThreshold: number; isLowStock?: boolean; totalSales?: number; quantitySold?: number; createdAt?: string; updatedAt?: string;
 };
 
@@ -181,8 +209,181 @@ export type StockMovement = {
 export type ProductHistorySummary = { quantitySold: number; revenue: number; orderCount: number };
 export type ProductStockHistory = Page<StockMovement, 'movements'> & { product?: Pick<Product, '_id' | 'name' | 'price' | 'stockQuantity' | 'sku' | 'category' | 'unit' | 'taxRate' | 'purchasePrice' | 'trackStock' | 'isActive'>; summary?: ProductHistorySummary };
 export type Customer = { _id: string; name: string; phone: string; countryCode?: string; email?: string; address?: string; billingAddress?: Record<string, string>; shippingAddress?: Record<string, string>; gstNumber?: string; taxIdentifiers?: Record<string, string>; contactPersons?: Record<string, string>[]; creditBalance?: number; outstandingDues?: number; isActive?: boolean; createdAt?: string; updatedAt?: string };
-export type InvoiceItem = { _id?: string; _uid?: string; product?: string | null; productId?: string; name: string; sku?: string; unit?: string; quantity: number; price: number; purchasePrice?: number; taxRate?: number; taxAmount?: number; total?: number; isCustom?: boolean };
-export type InvoiceCreateItem = Pick<InvoiceItem, 'productId' | 'name' | 'sku' | 'unit' | 'quantity' | 'price' | 'taxRate' | 'isCustom'>;
+export type GstTaxSummaryRow = { hsn: string; rate: number; taxableValue: number; cgst: number; sgst: number; igst: number; taxAmount: number };
+
+export type ExpenseCategory =
+  | 'rent' | 'salary' | 'transport' | 'utilities' | 'purchase' | 'repairs'
+  | 'marketing' | 'professional_fees' | 'bank_charges' | 'travel' | 'office_supplies' | 'other';
+
+export type Expense = {
+  _id: string;
+  date: string;
+  category: ExpenseCategory;
+  amount: number;
+  taxAmount: number;
+  total: number;
+  paymentMethod: PaymentMethod;
+  vendorName?: string;
+  reference?: string;
+  notes?: string;
+  isVoided?: boolean;
+  createdAt?: string;
+};
+
+export type ExpenseSummary = {
+  total: number;
+  count: number;
+  byCategory: { category: ExpenseCategory; total: number; count: number }[];
+};
+
+export type ExpenseListResponse = { expenses: Expense[]; summary: ExpenseSummary };
+
+export type ExpenseFormValues = {
+  amount: string;
+  taxAmount: string;
+  category: ExpenseCategory;
+  paymentMethod: PaymentMethod;
+  vendorName: string;
+  notes: string;
+};
+
+export type ExpensePayload = {
+  amount: number;
+  taxAmount?: number;
+  category: ExpenseCategory;
+  paymentMethod: PaymentMethod;
+  vendorName?: string;
+  notes?: string;
+  date?: string;
+};
+
+export type Vendor = {
+  _id: string;
+  name: string;
+  phone?: string;
+  countryCode?: string;
+  email?: string;
+  address?: string;
+  gstNumber?: string;
+  panNumber?: string;
+  notes?: string;
+  outstandingPayable?: number;
+  isActive?: boolean;
+};
+
+export type VendorFormValues = { name: string; phone: string; gstNumber: string; address: string };
+
+export type PurchaseItem = {
+  _id?: string;
+  product?: string | null;
+  productId?: string;
+  name: string;
+  sku?: string;
+  hsn?: string;
+  unit?: string;
+  quantity: number;
+  price: number;
+  taxRate?: number;
+  taxAmount?: number;
+  total?: number;
+  isCustom?: boolean;
+};
+
+export type PurchaseBill = {
+  _id: string;
+  billNumber: string;
+  vendorBillNumber?: string;
+  vendor: string;
+  vendorSnapshot: { name: string; phone?: string; gstNumber?: string };
+  date: string;
+  dueDate?: string | null;
+  items: PurchaseItem[];
+  subtotal: number;
+  taxTotal: number;
+  cgstTotal: number;
+  sgstTotal: number;
+  igstTotal: number;
+  total: number;
+  paidAmount: number;
+  balanceDue: number;
+  supplyType?: 'intra' | 'inter';
+  status: 'received' | 'cancelled';
+  paymentStatus: 'unpaid' | 'partial' | 'paid';
+  notes?: string;
+};
+
+export type PurchaseCreatePayload = {
+  vendorId: string;
+  items: { productId?: string; name: string; quantity: number; price: number; taxRate?: number; hsn?: string }[];
+  vendorBillNumber?: string;
+  taxRate?: number;
+  notes?: string;
+};
+
+export type VendorOutstanding = {
+  vendor: Vendor;
+  billed: number;
+  paid: number;
+  outstandingPayable: number;
+  bills: { _id: string; billNumber: string; date: string; total: number; paidAmount: number; balanceDue: number }[];
+};
+
+export type VendorPaymentPayload = { amount: number; method: PaymentMethod; billId?: string; reference?: string; notes?: string };
+
+export type Gstr1SectionKey = 'b2b' | 'b2cl' | 'b2cs' | 'cdnr' | 'hsn';
+
+/** Sales documents that are not invoices or orders — each has its own number series. */
+export type SalesDocumentKind = 'quotation' | 'delivery_challan' | 'credit_note';
+
+/**
+ * The number to show for any sales document. Invoices carry invoiceNumber; quotations,
+ * challans and credit notes only have documentNumber.
+ */
+export const documentNumberOf = (document: { invoiceNumber?: string; documentNumber?: string }) =>
+  document.invoiceNumber || document.documentNumber || '';
+
+export type DocumentCreatePayload = {
+  customerId: string;
+  items: InvoiceCreateItem[];
+  taxRate: number;
+  discountType: DiscountType;
+  discountValue: number;
+  notes: string;
+  placeOfSupplyCode?: string;
+  allowOversell?: boolean;
+  /** Quotation only. */
+  validUntil?: string;
+  /** Credit note only — the invoice being reversed. */
+  sourceInvoiceId?: string;
+  reason?: string;
+};
+
+export type Gstr1Report = {
+  period: string;
+  gstin: string;
+  businessName: string;
+  counts: Record<Gstr1SectionKey, number>;
+  totals: {
+    invoiceCount: number; cancelledCount: number; taxableValue: number;
+    cgst: number; sgst: number; igst: number; taxAmount: number; invoiceValue: number;
+  };
+  // Non-zero when the month contains invoices issued before per-item GST, whose split was
+  // inferred from a single document rate.
+  reconstructedInvoices: number;
+  documentSeries: { issued: number; cancelled: number; from: string; to: string };
+};
+
+export type Gstr3bReport = {
+  period: string;
+  gstin: string;
+  businessName: string;
+  outwardTaxableSupplies: { taxableValue: number; igst: number; cgst: number; sgst: number; cess: number };
+  invoiceCount: number;
+  cancelledCount: number;
+  reconstructedInvoices: number;
+};
+export type InvoiceItem = { _id?: string; _uid?: string; product?: string | null; productId?: string; name: string; sku?: string; unit?: string; quantity: number; price: number; purchasePrice?: number; taxRate?: number; hsn?: string; taxableValue?: number; taxAmount?: number; cgst?: number; sgst?: number; igst?: number; total?: number; isCustom?: boolean };
+export type InvoiceCreateItem = Pick<InvoiceItem, 'productId' | 'name' | 'sku' | 'unit' | 'quantity' | 'price' | 'taxRate' | 'hsn' | 'isCustom'>;
 export type InvoiceCreatePayload = {
   customerId: string;
   items: InvoiceCreateItem[];
@@ -190,6 +391,8 @@ export type InvoiceCreatePayload = {
   discountType: DiscountType;
   discountValue: number;
   notes: string;
+  // Optional override; the server resolves place of supply from the customer otherwise.
+  placeOfSupplyCode?: string;
   allowOversell?: boolean;
 };
 
@@ -232,8 +435,15 @@ export type InvoiceEligibility = {
 };
 
 export type Invoice = {
-  _id: string; invoiceNumber: string; date: string; dueDate?: string | null; customer?: string | null; customerSnapshot: Customer;
+  // documentNumber is the real identity for every sales document; invoiceNumber is only
+  // present on invoices (a quotation deliberately has none).
+  _id: string; invoiceNumber?: string; documentNumber?: string; documentType?: DocumentType;
+  sourceInvoice?: string | null; sourceDocument?: string | null; validUntil?: string | null; reason?: string;
+  date: string; dueDate?: string | null; customer?: string | null; customerSnapshot: Customer;
   items: InvoiceItem[]; subtotal: number; tax: { rate: number; amount: number }; discount: { type: DiscountType; value: number; amount: number };
+  // GST fields. Absent on documents issued before the GST engine — a missing taxSummary
+  // means "legacy single-rate", and the UI falls back to the old single tax row.
+  placeOfSupply?: { code: string; state: string }; supplyType?: 'intra' | 'inter'; taxSummary?: GstTaxSummaryRow[];
   total: number; paidAmount?: number; balanceDue?: number; status: InvoiceStatus; documentStatus?: string; paymentStatus?: InvoicePaymentStatus; fulfillmentStatus?: string; sourceOrder?: string | null; notes?: string; pdfUrl: string; shareToken?: string; shareExpiresAt?: string | null; shareRevokedAt?: string | null; emailedAt?: string | null; cancelledAt?: string | null; cancelledBy?: string | null; cancelReason?: string; refundResolvedAt?: string | null; eligibility?: InvoiceEligibility; createdAt?: string; updatedAt?: string;
 };
 
@@ -399,6 +609,48 @@ export type DataExport = {
 
 export type DataExportDownload = { url: string; fileName: string; sizeBytes: number };
 
+export type ImportType = 'customers' | 'products';
+export type ImportRowStatus = 'create' | 'update' | 'duplicate' | 'error';
+
+export type ImportField = { name: string; label: string; required: boolean; example?: string };
+
+export type ImportPreviewRow = {
+  line: number;
+  status: ImportRowStatus;
+  label?: string;
+  errors: string[];
+  duplicateOfLine?: number;
+};
+
+export type ImportPreview = {
+  type: ImportType;
+  headers: string[];
+  /** Our field name → the header in their file. */
+  columnMap: Record<string, string>;
+  fields: ImportField[];
+  duplicateLabel: string;
+  total: number;
+  counts: Record<ImportRowStatus, number>;
+  preview: ImportPreviewRow[];
+};
+
+export type ImportResult = {
+  type: ImportType;
+  mode: 'skip' | 'update';
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  errors: ImportPreviewRow[];
+};
+
+export type ImportRequest = {
+  type: ImportType;
+  csv: string;
+  columnMap?: Record<string, string>;
+  mode?: 'skip' | 'update';
+};
+
 export type NotificationItem = {
   id: string; type: string; resourceType: 'product' | 'invoice' | 'customer' | 'payment' | 'draft' | 'activity' | 'data_export'; resourceId: string; tone: 'danger' | 'warning' | 'info';
   title: string; description: string; to: string; read: boolean; sortDate?: string;
@@ -436,6 +688,23 @@ export type ReportSummary = {
   dues: {
     totalOutstanding: number; unpaidCount: number; unpaidAmount: number; partialCount: number; partialAmount: number;
     topDebtors: { customerId: string | null; name: string; balance: number; invoices: number }[];
+  };
+  // Q5 — am I actually making money?
+  profit: {
+    rangeLabel: string;
+    revenue: number;
+    costOfGoods: number;
+    grossProfit: number;
+    expenses: number;
+    expenseCount: number;
+    expensesByCategory: { category: ExpenseCategory; total: number; count: number }[];
+    netProfit: number;
+    /** % of sold lines that had a purchase price recorded — how trustworthy the margin is. */
+    costCoverage: number;
+    /** Stock bought in the period, and what is still owed for it. Not deducted from profit. */
+    purchases: number;
+    purchaseCount: number;
+    payables: number;
   };
   // Q4 — what is performing well?
   performance: {
@@ -508,6 +777,9 @@ export type ProductFormValues = {
   sku?: string;
   category?: string;
   unit?: string;
+  hsn?: string;
+  taxRate?: string;
+  barcode?: string;
   lowStockThreshold?: string;
 };
 
