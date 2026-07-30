@@ -34,7 +34,7 @@ import { formatCurrency, formatDate } from '@/utils/format';
 import { productSchema } from '@/validation/schemas';
 
 const PAGE_SIZE = 10;
-const blankProduct = { name: '', price: '', stockQuantity: '', sku: '', category: '', unit: DEFAULT_UNIT, lowStockThreshold: '5' };
+const blankProduct = { name: '', price: '', stockQuantity: '', sku: '', category: '', unit: DEFAULT_UNIT, hsn: '', taxRate: '', lowStockThreshold: '5' };
 type ProductFilters = ProductFilterValues & { search: string };
 const emptyProductFilters: ProductFilters = { search: '', ...defaultProductFilterValues };
 
@@ -210,7 +210,9 @@ export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
   const totalCount = query.data?.pages[0]?.pagination.total ?? 0;
   const visibleCount = products.length;
   const activeListKey = queryKeys.products.list(queryParams);
-  const toProductPayload = (values: ProductFormValues) => ({ ...values, price: Number(values.price), stockQuantity: Number(values.stockQuantity), lowStockThreshold: values.lowStockThreshold === '' ? 5 : Number(values.lowStockThreshold) });
+    // An empty GST rate must stay absent rather than becoming 0 — the server treats a
+  // stored 0 as 'never configured' and falls back to the invoice-level rate.
+  const toProductPayload = (values: ProductFormValues) => ({ ...values, price: Number(values.price), stockQuantity: Number(values.stockQuantity), hsn: values.hsn?.trim() || '', taxRate: values.taxRate === '' || values.taxRate === undefined ? undefined : Number(values.taxRate), lowStockThreshold: values.lowStockThreshold === '' ? 5 : Number(values.lowStockThreshold) });
   const save = useMutation({
     mutationFn: (values: ProductFormValues) => {
       const payload = toProductPayload(values);
@@ -264,7 +266,7 @@ export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
 
   useEffect(() => {
     if (editing === undefined) return;
-    form.reset(editing ? { name: editing.name, price: String(editing.price), stockQuantity: String(editing.stockQuantity), sku: editing.sku || '', category: editing.category || '', unit: editing.unit || DEFAULT_UNIT, lowStockThreshold: String(editing.lowStockThreshold ?? 5) } : blankProduct);
+    form.reset(editing ? { name: editing.name, price: String(editing.price), stockQuantity: String(editing.stockQuantity), sku: editing.sku || '', category: editing.category || '', unit: editing.unit || DEFAULT_UNIT, hsn: editing.hsn || '', taxRate: editing.taxRate ? String(editing.taxRate) : '', lowStockThreshold: String(editing.lowStockThreshold ?? 5) } : blankProduct);
   }, [editing, form]);
 
   const loadMoreProducts = () => {
