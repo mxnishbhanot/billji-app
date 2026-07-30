@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { NavigationAction } from '@react-navigation/native';
 import { useForm } from 'react-hook-form';
-import { Button, useTheme } from 'react-native-paper';
+import { Feather } from '@expo/vector-icons';
+import { Button, Text, useTheme } from 'react-native-paper';
 import {
   CustomerSelectorCard,
   DraftSyncIndicator,
@@ -15,6 +16,7 @@ import {
 import { useInvoiceBuilder } from '@/features/invoices/hooks/useInvoiceBuilder';
 import { customerDefaults, customItemDefaults } from '@/features/invoices/services/invoiceBuilderService';
 import { useAppDialog } from '@/components/AppDialog';
+import { BarcodeScannerSheet } from '@/components/BarcodeScannerSheet';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Screen } from '@/components/Screen';
 import { InvoiceBuilderScreenProps } from '@/navigation/types';
@@ -22,7 +24,12 @@ import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
 import { CustomerFormValues, CustomItemFormValues } from '@/types';
 import { customItemSchema, customerSchema } from '@/validation/schemas';
 
-export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) {
+const TITLES: Record<string, string> = { quotation: 'New Quotation', delivery_challan: 'New Challan', credit_note: 'New Credit Note' };
+
+export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreenProps) {
+  // Same builder for every sales document; the type only changes the title and the endpoint.
+  const documentType = route.params?.documentType;
+  const [scannerOpen, setScannerOpen] = useState(false);
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
@@ -34,7 +41,8 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
   const customForm = useForm<CustomItemFormValues>({ defaultValues: customItemDefaults, resolver: zodResolver(customItemSchema) });
   const builder = useInvoiceBuilder({
     onCreated: (invoiceId) => navigation.replace('InvoiceDetail', { id: invoiceId }),
-    showDialog
+    showDialog,
+    documentType
   });
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.08);
   const subSurface = isDark ? colors.surface : alpha(colors.primary, 0.04);
@@ -82,7 +90,7 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
 
   return (
     <Screen
-      title="New Invoice"
+      title={documentType ? TITLES[documentType] : 'New Invoice'}
       titleAccessory={
         <DraftSyncIndicator isDirty={builder.isDraftDirty} lastSavedAt={builder.lastDraftSavedAt} status={builder.draftStatus} />
       }
@@ -96,6 +104,20 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
         onChange={() => builder.setCustomerPicker(true)}
         subSurface={subSurface}
       />
+      {/* Scan straight onto the bill — the fastest path at a shop counter. Typing and
+          searching stay right below it, so a missing barcode is never a dead end. */}
+      <Pressable
+        onPress={() => setScannerOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Scan barcode to add item"
+        style={({ pressed }) => [
+          styles.scanRow,
+          { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.08), borderColor: alpha(colors.primary, isDark ? 0.3 : 0.18), opacity: pressed ? 0.9 : 1 }
+        ]}
+      >
+        <Feather name="maximize" size={16} color={theme.colors.primary} />
+        <Text style={[styles.scanRowLabel, { color: theme.colors.primary }]}>Scan barcode</Text>
+      </Pressable>
       <ProductPickerList
         cardBorder={cardBorder}
         colors={colors}
@@ -202,11 +224,20 @@ export function InvoiceBuilderScreen({ navigation }: InvoiceBuilderScreenProps) 
           if (action) navigation.dispatch(action);
         }}
       />
+      <BarcodeScannerSheet
+        visible={scannerOpen}
+        title="Scan to add item"
+        hint="Scan a product label to add it to the bill"
+        onClose={() => setScannerOpen(false)}
+        onScanned={(code) => void builder.addScannedProduct(code)}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  scanRow: { alignItems: 'center', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 10, paddingVertical: 12 },
+  scanRowLabel: { ...fontStyles.semiBold, fontSize: 14 },
   actionRow: { flexDirection: 'row', gap: 12, marginBottom: 18 },
   generateButton: { borderRadius: radii.input, flex: 1 },
   generateButtonContent: { paddingVertical: 6 },

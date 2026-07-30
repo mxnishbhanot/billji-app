@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { UseFormReturn } from 'react-hook-form';
+import { BarcodeScannerSheet } from '@/components/BarcodeScannerSheet';
 import { CategoryAutocomplete } from '@/components/CategoryAutocomplete';
 import { FormTextInput } from '@/components/FormTextInput';
 import { UnitInput } from '@/components/UnitInput';
@@ -36,6 +37,7 @@ export function ProductFormSheet({ visible, isEdit, form, categories, categories
   const [backdropOpacity] = useState(() => new Animated.Value(0));
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.1);
   const inputBackground = isDark ? colors.surface : '#FFFFFF';
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -100,6 +102,34 @@ export function ProductFormSheet({ visible, isEdit, form, categories, categories
                 <FormTextInput control={form.control} name="lowStockThreshold" label="Low stock alert" keyboardType="number-pad" />
               </View>
             </View>
+            {/* GST identity: HSN/SAC is compulsory on B2B invoices, and the rate here
+                becomes the line's rate at billing time. */}
+            <View style={styles.row}>
+              <View style={styles.rowItem}>
+                <FormTextInput control={form.control} name="hsn" label="HSN / SAC" keyboardType="number-pad" maxLength={8} />
+              </View>
+              <View style={styles.rowItem}>
+                <FormTextInput control={form.control} name="taxRate" label="GST %" keyboardType="decimal-pad" />
+              </View>
+            </View>
+            {/* Barcode stays a normal text field — scanning only fills it in, so a denied
+                camera or an unreadable label never blocks saving the product. */}
+            <View style={styles.barcodeRow}>
+              <View style={styles.barcodeInput}>
+                <FormTextInput control={form.control} name="barcode" label="Barcode (optional)" autoCapitalize="characters" maxLength={64} />
+              </View>
+              <Pressable
+                onPress={() => setScannerOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Scan barcode"
+                style={({ pressed }) => [
+                  styles.scanBtn,
+                  { backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary }
+                ]}
+              >
+                <Feather name="maximize" size={18} color="#FFFFFF" />
+              </Pressable>
+            </View>
             <CategoryAutocomplete control={form.control} name="category" categories={categories} />
             <View style={styles.unitBlock}>
               <UnitInput
@@ -132,6 +162,13 @@ export function ProductFormSheet({ visible, isEdit, form, categories, categories
           </Pressable>
         </Animated.View>
       </KeyboardAvoidingView>
+      <BarcodeScannerSheet
+        visible={scannerOpen}
+        title="Scan product barcode"
+        hint="Hold the label steady inside the frame"
+        onClose={() => setScannerOpen(false)}
+        onScanned={(value) => form.setValue('barcode', value, { shouldDirty: true })}
+      />
     </Modal>
   );
 }
@@ -142,8 +179,11 @@ const styles = StyleSheet.create({
   grabber: { alignItems: 'center', paddingTop: 8 },
   grabberBar: { borderRadius: radii.pill, height: 4, width: 38 },
   header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 8 },
+  barcodeInput: { flex: 1 },
+  barcodeRow: { flexDirection: 'row', gap: 10 },
   row: { flexDirection: 'row', gap: 12 },
   rowItem: { flex: 1 },
+  scanBtn: { alignItems: 'center', borderRadius: radii.input, height: 56, justifyContent: 'center', width: 56 },
   saveBtn: {
     alignItems: 'center',
     borderRadius: radii.lg,
