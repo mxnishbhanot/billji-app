@@ -14,7 +14,17 @@ import {
   DataExportDownload,
   DocumentType,
   DraftDocument,
+  DocumentCreatePayload,
   DraftUpsertPayload,
+  Expense,
+  ExpenseListResponse,
+  ExpensePayload,
+  Gstr1Report,
+  Gstr1SectionKey,
+  Gstr3bReport,
+  ImportPreview,
+  ImportRequest,
+  ImportResult,
   Invoice,
   InvoiceCreatePayload,
   InvoiceDraftPayload,
@@ -32,14 +42,22 @@ import {
   Page,
   PageQuery,
   Payment,
+  PendingReminderList,
   PermissionGroup,
+  PreparedReminder,
   Product,
   ProductFormValues,
   ProductQuery,
   ProductStockHistory,
   ProductStockMovementQuery,
+  PurchaseBill,
+  PurchaseCreatePayload,
   RecordPaymentPayload,
   RecordPaymentResponse,
+  SalesDocumentKind,
+  Vendor,
+  VendorOutstanding,
+  VendorPaymentPayload,
   ReportQuery,
   ReportSummary,
   RoleSummary,
@@ -160,8 +178,31 @@ export const invoicesApi = {
   remove: (id: string) => api.delete(`/invoices/${id}`).then((res) => res.data),
   whatsapp: (id: string) => api.get<{ link: string; message: string }>(`/invoices/${id}/whatsapp`).then((res) => res.data),
   email: (id: string, email: string) => api.post(`/invoices/${id}/email`, { email }).then((res) => res.data),
+  pendingReminders: () => api.get<PendingReminderList>('/invoices/reminders/pending').then((res) => res.data),
+  // Mints fresh share links, records the share, and returns one ready-to-open wa.me URL per invoice.
+  sendReminders: (invoiceIds: string[]) =>
+    api.post<{ reminders: PreparedReminder[]; requested: number; prepared: number }>('/invoices/reminders/send', { invoiceIds }).then((res) => res.data),
   rotateShareLink: (id: string) => api.post<{ invoice: Invoice }>(`/invoices/${id}/share/rotate`).then((res) => res.data.invoice),
   revokeShareLink: (id: string) => api.post<{ invoice: Invoice }>(`/invoices/${id}/share/revoke`).then((res) => res.data.invoice)
+};
+
+// Quotations, delivery challans and credit notes. Same sales-document shape as an invoice,
+// so they reuse the Invoice type; documentType decides which rules applied server-side.
+export const documentsApi = {
+  list: (documentType: SalesDocumentKind, params?: { search?: string; status?: string }) =>
+    api.get<{ documents: Invoice[] }>(`/documents/${documentType}`, { params }).then((res) => res.data.documents),
+  get: (documentType: SalesDocumentKind, id: string) =>
+    api.get<{ document: Invoice }>(`/documents/${documentType}/${id}`).then((res) => res.data.document),
+  create: (documentType: SalesDocumentKind, payload: DocumentCreatePayload) =>
+    api
+      .post<{ document: Invoice }>(`/documents/${documentType}`, payload, { headers: { 'Idempotency-Key': idempotencyKey(documentType) } })
+      .then((res) => res.data.document),
+  convert: (documentType: SalesDocumentKind, id: string) =>
+    api
+      .post<{ invoice: Invoice }>(`/documents/${documentType}/${id}/convert`, {}, { headers: { 'Idempotency-Key': idempotencyKey(`convert-${id}`) } })
+      .then((res) => res.data.invoice),
+  cancel: (documentType: SalesDocumentKind, id: string, cancelReason?: string) =>
+    api.post<{ document: Invoice }>(`/documents/${documentType}/${id}/cancel`, { cancelReason }).then((res) => res.data.document)
 };
 
 export const ordersApi = {
@@ -202,8 +243,53 @@ export const paymentsApi = {
       .then((res) => res.data)
 };
 
+export const expensesApi = {
+  list: (params?: { search?: string; category?: string; from?: string; to?: string }) =>
+    api.get<ExpenseListResponse>('/expenses', { params }).then((res) => res.data),
+  create: (payload: ExpensePayload) =>
+    api.post<{ expense: Expense }>('/expenses', payload, { headers: { 'Idempotency-Key': idempotencyKey('expense') } }).then((res) => res.data.expense),
+  update: (id: string, payload: ExpensePayload) => api.patch<{ expense: Expense }>(`/expenses/${id}`, payload).then((res) => res.data.expense),
+  remove: (id: string) => api.delete<{ expense: Expense }>(`/expenses/${id}`).then((res) => res.data.expense)
+};
+
+export const purchasesApi = {
+  list: (params?: { search?: string; status?: string; vendorId?: string }) =>
+    api.get<{ purchases: PurchaseBill[] }>('/purchases', { params }).then((res) => res.data.purchases),
+  get: (id: string) => api.get<{ purchase: PurchaseBill; payments: Payment[] }>(`/purchases/${id}`).then((res) => res.data),
+  create: (payload: PurchaseCreatePayload) =>
+    api
+      .post<{ purchase: PurchaseBill }>('/purchases', payload, { headers: { 'Idempotency-Key': idempotencyKey('purchase') } })
+      .then((res) => res.data.purchase),
+  cancel: (id: string, cancelReason?: string) =>
+    api.post<{ purchase: PurchaseBill }>(`/purchases/${id}/cancel`, { cancelReason }).then((res) => res.data.purchase),
+
+  vendors: (search?: string) => api.get<{ vendors: Vendor[] }>('/purchases/vendors', { params: { search } }).then((res) => res.data.vendors),
+  createVendor: (payload: Partial<Vendor>) => api.post<{ vendor: Vendor }>('/purchases/vendors', payload).then((res) => res.data.vendor),
+  vendorOutstanding: (id: string) => api.get<VendorOutstanding>(`/purchases/vendors/${id}/outstanding`).then((res) => res.data),
+  payVendor: (id: string, payload: VendorPaymentPayload) =>
+    api
+      .post<{ outstandingPayable: number }>(`/purchases/vendors/${id}/payments`, payload, {
+        headers: { 'Idempotency-Key': idempotencyKey(`vendor-pay-${id}`) }
+      })
+      .then((res) => res.data)
+};
+
 export const reportsApi = {
   summary: (params?: ReportQuery) => api.get<{ report: ReportSummary }>('/reports/summary', { params }).then((res) => res.data.report)
+};
+
+export const gstApi = {
+  gstr1: (period: string) => api.get<{ report: Gstr1Report }>('/gst/gstr1', { params: { period } }).then((res) => res.data.report),
+  gstr3b: (period: string) => api.get<{ report: Gstr3bReport }>('/gst/gstr3b', { params: { period } }).then((res) => res.data.report),
+  // CSV comes back as text through the authenticated client; the caller writes and shares it.
+  sectionCsv: (period: string, section: Gstr1SectionKey) =>
+    api
+      .get<string>('/gst/gstr1', { params: { period, format: 'csv', section }, responseType: 'text', transformResponse: (data) => data })
+      .then((res) => res.data),
+  gstr3bCsv: (period: string) =>
+    api
+      .get<string>('/gst/gstr3b', { params: { period, format: 'csv' }, responseType: 'text', transformResponse: (data) => data })
+      .then((res) => res.data)
 };
 
 export const auditApi = {
@@ -222,10 +308,22 @@ export const exportsApi = {
   downloadUrl: (id: string) => api.get<DataExportDownload>(`/exports/${id}/download-url`).then((res) => res.data)
 };
 
+export const importsApi = {
+  preview: (payload: ImportRequest) => api.post<ImportPreview>('/imports/preview', payload).then((res) => res.data),
+  commit: (payload: ImportRequest) =>
+    api
+      .post<ImportResult>('/imports/commit', payload, { headers: { 'Idempotency-Key': idempotencyKey(`import-${payload.type}`) } })
+      .then((res) => res.data)
+};
+
 export const notificationsApi = {
   page: (params: NotificationQuery) => api.get<NotificationPage>('/notifications', { params }).then((res) => res.data),
   markSeen: (notificationIds: string[], all = false) => api.patch('/notifications/seen', { notificationIds, all }).then((res) => res.data),
   dismiss: (notificationIds: string[]) => api.patch('/notifications/dismiss', { notificationIds }).then((res) => res.data),
+  registerDevice: (token: string, platform: 'android' | 'ios' | 'web') =>
+    api.post<{ success: boolean }>('/notifications/devices', { token, platform }).then((res) => res.data),
+  unregisterDevice: (token: string) =>
+    api.delete<{ success: boolean }>(`/notifications/devices/${encodeURIComponent(token)}`).then((res) => res.data),
   getPreferences: () => api.get<{ preferences: NotificationPreferences }>('/notifications/preferences').then((res) => res.data.preferences),
   updatePreferences: (preferences: NotificationPreferences) =>
     api.put<{ preferences: NotificationPreferences }>('/notifications/preferences', { preferences }).then((res) => res.data.preferences)

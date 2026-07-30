@@ -26,6 +26,10 @@ export const productSchema = z.object({
   sku: z.string().trim().max(64, 'SKU is too long').optional(),
   category: z.string().trim().max(80, 'Category is too long').optional(),
   unit: z.string().trim().max(24).optional(),
+  // HSN (goods) / SAC (services) code — 4, 6 or 8 digits per GST rules; blank allowed
+  // until the business needs it.
+  hsn: z.union([z.literal(''), z.string().trim().regex(/^\d{4}(\d{2})?(\d{2})?$/, 'HSN/SAC must be 4, 6 or 8 digits')]).optional(),
+  taxRate: z.union([z.literal(''), z.string().trim().regex(/^\d{1,2}(\.\d{1,2})?$/, 'Enter a GST rate like 5, 12 or 18')]).optional(),
   lowStockThreshold: z.union([z.literal(''), z.string().trim().regex(/^\d+$/, 'Low stock alert must be a whole number')]).optional()
 });
 export const emailSchema = z.object({ email: z.email('Enter a valid email') });

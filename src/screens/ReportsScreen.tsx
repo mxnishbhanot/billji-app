@@ -245,12 +245,27 @@ export function ReportsScreen({ navigation }: ReportsScreenProps) {
   const collected = report?.collected;
   const dues = report?.dues;
   const performance = report?.performance;
+  const profit = report?.profit;
 
   const collectRatio = collected && collected.invoicedInRange > 0 ? collected.range / collected.invoicedInRange : 0;
   const methodTotal = collected?.methodBreakdown.reduce((sum, m) => sum + m.amount, 0) || 0;
 
+  // GST returns are month-based filing artefacts rather than a report range, so they get
+  // their own screen reached from here instead of another card obeying the period bar.
+  const gstAction = (
+    <Pressable
+      onPress={() => navigation.navigate('GstReturns')}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="GST returns"
+      style={styles.gstAction}
+    >
+      <Text style={[styles.gstActionLabel, { color: theme.colors.primary }]}>GST</Text>
+    </Pressable>
+  );
+
   return (
-    <Screen title="Reports" contentStyle={styles.screenContent}>
+    <Screen title="Reports" headerAction={gstAction} contentStyle={styles.screenContent}>
       {/* Period selector — one control that every card below obeys */}
       <View style={styles.rangeBar}>
         <View style={[styles.segment, { backgroundColor: isDark ? alpha(colors.border, 0.5) : alpha(colors.primaryStrong, 0.06) }]}>
@@ -317,6 +332,59 @@ export function ReportsScreen({ navigation }: ReportsScreenProps) {
             </View>
           );
         }) : <EmptyState title="No payments yet" message="Record a payment on an invoice to see collections here." />}
+      </SectionCard>
+
+      {/* Q5 — Am I actually making money? Sales minus cost of goods minus expenses. */}
+      <SectionCard
+        icon="chart-line-variant"
+        title="Am I making money?"
+        hint="Sales, less item cost and expenses"
+        actionLabel="Expenses"
+        onAction={() => navigation.navigate('Expenses')}
+      >
+        <Hero
+          label={`Net profit · ${PRESET_LABEL[preset]}`}
+          value={formatCurrency(profit?.netProfit)}
+          accent={(profit?.netProfit ?? 0) < 0 ? colors.destructive : colors.accent}
+        />
+        <View style={styles.profitRows}>
+          {[
+            { label: 'Revenue', value: profit?.revenue ?? 0 },
+            { label: 'Cost of goods', value: -(profit?.costOfGoods ?? 0) },
+            { label: 'Gross profit', value: profit?.grossProfit ?? 0, strong: true },
+            { label: `Expenses (${profit?.expenseCount ?? 0})`, value: -(profit?.expenses ?? 0) }
+          ].map((line) => (
+            <View key={line.label} style={styles.profitRow}>
+              <Text style={[styles.profitLabel, { color: theme.colors.onSurfaceVariant }]}>{line.label}</Text>
+              <Text
+                style={[
+                  styles.profitValue,
+                  line.strong && styles.profitValueStrong,
+                  { color: line.value < 0 ? colors.warning : theme.colors.onSurface }
+                ]}
+              >
+                {line.value < 0 ? `- ${formatCurrency(Math.abs(line.value))}` : formatCurrency(line.value)}
+              </Text>
+            </View>
+          ))}
+        </View>
+        {/* Margin is only as good as the purchase prices behind it — say so rather than
+            implying a precision the data does not have. */}
+        {(profit?.purchases ?? 0) > 0 || (profit?.payables ?? 0) > 0 ? (
+          <Pressable onPress={() => navigation.navigate('Purchases')} style={styles.profitPurchaseRow} accessibilityRole="button">
+            <Text style={[styles.profitLabel, { color: theme.colors.onSurfaceVariant }]}>
+              Stock bought {formatCurrency(profit?.purchases)} · owed {formatCurrency(profit?.payables)}
+            </Text>
+            <Feather name="chevron-right" size={15} color={theme.colors.primary} />
+          </Pressable>
+        ) : null}
+        {(profit?.costCoverage ?? 0) < 100 ? (
+          <Text style={[styles.profitNote, { color: theme.colors.onSurfaceVariant }]}>
+            {profit?.costCoverage
+              ? `Cost price is set on ${profit.costCoverage}% of items sold — add it in Inventory for an exact margin.`
+              : 'No cost prices set yet. Add purchase price to products to see true margin.'}
+          </Text>
+        ) : null}
       </SectionCard>
 
       {/* Q3 — Who owes me money? (live snapshot) */}
@@ -460,6 +528,15 @@ const styles = StyleSheet.create({
   rowContent: { flex: 1, minWidth: 0 },
   rowMeta: { ...typeScale.caption, marginTop: 3 },
   rowTitle: { ...fontStyles.bold, fontSize: 14.5 },
+  gstAction: { paddingHorizontal: 10, paddingVertical: 8 },
+  gstActionLabel: { ...fontStyles.bold, fontSize: 14, letterSpacing: 0.6 },
+  profitLabel: { ...typeScale.caption, fontSize: 13 },
+  profitNote: { ...typeScale.caption, fontSize: 12, marginTop: 10 },
+  profitRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  profitPurchaseRow: { alignItems: 'center', flexDirection: 'row', gap: 6, justifyContent: 'space-between', marginTop: 10 },
+  profitRows: { gap: 8, marginTop: 12 },
+  profitValue: { ...fontStyles.semiBold, fontSize: 13 },
+  profitValueStrong: { ...fontStyles.bold, fontSize: 14 },
   screenContent: { paddingTop: 8 },
   sectionCard: { marginBottom: 16 },
   segChip: { alignItems: 'center', borderRadius: radii.md, flex: 1, flexDirection: 'row', gap: 4, justifyContent: 'center', paddingVertical: 9 },

@@ -23,7 +23,13 @@ export const queryKeys = {
   invoices: {
     all: ['invoices'] as const,
     list: (params?: QueryParams) => ['invoices', params ?? {}] as const,
-    detail: (id: string) => ['invoices', id] as const
+    detail: (id: string) => ['invoices', id] as const,
+    pendingReminders: ['invoices', 'reminders', 'pending'] as const
+  },
+  documents: {
+    all: ['documents'] as const,
+    list: (documentType: string) => ['documents', documentType] as const,
+    detail: (documentType: string, id: string) => ['documents', documentType, id] as const
   },
   orders: {
     all: ['orders'] as const,
@@ -43,9 +49,23 @@ export const queryKeys = {
     customer: (id: string) => ['payments', 'customer', id] as const,
     customerOutstanding: (id: string) => ['payments', 'customer', id, 'outstanding'] as const
   },
+  expenses: {
+    all: ['expenses'] as const,
+    list: (params?: QueryParams) => ['expenses', params ?? {}] as const
+  },
+  purchases: {
+    all: ['purchases'] as const,
+    list: (params?: QueryParams) => ['purchases', params ?? {}] as const,
+    vendors: (search?: string) => ['purchases', 'vendors', search ?? ''] as const,
+    vendorOutstanding: (id: string) => ['purchases', 'vendors', id, 'outstanding'] as const
+  },
   report: {
     all: ['report'] as const,
     summary: (params?: QueryParams) => ['report', params ?? {}] as const
+  },
+  gst: {
+    all: ['gst'] as const,
+    gstr1: (period: string) => ['gst', 'gstr1', period] as const
   },
   audit: {
     all: ['audit'] as const,

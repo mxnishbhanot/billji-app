@@ -273,9 +273,16 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
     }
   ];
 
+  // Dues are an all-time snapshot, not range-bound — the banner is the entry point to
+  // the reminder flow, so it only appears when there is actually money to chase.
+  const duesOutstanding = report?.dues?.totalOutstanding ?? 0;
+  const duesCount = (report?.dues?.unpaidCount ?? 0) + (report?.dues?.partialCount ?? 0);
+
   const quickActions: { label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; onPress: () => void; anchorId?: string }[] = [
     { label: 'Invoices', icon: 'file-document', onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList' }) },
-    { label: 'Orders', icon: 'clipboard-list-outline', onPress: () => navigation.navigate('InvoicesTab', { screen: 'OrderList' }) },
+    // Orders moved to a labelled tile on the Invoices screen, next to quotes and notes;
+    // this slot now goes to money-out, which had no entry point at all.
+    { label: 'Expenses', icon: 'cash-minus', onPress: () => navigation.navigate('Expenses') },
     { label: 'Products', icon: 'package-variant-closed', onPress: () => navigation.navigate('CatalogTab', { screen: 'Products' }) },
     { label: 'Reports', icon: 'chart-box', onPress: () => navigation.navigate('Reports'), anchorId: ANCHOR.reportsButton }
   ];
@@ -367,6 +374,33 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
 
       <View style={styles.statRow}>{stats.slice(0, 2).map((item) => <StatCard key={item.label} {...item} />)}</View>
       <View style={styles.statRow}>{stats.slice(2).map((item) => <StatCard key={item.label} {...item} />)}</View>
+
+      {duesOutstanding > 0 ? (
+        <Pressable
+          onPress={() => navigation.navigate('PaymentReminders')}
+          accessibilityRole="button"
+          accessibilityLabel={`Send payment reminders for ${formatCurrency(duesOutstanding)} outstanding`}
+          style={({ pressed }) => [
+            styles.duesBanner,
+            {
+              backgroundColor: alpha(colors.destructive, isDark ? 0.16 : 0.07),
+              borderColor: alpha(colors.destructive, isDark ? 0.32 : 0.18),
+              opacity: pressed ? 0.92 : 1
+            }
+          ]}
+        >
+          <View style={[styles.duesIcon, { backgroundColor: alpha(colors.destructive, isDark ? 0.26 : 0.14) }]}>
+            <Feather name="alert-circle" size={18} color={colors.destructive} />
+          </View>
+          <View style={styles.duesText}>
+            <Text style={[styles.duesAmount, { color: colors.destructive }]}>{formatCurrency(duesOutstanding)} pending</Text>
+            <Text numberOfLines={1} style={[styles.duesHint, { color: theme.colors.onSurfaceVariant }]}>
+              {duesCount} customer{duesCount === 1 ? '' : 's'} to chase · tap to send WhatsApp reminders
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={theme.colors.onSurfaceVariant} />
+        </Pressable>
+      ) : null}
 
       <View style={styles.quickRail} onLayout={(e) => { quickRailY.current = e.nativeEvent.layout.y; }}>
         {quickActions.map((item) => {
@@ -493,6 +527,11 @@ const styles = StyleSheet.create({
   screenContent: { paddingTop: 8 },
   sectionHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, marginTop: 4 },
   sectionTitle: { ...fontStyles.bold, fontSize: 16 },
+  duesAmount: { ...fontStyles.bold, fontSize: 15 },
+  duesBanner: { alignItems: 'center', borderRadius: radii.lg, borderWidth: 1, flexDirection: 'row', gap: 12, marginTop: 12, padding: 14 },
+  duesHint: { ...typeScale.caption, fontSize: 12, marginTop: 2 },
+  duesIcon: { alignItems: 'center', borderRadius: radii.md, height: 36, justifyContent: 'center', width: 36 },
+  duesText: { flex: 1, minWidth: 0 },
   statRow: { flexDirection: 'row', marginBottom: 2, marginHorizontal: -6 },
   viewAll: { ...fontStyles.bold, fontSize: 12 }
 });

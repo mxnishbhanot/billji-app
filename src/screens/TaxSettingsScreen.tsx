@@ -12,6 +12,7 @@ import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { TaxSettings } from '@/types';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
+import { stateCodeFromGstin, stateCodeFromName, stateNameForCode } from '@/shared/gst/gstStates';
 import { isValidGstin } from '@/utils/gstin';
 
 const GST_SLABS = [
@@ -60,6 +61,11 @@ export function TaxSettingsScreen() {
 
   const gstNumber = user?.businessProfile?.gstNumber || '';
   const gstinVerified = Boolean(gstNumber) && isValidGstin(gstNumber);
+  // Supplier state drives every CGST/SGST-vs-IGST decision. The GSTIN wins when set —
+  // the server derives it the same way, so this is a read-only reflection of that.
+  const stateCode =
+    user?.businessProfile?.stateCode || stateCodeFromGstin(gstNumber) || stateCodeFromName(user?.businessProfile?.state || '');
+  const stateName = stateNameForCode(stateCode) || user?.businessProfile?.state || '';
   const bannerTitle = gstNumber ? 'GST Registered' : 'GST not registered';
   const bannerSubtitle = gstNumber
     ? `Default rate: ${settings.defaultRate}%${gstinVerified ? ' · GSTIN verified' : ' · GSTIN needs review'}`
@@ -150,6 +156,23 @@ export function TaxSettingsScreen() {
           </Pressable>
         );
       })}
+
+      <SectionLabel title="PLACE OF BUSINESS" />
+      <View style={[styles.behaviourCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
+        <View style={styles.behaviourRow}>
+          <View style={[styles.behaviourIcon, { backgroundColor: alpha(colors.primary, isDark ? 0.22 : 0.12) }]}>
+            <MaterialCommunityIcons name="map-marker-outline" size={18} color={theme.colors.primary} />
+          </View>
+          <View style={styles.behaviourText}>
+            <Text style={[styles.behaviourTitle, { color: theme.colors.onSurface }]}>{stateName || 'State not set'}</Text>
+            <Text style={[styles.behaviourSubtitle, { color: theme.colors.onSurfaceVariant }]}>
+              {gstNumber
+                ? 'Taken from your GSTIN. Sales inside this state are CGST + SGST; outside it, IGST.'
+                : 'Set your state in Business Profile so GST splits correctly.'}
+            </Text>
+          </View>
+        </View>
+      </View>
 
       <SectionLabel title="TAX BEHAVIOUR" />
       <View style={[styles.behaviourCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
