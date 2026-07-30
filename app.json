@@ -29,7 +29,7 @@
       "googleServicesFile": "./google-services.json",
       "versionCode": 1,
       "softwareKeyboardLayoutMode": "resize",
-      "permissions": [],
+      "permissions": ["POST_NOTIFICATIONS"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FC7A0E"
@@ -44,8 +44,16 @@
         }
       ],
       "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "BillJi uses the camera to scan product barcodes.",
+          "recordAudioAndroid": false
+        }
+      ],
       "@react-native-community/datetimepicker",
       "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
       "@react-native-google-signin/google-signin",
       [
         "@sentry/react-native/expo",

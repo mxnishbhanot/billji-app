@@ -13,6 +13,8 @@ import { sessionStorage } from '@/store/sessionStorage';
 export type AnalyticsEvent =
   | 'invoice_created'
   | 'invoice_shared'
+  | 'payment_reminders_sent'
+  | 'invoice_item_scanned'
   | 'onboarding_orientation_started'
   | 'onboarding_orientation_step'
   | 'onboarding_orientation_completed'
