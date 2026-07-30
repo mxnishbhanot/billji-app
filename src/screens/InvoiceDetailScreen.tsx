@@ -21,10 +21,33 @@ import { TourAnchor, ANCHOR, useOnboardingOptional } from '@/features/onboarding
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, statusTone, typeScale } from '@/theme/theme';
-import { Invoice, InvoicePaymentStatus, InvoiceStatus, RecordPaymentPayload } from '@/types';
+import { documentNumberOf, Invoice, InvoicePaymentStatus, InvoiceStatus, RecordPaymentPayload } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/format';
 import { emailSchema } from '@/validation/schemas';
 import { useEffect, useMemo, useState } from 'react';
+
+/**
+ * Tax heads to print, summed from the stored HSN summary. Returns [] for documents
+ * issued before the GST engine, which have no summary and fall back to a single merged
+ * "Tax" row. Plain function rather than a memo: it walks a handful of rows, and the
+ * invoice is only available after this screen's loading guards.
+ */
+const gstHeadsFor = (invoice: Invoice) => {
+  const summary = invoice.taxSummary ?? [];
+  if (!summary.length) return [];
+
+  const sum = (key: 'cgst' | 'sgst' | 'igst') =>
+    Math.round(summary.reduce((total, row) => total + Number(row[key] || 0), 0) * 100) / 100;
+
+  return (
+    invoice.supplyType === 'inter'
+      ? [{ label: 'IGST', amount: sum('igst') }]
+      : [
+          { label: 'CGST', amount: sum('cgst') },
+          { label: 'SGST', amount: sum('sgst') }
+        ]
+  ).filter((head) => head.amount > 0);
+};
 
 function HeroPattern() {
   return (
@@ -214,7 +237,6 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
     onSuccess: () => {
       track('invoice_shared', { channel: 'email' });
       onboarding?.markLocalFlag('sharedInvoice', true);
-      onboarding?.completeTask('share_invoice', 'action');
       setEmailOpen(false);
       query.refetch();
     },
@@ -279,10 +301,9 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
     if (!invoice || busyAction) return;
     setBusyAction(label);
     try {
-      await openOrSharePdf(invoice.pdfUrl, invoice.invoiceNumber);
+      await openOrSharePdf(invoice.pdfUrl, documentNumberOf(invoice));
       track('invoice_shared', { channel: label.toLowerCase() });
       onboarding?.markLocalFlag('sharedInvoice', true);
-      onboarding?.completeTask('share_invoice', 'action');
     } catch (error) {
       showDialog({ title: 'Could not share invoice', message: apiErrorMessage(error), tone: 'error' });
     } finally {
@@ -318,6 +339,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   const tone = statusTone(currentStatus, isDark);
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.08);
   const isCancelled = currentStatus === 'cancelled';
+  const gstHeads = gstHeadsFor(invoice);
   const hasPayments = invoice.eligibility?.hasPayments ?? (paidAmount > 0 || (paymentsQuery.data?.length ?? 0) > 0);
   const hasProductItems = invoice.items.some((item) => item.product);
   // Server eligibility is authoritative; the heuristic only covers the (rare)
@@ -363,7 +385,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
       ];
 
   return (
-    <Screen title={invoice.invoiceNumber}>
+    <Screen title={documentNumberOf(invoice)}>
       <View style={[styles.heroCard, { borderColor: alpha('#C3C0FF', 0.3) }]}>
         <HeroPattern />
         <FloatingHeroBubbles />
@@ -410,10 +432,30 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
             <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>Discount</Text>
             <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>-{formatCurrency(invoice.discount.amount)}</Text>
           </View>
-          <View style={styles.totalRow}>
-            <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>Tax</Text>
-            <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>{formatCurrency(invoice.tax.amount)}</Text>
-          </View>
+          {/* GST invoices show each tax head separately; documents issued before the GST
+              engine have no taxSummary and keep the single "Tax" row they were created with. */}
+          {gstHeads.length ? (
+            gstHeads.map((head) => (
+              <View key={head.label} style={styles.totalRow}>
+                <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>{head.label}</Text>
+                <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>{formatCurrency(head.amount)}</Text>
+              </View>
+            ))
+          ) : (
+            <View style={styles.totalRow}>
+              <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>Tax</Text>
+              <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>{formatCurrency(invoice.tax.amount)}</Text>
+            </View>
+          )}
+          {invoice.placeOfSupply?.state ? (
+            <View style={styles.totalRow}>
+              <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>Place of supply</Text>
+              <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>
+                {invoice.placeOfSupply.state}
+                {invoice.supplyType === 'inter' ? ' · inter-state' : ''}
+              </Text>
+            </View>
+          ) : null}
           <View style={[styles.grandTotal, { borderColor: cardBorder }]}>
             <Text style={[styles.grandTotalLabel, { color: theme.colors.onSurface }]}>Total</Text>
             <Text style={[styles.grandTotalValue, { color: theme.colors.primary }]}>{formatCurrency(invoice.total)}</Text>

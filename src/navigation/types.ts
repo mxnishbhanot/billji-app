@@ -1,6 +1,6 @@
 import { CompositeNavigationProp, NavigationProp, NavigatorScreenParams, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Customer, InvoiceCreatePayload, InvoiceStatus, TwoFactorMethod } from '@/types';
+import { Customer, InvoiceCreatePayload, InvoiceStatus, SalesDocumentKind, TwoFactorMethod } from '@/types';
 
 export type InvoiceSortParam = 'newest' | 'oldest' | 'amount-high' | 'amount-low';
 export type ProductSortParam = 'updated' | 'top-sales' | 'name-asc' | 'price-high' | 'price-low' | 'stock-low';
@@ -23,6 +23,10 @@ export type DashboardStackParamList = {
   DashboardHome: undefined;
   Reports: undefined;
   Payments: undefined;
+  PaymentReminders: undefined;
+  GstReturns: undefined;
+  Expenses: undefined;
+  Purchases: undefined;
 };
 
 export type InvoiceStackParamList = {
@@ -33,9 +37,11 @@ export type InvoiceStackParamList = {
     sort?: InvoiceSortParam;
     status?: InvoiceStatus;
   } | undefined;
-  InvoiceCreate: undefined;
+  // documentType absent = a tax invoice. Quotations and challans reuse the same builder.
+  InvoiceCreate: { documentType?: SalesDocumentKind } | undefined;
   InvoicePreview: { payload: InvoiceCreatePayload };
   InvoiceDetail: { id: string };
+  Documents: { documentType?: SalesDocumentKind } | undefined;
   Drafts: undefined;
   OrderList: undefined;
   OrderCreate: undefined;
@@ -68,6 +74,7 @@ export type SettingsStackParamList = {
   ActivityLog: undefined;
   Ledger: undefined;
   DataExport: undefined;
+  DataImport: undefined;
   TwoFactorSetup: undefined;
   Team: undefined;
   Roles: undefined;
@@ -120,11 +127,13 @@ export type ReportsScreenProps = {
   route: RouteProp<DashboardStackParamList, 'Reports'>;
 };
 export type PaymentsScreenProps = NativeStackScreenProps<DashboardStackParamList, 'Payments'>;
+export type ExpensesScreenProps = NativeStackScreenProps<DashboardStackParamList, 'Expenses'>;
 export type InvoicesScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'InvoiceList'>;
 export type InvoiceBuilderScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'InvoiceCreate'>;
 export type InvoicePreviewScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'InvoicePreview'>;
 export type InvoiceDetailScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'InvoiceDetail'>;
 export type DraftsScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'Drafts'>;
+export type DocumentsScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'Documents'>;
 export type OrdersScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'OrderList'>;
 export type OrderBuilderScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'OrderCreate'>;
 export type OrderDetailScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'OrderDetail'>;

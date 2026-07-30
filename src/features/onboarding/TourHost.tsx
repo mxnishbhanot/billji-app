@@ -4,7 +4,6 @@ import { Button, Text, useTheme } from 'react-native-paper';
 import Reanimated, {
   Easing,
   ReduceMotion,
-  useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -24,9 +23,11 @@ const CARET_SIZE = 14;
 const TOOLTIP_GAP = 14;
 const TIP_AUTO_DISMISS_MS = 8000;
 
-const AnimatedRect = Reanimated.createAnimatedComponent(Rect);
-
 const SPRING = { damping: 19, stiffness: 190, mass: 0.7, reduceMotion: ReduceMotion.System } as const;
+
+// Halo sits this far outside the cutout; the pulse only scales/fades it (0.97→1.03),
+// never re-lays it out, so the ring never lands back on the highlighted element.
+const HALO_SPREAD = 8;
 
 type Hole = { left: number; top: number; width: number; height: number; radius: number };
 
@@ -76,8 +77,10 @@ function useAnchorRect(anchorId: string | undefined, winW: number, winH: number)
       const result = await measureAnchor(anchorId);
       if (cancelled) return;
       if (result) {
-        setMeasured({ id: anchorId, rect: result });
-        if (same(last, result)) clearInterval(id);
+        // Only commit when the rect actually moved — an unchanged read must not
+        // re-render the host (the cutout/tooltip positions are state now).
+        if (!same(last, result)) setMeasured({ id: anchorId, rect: result });
+        else clearInterval(id);
         last = result;
       }
       if (++tries > ANCHOR_POLL_TRIES) clearInterval(id); // hard cap ~4s
@@ -130,22 +133,15 @@ function SpotlightTour() {
 
   const rect = useAnchorRect(step?.anchorId, winW, winH);
   const [tooltipH, setTooltipH] = useState(0);
-  const [caret, setCaret] = useState<{ side: 'top' | 'bottom'; x: number } | null>(null);
 
   const tooltipWidth = Math.min(340, winW - 32);
 
-  // Spotlight cutout shared values
-  const hx = useSharedValue(winW / 2);
-  const hy = useSharedValue(winH / 2);
-  const hw = useSharedValue(0);
-  const hh = useSharedValue(0);
-  const hr = useSharedValue(0);
-  const hasRect = useSharedValue(0);
-  const pulse = useSharedValue(0);
+  // The cutout is plain geometry, not animated props: an animated SVG Rect inside a
+  // Mask forces react-native-svg to re-rasterise the whole full-screen dim layer every
+  // frame (~10fps on mid-range Android). Recomputed only when the anchor moves.
+  const hole = useMemo(() => (rect ? computeHole(rect) : null), [rect]);
 
-  // Tooltip shared values
-  const tpx = useSharedValue((winW - tooltipWidth) / 2);
-  const tpy = useSharedValue(winH * 0.4);
+  const pulse = useSharedValue(0);
   const tOpacity = useSharedValue(0);
   const tShift = useSharedValue(10);
 
@@ -160,87 +156,50 @@ function SpotlightTour() {
     );
   }, [pulse]);
 
-  // Reset tooltip entrance on step change
+  // Tooltip box + caret are pure geometry — derived in render, no state, no effect.
+  const place = useMemo(() => {
+    if (!tooltipH) return null;
+    if (!hole) {
+      return {
+        x: (winW - tooltipWidth) / 2,
+        y: Math.max(insets.top + 32, winH * 0.4),
+        caret: null as { side: 'top' | 'bottom'; x: number } | null
+      };
+    }
+    const centerX = hole.left + hole.width / 2;
+    const x = clamp(centerX - tooltipWidth / 2, 16, Math.max(16, winW - tooltipWidth - 16));
+    const fitsBelow = hole.top + hole.height + TOOLTIP_GAP + tooltipH <= winH - insets.bottom - 12;
+    const fitsAbove = hole.top - TOOLTIP_GAP - tooltipH >= insets.top + 12;
+    const placeBelow = step?.placement === 'top' ? !fitsAbove : fitsBelow || !fitsAbove;
+    return {
+      x,
+      y: placeBelow
+        ? hole.top + hole.height + TOOLTIP_GAP
+        : Math.max(insets.top + 12, hole.top - TOOLTIP_GAP - tooltipH),
+      caret: {
+        side: (placeBelow ? 'top' : 'bottom') as 'top' | 'bottom',
+        x: clamp(centerX - x - CARET_SIZE / 2, 20, tooltipWidth - 20 - CARET_SIZE)
+      }
+    };
+  }, [hole, tooltipH, winW, winH, insets.top, insets.bottom, step?.placement, tooltipWidth]);
+
+  // Entrance: reset on step change, play once the box has a position.
+  const positioned = Boolean(place);
   useEffect(() => {
     tOpacity.value = 0;
     tShift.value = 10;
-  }, [stepIndex, tOpacity, tShift]);
-
-  // Move the cutout to the measured anchor
-  useEffect(() => {
-    if (!rect) return;
-    const hole = computeHole(rect);
-    hx.value = withSpring(hole.left, SPRING);
-    hy.value = withSpring(hole.top, SPRING);
-    hw.value = withSpring(hole.width, SPRING);
-    hh.value = withSpring(hole.height, SPRING);
-    hr.value = withSpring(hole.radius, SPRING);
-    hasRect.value = withTiming(1, { duration: 180 });
-  }, [rect, hx, hy, hw, hh, hr, hasRect]);
-
-  // Position the tooltip once its height is known
-  useEffect(() => {
-    if (!tooltipH) return;
-    let x: number;
-    let y: number;
-    if (!rect) {
-      x = (winW - tooltipWidth) / 2;
-      y = Math.max(insets.top + 32, winH * 0.4);
-      setCaret(null);
-    } else {
-      const hole = computeHole(rect);
-      const centerX = hole.left + hole.width / 2;
-      x = clamp(centerX - tooltipWidth / 2, 16, Math.max(16, winW - tooltipWidth - 16));
-      const fitsBelow = hole.top + hole.height + TOOLTIP_GAP + tooltipH <= winH - insets.bottom - 12;
-      const fitsAbove = hole.top - TOOLTIP_GAP - tooltipH >= insets.top + 12;
-      const preferTop = step?.placement === 'top';
-      const placeBelow = preferTop ? !fitsAbove : fitsBelow || !fitsAbove;
-      y = placeBelow
-        ? hole.top + hole.height + TOOLTIP_GAP
-        : Math.max(insets.top + 12, hole.top - TOOLTIP_GAP - tooltipH);
-      setCaret({
-        side: placeBelow ? 'top' : 'bottom',
-        x: clamp(centerX - x - CARET_SIZE / 2, 20, tooltipWidth - 20 - CARET_SIZE)
-      });
-    }
-    tpx.value = withSpring(x, SPRING);
-    tpy.value = withSpring(y, SPRING);
+    if (!positioned) return;
     tOpacity.value = withDelay(90, withTiming(1, { duration: 200, reduceMotion: ReduceMotion.System }));
     tShift.value = withDelay(90, withSpring(0, SPRING));
-  }, [rect, tooltipH, winW, winH, insets.top, insets.bottom, stepIndex, step?.placement, tooltipWidth, tpx, tpy, tOpacity, tShift]);
+  }, [stepIndex, positioned, tOpacity, tShift]);
 
-  const cutoutProps = useAnimatedProps(() => ({
-    x: hx.value,
-    y: hy.value,
-    width: hw.value * hasRect.value,
-    height: hh.value * hasRect.value,
-    rx: hr.value,
-    ry: hr.value
-  }));
-
-  const haloStyle = useAnimatedStyle(() => {
-    const spread = 5 + pulse.value * 7;
-    return {
-      left: hx.value - spread,
-      top: hy.value - spread,
-      width: hw.value + spread * 2,
-      height: hh.value + spread * 2,
-      borderRadius: hr.value + spread,
-      opacity: hasRect.value * (0.75 - pulse.value * 0.45)
-    };
-  });
-
-  const cutoutTapStyle = useAnimatedStyle(() => ({
-    left: hx.value,
-    top: hy.value,
-    width: hw.value,
-    height: hh.value,
-    opacity: hasRect.value
+  // Only opacity + transform animate — no layout props, so no per-frame layout pass.
+  const haloStyle = useAnimatedStyle(() => ({
+    opacity: 0.75 - pulse.value * 0.45,
+    transform: [{ scale: 0.97 + pulse.value * 0.06 }]
   }));
 
   const tooltipStyle = useAnimatedStyle(() => ({
-    left: tpx.value,
-    top: tpy.value,
     opacity: tOpacity.value,
     transform: [{ translateY: tShift.value }]
   }));
@@ -259,7 +218,17 @@ function SpotlightTour() {
           <Defs>
             <Mask id="tour-spotlight-mask">
               <Rect x={0} y={0} width={winW} height={winH} fill="#FFFFFF" />
-              <AnimatedRect animatedProps={cutoutProps} fill="#000000" />
+              {hole ? (
+                <Rect
+                  x={hole.left}
+                  y={hole.top}
+                  width={hole.width}
+                  height={hole.height}
+                  rx={hole.radius}
+                  ry={hole.radius}
+                  fill="#000000"
+                />
+              ) : null}
             </Mask>
           </Defs>
           <Rect x={0} y={0} width={winW} height={winH} fill="rgba(10, 12, 26, 0.72)" mask="url(#tour-spotlight-mask)" />
@@ -269,36 +238,60 @@ function SpotlightTour() {
         <Pressable style={StyleSheet.absoluteFill} accessible={false} onPress={() => {}} />
 
         {/* Pulsing halo ring around the cutout */}
-        <Reanimated.View pointerEvents="none" style={[styles.halo, { borderColor: colors.primary }, haloStyle]} />
+        {hole ? (
+          <Reanimated.View
+            pointerEvents="none"
+            style={[
+              styles.halo,
+              {
+                borderColor: colors.primary,
+                left: hole.left - HALO_SPREAD,
+                top: hole.top - HALO_SPREAD,
+                width: hole.width + HALO_SPREAD * 2,
+                height: hole.height + HALO_SPREAD * 2,
+                borderRadius: hole.radius + HALO_SPREAD
+              },
+              haloStyle
+            ]}
+          />
+        ) : null}
 
         {/* The highlighted element itself is tappable to advance */}
-        <Reanimated.View style={[styles.cutoutTap, cutoutTapStyle]}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={onboarding.nextTourStep}
-            accessibilityRole="button"
-            accessibilityLabel={`${step.title}. Tap to continue the tour.`}
-          />
-        </Reanimated.View>
+        {hole ? (
+          <View style={[styles.cutoutTap, { left: hole.left, top: hole.top, width: hole.width, height: hole.height }]}>
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={onboarding.nextTourStep}
+              accessibilityRole="button"
+              accessibilityLabel={`${step.title}. Tap to continue the tour.`}
+            />
+          </View>
+        ) : null}
 
         {/* Tooltip card */}
         <Reanimated.View
           onLayout={(e) => setTooltipH(e.nativeEvent.layout.height)}
           style={[
             styles.tooltip,
-            { width: tooltipWidth, backgroundColor: colors.card, borderColor: cardBorder },
+            {
+              width: tooltipWidth,
+              backgroundColor: colors.card,
+              borderColor: cardBorder,
+              left: place?.x ?? (winW - tooltipWidth) / 2,
+              top: place?.y ?? winH * 0.4
+            },
             tooltipStyle
           ]}
         >
-          {caret ? (
+          {place?.caret ? (
             <View
               style={[
                 styles.caret,
                 {
                   backgroundColor: colors.card,
                   borderColor: cardBorder,
-                  left: caret.x,
-                  ...(caret.side === 'top'
+                  left: place.caret.x,
+                  ...(place.caret.side === 'top'
                     ? { top: -CARET_SIZE / 2, borderLeftWidth: 1, borderTopWidth: 1 }
                     : { bottom: -CARET_SIZE / 2, borderRightWidth: 1, borderBottomWidth: 1 })
                 }

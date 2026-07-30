@@ -26,11 +26,16 @@ const InvoiceBuilderScreen = lazy(() => import('@/screens/InvoiceBuilderScreen')
 const InvoicePreviewScreen = lazy(() => import('@/screens/InvoicePreviewScreen').then((m) => ({ default: m.InvoicePreviewScreen })));
 const InvoiceDetailScreen = lazy(() => import('@/screens/InvoiceDetailScreen').then((m) => ({ default: m.InvoiceDetailScreen })));
 const DraftsScreen = lazy(() => import('@/screens/DraftsScreen').then((m) => ({ default: m.DraftsScreen })));
+const DocumentsScreen = lazy(() => import('@/screens/DocumentsScreen').then((m) => ({ default: m.DocumentsScreen })));
 const OrdersScreen = lazy(() => import('@/screens/OrdersScreen').then((m) => ({ default: m.OrdersScreen })));
 const OrderBuilderScreen = lazy(() => import('@/screens/OrderBuilderScreen').then((m) => ({ default: m.OrderBuilderScreen })));
 const OrderDetailScreen = lazy(() => import('@/screens/OrderDetailScreen').then((m) => ({ default: m.OrderDetailScreen })));
 const ReportsScreen = lazy(() => import('@/screens/ReportsScreen').then((m) => ({ default: m.ReportsScreen })));
 const PaymentsScreen = lazy(() => import('@/screens/PaymentsScreen').then((m) => ({ default: m.PaymentsScreen })));
+const PaymentRemindersScreen = lazy(() => import('@/screens/PaymentRemindersScreen').then((m) => ({ default: m.PaymentRemindersScreen })));
+const GstReturnsScreen = lazy(() => import('@/screens/GstReturnsScreen').then((m) => ({ default: m.GstReturnsScreen })));
+const ExpensesScreen = lazy(() => import('@/screens/ExpensesScreen').then((m) => ({ default: m.ExpensesScreen })));
+const PurchasesScreen = lazy(() => import('@/screens/PurchasesScreen').then((m) => ({ default: m.PurchasesScreen })));
 const SettingsScreen = lazy(() => import('@/screens/SettingsScreen').then((m) => ({ default: m.SettingsScreen })));
 const BusinessProfileScreen = lazy(() => import('@/screens/BusinessProfileScreen').then((m) => ({ default: m.BusinessProfileScreen })));
 const TaxSettingsScreen = lazy(() => import('@/screens/TaxSettingsScreen').then((m) => ({ default: m.TaxSettingsScreen })));
@@ -39,11 +44,13 @@ const NotificationSettingsScreen = lazy(() => import('@/screens/NotificationSett
 const ActivityLogScreen = lazy(() => import('@/screens/ActivityLogScreen').then((m) => ({ default: m.ActivityLogScreen })));
 const LedgerScreen = lazy(() => import('@/screens/LedgerScreen').then((m) => ({ default: m.LedgerScreen })));
 const DataExportScreen = lazy(() => import('@/screens/DataExportScreen').then((m) => ({ default: m.DataExportScreen })));
+const DataImportScreen = lazy(() => import('@/screens/DataImportScreen').then((m) => ({ default: m.DataImportScreen })));
 const TeamScreen = lazy(() => import('@/screens/TeamScreen').then((m) => ({ default: m.TeamScreen })));
 const RolesScreen = lazy(() => import('@/screens/RolesScreen').then((m) => ({ default: m.RolesScreen })));
 const RoleEditorScreen = lazy(() => import('@/screens/RoleEditorScreen').then((m) => ({ default: m.RoleEditorScreen })));
 const AcceptInviteScreen = lazy(() => import('@/screens/AcceptInviteScreen').then((m) => ({ default: m.AcceptInviteScreen })));
 import { useAuthStore } from '@/store/authStore';
+import { attachPushListeners, registerForPush } from '@/services/push';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { CelebrationOverlay, OnboardingProvider, TourAnchor, TourHost, WelcomeSheet, ANCHOR, useOnboardingOptional } from '@/features/onboarding';
 import { navigationRef } from './navigationRef';
@@ -113,6 +120,10 @@ function DashboardNavigator() {
       <DashboardStack.Screen name="DashboardHome" component={DashboardScreen} />
       <DashboardStack.Screen name="Reports" component={ReportsScreen} />
       <DashboardStack.Screen name="Payments" component={PaymentsScreen} />
+      <DashboardStack.Screen name="PaymentReminders" component={PaymentRemindersScreen} />
+      <DashboardStack.Screen name="GstReturns" component={GstReturnsScreen} />
+      <DashboardStack.Screen name="Expenses" component={ExpensesScreen} />
+      <DashboardStack.Screen name="Purchases" component={PurchasesScreen} />
     </DashboardStack.Navigator>
   );
 }
@@ -126,6 +137,7 @@ function InvoiceNavigator() {
       <InvoiceStack.Screen name="InvoicePreview" component={InvoicePreviewScreen} />
       <InvoiceStack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
       <InvoiceStack.Screen name="Drafts" component={DraftsScreen} />
+      <InvoiceStack.Screen name="Documents" component={DocumentsScreen} />
       <InvoiceStack.Screen name="OrderList" component={OrdersScreen} options={{ animation: 'none' }} />
       <InvoiceStack.Screen name="OrderCreate" component={OrderBuilderScreen} />
       <InvoiceStack.Screen name="OrderDetail" component={OrderDetailScreen} />
@@ -163,6 +175,7 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="ActivityLog" component={ActivityLogScreen} />
       <SettingsStack.Screen name="Ledger" component={LedgerScreen} />
       <SettingsStack.Screen name="DataExport" component={DataExportScreen} />
+      <SettingsStack.Screen name="DataImport" component={DataImportScreen} />
       <SettingsStack.Screen name="TwoFactorSetup" component={TwoFactorSetupScreen} />
       <SettingsStack.Screen name="Team" component={TeamScreen} />
       <SettingsStack.Screen name="Roles" component={RolesScreen} />
@@ -315,6 +328,16 @@ function AppShell() {
 
 export function AppNavigator() {
   const token = useAuthStore((state) => state.token);
+  const businessId = useAuthStore((state) => state.user?.businessId);
+
+  // Push registration is per session AND per workspace: switching business must move
+  // this device so notifications follow the workspace the user is actually in. Asked
+  // for only once signed in — a permission prompt on first launch gets denied.
+  useEffect(() => {
+    if (!token || !businessId) return undefined;
+    void registerForPush();
+    return attachPushListeners();
+  }, [token, businessId]);
 
   // Keep client permissions fresh: a server-side re-role/disable isn't reflected in a
   // long-lived session otherwise. Refresh the user on launch (once a token exists) and

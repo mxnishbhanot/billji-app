@@ -47,6 +47,27 @@ export const downloadAndShare = async (
   await Linking.openURL(sourceUrl);
 };
 
+/**
+ * Writes already-fetched text to a cache file and opens the share sheet on it.
+ *
+ * Used for content that needs the Authorization header to obtain (GST return CSVs):
+ * FileSystem.downloadAsync cannot carry the session, so the API client fetches the body
+ * and this only handles the file-and-share half.
+ */
+export const shareTextFile = async (
+  content: string,
+  fileName: string,
+  { mimeType, uti, dialogTitle }: { mimeType: string; uti: string; dialogTitle?: string }
+) => {
+  const destination = `${FileSystem.cacheDirectory}${fileName}`;
+  await FileSystem.writeAsStringAsync(destination, content, { encoding: FileSystem.EncodingType.UTF8 });
+
+  if (!(await Sharing.isAvailableAsync())) {
+    throw new Error('Sharing is not available on this device');
+  }
+  await Sharing.shareAsync(destination, { mimeType, UTI: uti, dialogTitle: dialogTitle || fileName });
+};
+
 export const shareDataExport = (url: string, fileName: string) =>
   downloadAndShare(url, `${safeFileName(fileName.replace(/\.zip$/i, ''), 'billji-export')}.zip`, {
     mimeType: 'application/zip',

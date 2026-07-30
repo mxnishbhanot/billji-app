@@ -1,6 +1,5 @@
+import { calculateGstTotals } from '@/shared/gst/gstMath';
 import { DiscountType, InvoiceItem } from '@/types';
-
-const roundMoney = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
 
 // Intl formatters are expensive to construct; hoist to module singletons so list
 // rows reuse one instance instead of allocating per render.
@@ -67,13 +66,25 @@ export const describeDevice = (
   return { name: name || 'Unknown device', icon };
 };
 
-export const calculateClientTotals = ({ items, taxRate = 0, discountType = 'flat', discountValue = 0 }: { items: InvoiceItem[]; taxRate?: number; discountType?: DiscountType; discountValue?: number }) => {
-  const subtotal = roundMoney(items.reduce((sum, item) => sum + roundMoney(Number(item.quantity || 0) * Number(item.price || 0)), 0));
-  const discount = discountType === 'percentage' ? subtotal * (Number(discountValue || 0) / 100) : Number(discountValue || 0);
-  const discountAmount = roundMoney(Math.min(Math.max(discount, 0), subtotal));
-  const taxable = Math.max(subtotal - discountAmount, 0);
-  const taxAmount = roundMoney(taxable * (Math.max(Number(taxRate || 0), 0) / 100));
-  return { subtotal, discountAmount, taxAmount, total: roundMoney(taxable + taxAmount) };
-};
+/**
+ * Live builder totals. Delegates to the shared GST math so the preview matches what the
+ * server will store; the extra GST fields (per-head splits, HSN summary) come back too
+ * for callers that show the breakup.
+ */
+export const calculateClientTotals = ({
+  items,
+  taxRate = 0,
+  discountType = 'flat',
+  discountValue = 0,
+  supplyType = 'intra',
+  pricesIncludeTax = false
+}: {
+  items: InvoiceItem[];
+  taxRate?: number;
+  discountType?: DiscountType;
+  discountValue?: number;
+  supplyType?: 'intra' | 'inter';
+  pricesIncludeTax?: boolean;
+}) => calculateGstTotals({ items, taxRate, discountType, discountValue, supplyType, pricesIncludeTax });
 
 export const compactNumber = (value?: number | string | null) => Number(value || 0).toLocaleString('en-IN');

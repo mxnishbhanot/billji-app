@@ -1,14 +1,15 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { customersApi, invoicesApi, productsApi } from '@/api/endpoints';
+import { customersApi, documentsApi, invoicesApi, productsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useDocumentDraft } from '@/shared/drafts/useDocumentDraft';
+import { resolvePlaceOfSupplyCode, stateCodeFromGstin, stateCodeFromName, supplyTypeFor } from '@/shared/gst/gstStates';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { useAuthStore } from '@/store/authStore';
 import { track } from '@/services/analytics';
 import { useOnboardingOptional } from '@/features/onboarding';
-import { Customer, DiscountType, InvoiceCreatePayload, InvoiceDraftPayload, InvoiceItem, Product, StockShortage } from '@/types';
+import { Customer, DiscountType, InvoiceCreatePayload, InvoiceDraftPayload, InvoiceItem, Product, SalesDocumentKind, StockShortage } from '@/types';
 import { calculateClientTotals } from '@/utils/format';
 import {
   addProductToItems,
@@ -32,10 +33,13 @@ const stockShortagesFromError = (error: unknown) => {
 
 export const useInvoiceBuilder = ({
   onCreated,
-  showDialog
+  showDialog,
+  documentType
 }: {
   onCreated: (invoiceId: string) => void;
   showDialog: (dialog: { title: string; message?: string; tone?: 'default' | 'success' | 'error' | 'warning' }) => void;
+  /** Absent = tax invoice. A quotation or challan posts to /documents instead. */
+  documentType?: SalesDocumentKind;
 }) => {
   const queryClient = useQueryClient();
   const onboarding = useOnboardingOptional();
@@ -81,9 +85,31 @@ export const useInvoiceBuilder = ({
     () => buildInvoiceDraftPayload({ selectedCustomerId, selectedCustomer: activeCustomer, items, taxRate, discountType, discountValue, notes }),
     [activeCustomer, discountType, discountValue, items, notes, selectedCustomerId, taxRate]
   );
+  // Mirror the server's place-of-supply resolution so the live preview shows the same
+  // CGST/SGST-vs-IGST split the created invoice will carry.
+  const businessProfile = useAuthStore((state) => state.user?.businessProfile);
+  const supplyType = useMemo(() => {
+    const supplierStateCode =
+      businessProfile?.stateCode || stateCodeFromGstin(businessProfile?.gstNumber || '') || stateCodeFromName(businessProfile?.state || '');
+    const placeOfSupplyCode = resolvePlaceOfSupplyCode({
+      customerGstin: activeCustomer?.gstNumber || activeCustomer?.taxIdentifiers?.gstNumber,
+      customerState: activeCustomer?.billingAddress?.state,
+      supplierStateCode
+    });
+    return supplyTypeFor(supplierStateCode, placeOfSupplyCode);
+  }, [activeCustomer, businessProfile?.gstNumber, businessProfile?.state, businessProfile?.stateCode]);
+
   const totals = useMemo(
-    () => calculateClientTotals({ items, taxRate: Number(taxRate || 0), discountType, discountValue: Number(discountValue || 0) }),
-    [items, taxRate, discountType, discountValue]
+    () =>
+      calculateClientTotals({
+        items,
+        taxRate: Number(taxRate || 0),
+        discountType,
+        discountValue: Number(discountValue || 0),
+        supplyType,
+        pricesIncludeTax: Boolean(businessProfile?.taxSettings?.pricesIncludeTax)
+      }),
+    [items, taxRate, discountType, discountValue, supplyType, businessProfile?.taxSettings?.pricesIncludeTax]
   );
 
   const applyDraftPayload = useCallback((payload: InvoiceDraftPayload) => {
@@ -100,7 +126,9 @@ export const useInvoiceBuilder = ({
   const hasPayloadContent = useCallback((payload: InvoiceDraftPayload) => hasInvoiceDraftContent(payload, defaultTaxRate), [defaultTaxRate]);
 
   const draft = useDocumentDraft<InvoiceDraftPayload>({
-    documentType: 'invoice',
+    // Keyed per type so an unfinished quotation and an unfinished invoice do not overwrite
+    // each other's recovery draft.
+    documentType: documentType || 'invoice',
     payload: draftPayload,
     hasPayloadContent,
     applyPayload: applyDraftPayload
@@ -110,7 +138,6 @@ export const useInvoiceBuilder = ({
     mutationFn: customersApi.create,
     onSuccess: (customer) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
-      onboarding?.completeTask('add_customer', 'action');
       setSelectedCustomerId(customer._id);
       setSelectedCustomer(customer);
       setCustomerModal(false);
@@ -119,7 +146,8 @@ export const useInvoiceBuilder = ({
   });
 
   const createInvoiceMutation = useMutation({
-    mutationFn: invoicesApi.create,
+    mutationFn: (payload: InvoiceCreatePayload) =>
+      documentType ? documentsApi.create(documentType, payload) : invoicesApi.create(payload),
     onSuccess: (_invoice, payload) => {
       // No PII / amounts — counts and booleans only. Covers normal + oversell paths.
       track('invoice_created', {
@@ -127,10 +155,10 @@ export const useInvoiceBuilder = ({
         has_discount: payload.discountValue > 0,
         oversell: Boolean(payload.allowOversell)
       });
-      onboarding?.completeTask('create_invoice', 'action');
       onboarding?.markLocalFlag('invoiceCreateCount');
       draft.clearActiveDraft();
       queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
     },
@@ -155,6 +183,38 @@ export const useInvoiceBuilder = ({
   };
 
   const addProduct = useCallback((product: Product) => setItems((current) => addProductToItems(current, product)), []);
+
+  /**
+   * Scan a label straight onto the bill. Looks the code up directly rather than pushing it
+   * into the search box and waiting for the list to settle — the server resolves an exact
+   * barcode to a single product, so there is nothing to disambiguate.
+   */
+  const addScannedProduct = useCallback(
+    async (barcode: string) => {
+      const code = barcode.trim();
+      if (!code) return;
+
+      try {
+        const matches = await productsApi.list({ search: code, limit: 1 });
+        const product = matches.find((item) => item.barcode === code) ?? matches[0];
+
+        if (!product) {
+          showDialog({
+            title: 'Product not found',
+            message: `No product is saved against ${code}. Add it in Inventory, or search by name instead.`,
+            tone: 'warning'
+          });
+          return;
+        }
+
+        addProduct(product);
+        track('invoice_item_scanned', { matched: true });
+      } catch (error) {
+        showDialog({ title: 'Could not look up that code', message: apiErrorMessage(error), tone: 'error' });
+      }
+    },
+    [addProduct, showDialog]
+  );
   const updateQuantity = useCallback((index: number, delta: number) => setItems((current) => updateItemQuantity(current, index, delta)), []);
   const setQuantity = useCallback((index: number, quantity: number) => setItems((current) => setItemQuantity(current, index, quantity)), []);
   const removeItem = useCallback((index: number) => setItems((current) => removeInvoiceItem(current, index)), []);
@@ -206,6 +266,7 @@ export const useInvoiceBuilder = ({
     addCustomer,
     addCustomItem,
     addProduct,
+    addScannedProduct,
     createInvoice,
     createInvoiceMutation,
     customerModal,

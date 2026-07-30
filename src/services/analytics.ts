@@ -13,14 +13,12 @@ import { sessionStorage } from '@/store/sessionStorage';
 export type AnalyticsEvent =
   | 'invoice_created'
   | 'invoice_shared'
+  | 'payment_reminders_sent'
+  | 'invoice_item_scanned'
   | 'onboarding_orientation_started'
   | 'onboarding_orientation_step'
   | 'onboarding_orientation_completed'
   | 'onboarding_orientation_dismissed'
-  | 'onboarding_checklist_shown'
-  | 'onboarding_checklist_item_completed'
-  | 'onboarding_checklist_completed'
-  | 'onboarding_checklist_dismissed'
   | 'onboarding_coachmark_shown'
   | 'onboarding_coachmark_dismissed'
   | 'onboarding_help_replay';

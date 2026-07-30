@@ -13,7 +13,6 @@ import { FormTextInput } from '@/components/FormTextInput';
 import { IndiaAddressFields } from '@/components/IndiaAddressFields';
 import { PhoneInput } from '@/components/PhoneInput';
 import { Screen } from '@/components/Screen';
-import { useOnboardingOptional } from '@/features/onboarding';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
@@ -62,7 +61,6 @@ export function BusinessProfileScreen() {
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
   const { showToast } = useAppToast();
-  const onboarding = useOnboardingOptional();
   const form = useForm<BusinessProfileFormValues>({
     defaultValues: profileDefaults(user?.businessProfile),
     resolver: zodResolver(settingsSchema)
@@ -94,7 +92,6 @@ export function BusinessProfileScreen() {
       await setUser(response.user);
       queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.onboarding.progress });
-      onboarding?.completeTask('complete_profile', 'action');
       showToast('Business profile saved', 'success');
     },
     onError: (error) => showDialog({ title: 'Could not save profile', message: apiErrorMessage(error), tone: 'error' })

@@ -16,7 +16,9 @@ describe('validation schemas', () => {
 
   it('keeps product, custom item, and settings required fields guarded', () => {
     expect(productSchema.safeParse({ name: '', price: '', stockQuantity: '' }).success).toBe(false);
-    expect(customItemSchema.safeParse({ name: 'Service', price: '100', quantity: '1' }).success).toBe(true);
+    // unit is required and always seeded from customItemDefaults (invoiceBuilderService).
+    expect(customItemSchema.safeParse({ name: 'Service', price: '100', quantity: '1', unit: 'pcs' }).success).toBe(true);
+    expect(customItemSchema.safeParse({ name: 'Service', price: '100', quantity: '1' }).success).toBe(false);
     expect(settingsSchema.safeParse({ businessName: '', invoicePrefix: '', theme: 'light' }).success).toBe(false);
   });
 });

@@ -19,6 +19,7 @@ import { SecuritySessionsSheet } from '@/components/SecuritySessionsSheet';
 import { WorkspaceSwitcherSheet } from '@/components/WorkspaceSwitcherSheet';
 import { Screen } from '@/components/Screen';
 import { AppNavigation } from '@/navigation/types';
+import { unregisterFromPush } from '@/services/push';
 import { disconnectSocket } from '@/services/socket';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
@@ -216,6 +217,7 @@ export function SettingsScreen() {
   const canViewTeam = can(PERMISSION.teamView);
   const canViewRoles = can(PERMISSION.rolesView);
   const canExportData = can(PERMISSION.settingsExport);
+  const canImportData = can(PERMISSION.customersManage) || can(PERMISSION.productsManage);
   const [brandSheetVisible, setBrandSheetVisible] = useState(false);
   const [sessionsSheetVisible, setSessionsSheetVisible] = useState(false);
   const [workspaceSheetVisible, setWorkspaceSheetVisible] = useState(false);
@@ -262,6 +264,9 @@ export function SettingsScreen() {
     onError: (error) => showDialog({ title: 'Could not revoke session', message: apiErrorMessage(error), tone: 'error' })
   });
   const signOut = async () => {
+    // Drop the push registration while the session is still valid — afterwards the
+    // DELETE would 401 and this phone would keep buzzing for the previous account.
+    await unregisterFromPush();
     try {
       await authApi.logout();
     } catch {
@@ -429,7 +434,7 @@ export function SettingsScreen() {
         />
       </SettingsGroup>
 
-      {canViewLedger || canViewActivity || canExportData ? (
+      {canViewLedger || canViewActivity || canExportData || canImportData ? (
         <SettingsGroup title="RECORDS">
           {canViewLedger ? (
             <SettingsRow icon="book-open-outline" title="Ledger" subtitle="Accounting entries" tone={colors.primary} onPress={() => navigation.navigate('Ledger')} />
@@ -441,6 +446,10 @@ export function SettingsScreen() {
           {(canViewLedger || canViewActivity) && canExportData ? <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} /> : null}
           {canExportData ? (
             <SettingsRow icon="database-export-outline" title="Export my data" subtitle="Download everything as CSV and JSON" tone={colors.violet} onPress={() => navigation.navigate('DataExport')} />
+          ) : null}
+          {canExportData && canImportData ? <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} /> : null}
+          {canImportData ? (
+            <SettingsRow icon="database-import-outline" title="Import data" subtitle="Bring customers and products from a CSV" tone={colors.accent} onPress={() => navigation.navigate('DataImport')} />
           ) : null}
         </SettingsGroup>
       ) : null}
@@ -466,17 +475,6 @@ export function SettingsScreen() {
           subtitle="Quick walkthrough of Home, Invoices, and Customers"
           tone={colors.primary}
           onPress={() => onboarding?.replayOrientation()}
-        />
-        <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
-        <SettingsRow
-          icon="checkbox-marked-circle-outline"
-          title="Show my setup checklist"
-          subtitle="Reopen the setup checklist on Home"
-          tone={colors.accent}
-          onPress={() => {
-            onboarding?.replayChecklist();
-            navigation.navigate('DashboardTab', { screen: 'DashboardHome' });
-          }}
         />
       </SettingsGroup>
 

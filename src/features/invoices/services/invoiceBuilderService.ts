@@ -16,6 +16,8 @@ export const productToInvoiceItem = (product: Product): InvoiceItem => ({
   quantity: 1,
   sku: product.sku,
   unit: product.unit,
+  // HSN travels with the line so the GST summary and the printed invoice carry it.
+  hsn: product.hsn,
   taxRate: product.taxRate
 });
 
@@ -74,6 +76,7 @@ export const buildInvoicePayload = ({
     quantity: Number(item.quantity || 1),
     price: Number(item.price || 0),
     taxRate: item.taxRate,
+    hsn: item.hsn,
     isCustom: item.isCustom
   })),
   taxRate: Number(taxRate || 0),

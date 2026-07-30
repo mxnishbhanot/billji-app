@@ -7,30 +7,14 @@ import { useAuthStore } from '@/store/authStore';
 import { sessionStorage } from '@/store/sessionStorage';
 import { navigateToTarget } from '@/navigation/navigationRef';
 import { onboardingApi } from './api';
-import { detectCompletedTasks, mergeDetectedIntoProgress, requiredTasksComplete } from './completionDetect';
-import {
-  ANCHOR,
-  checklistTasksForRole,
-  FEATURE_TOURS,
-  getTourById,
-  ORIENTATION_TOUR_ID
-} from './registry';
-import type {
-  AnchorRect,
-  ChecklistTaskDef,
-  ChecklistTaskKey,
-  OnboardingHints,
-  OnboardingProgress,
-  TourDefinition
-} from './types';
+import { ANCHOR, FEATURE_TOURS, getTourById, ORIENTATION_TOUR_ID } from './registry';
+import type { AnchorRect, OnboardingHints, OnboardingProgress, TourDefinition } from './types';
 
 const CACHE_PREFIX = 'billji-onboarding-v1:';
 const LOCAL_FLAGS_KEY = 'billji-onboarding-local-flags';
 
 type LocalFlags = {
   sharedInvoice?: boolean;
-  openedReports?: boolean;
-  viewedInvoices?: boolean;
   invoiceCreateCount?: number;
 };
 
@@ -43,30 +27,22 @@ export type ActiveTourState = {
   mode: TourMode;
 };
 
-export type CelebrationState = { kind: 'activation' | 'checklist' } | null;
+/** Confetti moment when the user shares their first invoice. */
+export type CelebrationState = { kind: 'activation' } | null;
 
 type OnboardingContextValue = {
   ready: boolean;
   progress: OnboardingProgress | null;
   hints: OnboardingHints | null;
-  checklistTasks: ChecklistTaskDef[];
-  /** True while the checklist journey is active and has unfinished tasks (drives the pill). */
-  checklistVisible: boolean;
-  checklistSheetOpen: boolean;
-  setChecklistSheetOpen: (open: boolean) => void;
   welcomeVisible: boolean;
   acceptWelcome: () => void;
   declineWelcome: () => void;
   activeTour: ActiveTourState | null;
-  completeTask: (key: ChecklistTaskKey, method?: 'action' | 'skipped') => void;
-  dismissChecklist: () => void;
-  showChecklist: () => void;
   startTour: (tourId: string, source?: ActiveTourState['source']) => void;
   nextTourStep: () => void;
   prevTourStep: () => void;
   dismissTour: () => void;
   replayOrientation: () => void;
-  replayChecklist: () => void;
   notifyRouteFocus: (routeName: string) => void;
   markLocalFlag: (flag: keyof LocalFlags, value?: boolean | number) => void;
   celebration: CelebrationState;
@@ -135,13 +111,10 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
   const anchors = useRef(new Map<string, RefObject<View | null>>());
   const [localFlags, setLocalFlags] = useState<LocalFlags>({});
-  const [checklistSheetOpen, setChecklistSheetOpen] = useState(false);
   const [welcomeVisible, setWelcomeVisible] = useState(false);
   const [activeTour, setActiveTour] = useState<ActiveTourState | null>(null);
   const [celebration, setCelebration] = useState<CelebrationState>(null);
   const welcomeHandledRef = useRef(false);
-  const syncingDetectionRef = useRef(false);
-  const checklistCompletedRef = useRef(false);
   const routeTipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Mirrors of state so event handlers can read the current value and run their
   // side effects (mutate/track/navigate) OUTSIDE the setState updater. Updaters
@@ -205,63 +178,6 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  const checklistTasks = useMemo(() => checklistTasksForRole(roleKey, can), [roleKey, can]);
-
-  const checklistVisible = Boolean(
-    progress &&
-      progress.checklist.status === 'active' &&
-      checklistTasks.some((t) => {
-        const s = progress.checklist.items[t.key]?.status;
-        return s !== 'completed' && s !== 'skipped';
-      })
-  );
-
-  // Auto-complete checklist when all required (non-optional) tasks are done
-  useEffect(() => {
-    if (!progress || progress.checklist.status !== 'active' || checklistCompletedRef.current) return;
-    const required = checklistTasks.filter((t) => !t.optional);
-    if (!required.length) return;
-    const allDone = required.every((t) => {
-      const s = progress.checklist.items[t.key]?.status;
-      return s === 'completed' || s === 'skipped';
-    });
-    if (!allDone) return;
-    checklistCompletedRef.current = true;
-    patchMutation.mutate({ checklist: { status: 'completed' } });
-    track('onboarding_checklist_completed', { roleKey: roleKey || 'owner' });
-    setCelebration((current) => current ?? { kind: 'checklist' });
-  }, [progress, checklistTasks, roleKey]);
-
-  // Merge detected completions
-  useEffect(() => {
-    if (!progress || !hints || syncingDetectionRef.current) return;
-    const detected = detectCompletedTasks(hints, {
-      sharedInvoice: localFlags.sharedInvoice,
-      openedReports: localFlags.openedReports,
-      viewedInvoices: localFlags.viewedInvoices
-    });
-    const { progress: merged, changedKeys } = mergeDetectedIntoProgress(progress, detected);
-    if (!changedKeys.length) return;
-
-    syncingDetectionRef.current = true;
-    const items: Record<string, { status: string; method: string }> = {};
-    for (const key of changedKeys) {
-      const item = merged.checklist.items[key];
-      if (item) {
-        items[key] = { status: item.status, method: item.method || 'detected' };
-        track('onboarding_checklist_item_completed', { taskKey: key, method: 'detected' });
-      }
-    }
-    patchMutation.mutate(
-      { checklist: { items } },
-      {
-        onSettled: () => {
-          syncingDetectionRef.current = false;
-        }
-      }
-    );
-  }, [progress, hints, localFlags]);
-
   // First-run welcome: instead of auto-firing a tour, offer the choice once.
   useEffect(() => {
     if (!progress || !hints || welcomeHandledRef.current || activeTour) return;
@@ -277,12 +193,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       return;
     }
     welcomeHandledRef.current = true;
-    const timer = setTimeout(() => {
-      setWelcomeVisible(true);
-      track('onboarding_checklist_shown', { roleKey: roleKey || 'owner', itemsTotal: checklistTasks.length });
-    }, 600);
+    const timer = setTimeout(() => setWelcomeVisible(true), 600);
     return () => clearTimeout(timer);
-  }, [progress, hints, activeTour, roleKey, checklistTasks.length]);
+  }, [progress, hints, activeTour]);
 
   const registerAnchor = useCallback((id: string, ref: RefObject<View | null>) => {
     anchors.current.set(id, ref);
@@ -315,49 +228,11 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     [registerAnchor, unregisterAnchor, measureAnchor]
   );
 
-  const completeTask = useCallback(
-    (key: ChecklistTaskKey, method: 'action' | 'skipped' = 'action') => {
-      if (!progress) return;
-      const existing = progress.checklist.items[key]?.status;
-      if (existing === 'completed' || existing === 'skipped') return;
-      const status = method === 'skipped' ? 'skipped' : 'completed';
-      patchMutation.mutate({
-        checklist: {
-          items: { [key]: { status, method: method === 'skipped' ? 'skipped' : 'action' } }
-        }
-      });
-      track('onboarding_checklist_item_completed', { taskKey: key, method });
-      if (key === 'share_invoice' && method === 'action') {
-        setCelebration({ kind: 'activation' });
-        setChecklistSheetOpen(false);
-      }
-    },
-    [progress, patchMutation]
-  );
-
-  const dismissChecklist = useCallback(() => {
-    setChecklistSheetOpen(false);
-    patchMutation.mutate({ checklist: { status: 'dismissed' } });
-    const itemsDone = checklistTasks.filter((t) => {
-      const s = progress?.checklist.items[t.key]?.status;
-      return s === 'completed' || s === 'skipped';
-    }).length;
-    track('onboarding_checklist_dismissed', { itemsDone, itemsTotal: checklistTasks.length });
-  }, [patchMutation, checklistTasks, progress]);
-
-  const showChecklist = useCallback(() => {
-    checklistCompletedRef.current = false;
-    replayMutation.mutate({ orientation: false, checklist: true });
-    setChecklistSheetOpen(true);
-    track('onboarding_checklist_shown', { roleKey: roleKey || 'owner', itemsTotal: checklistTasks.length });
-  }, [replayMutation, roleKey, checklistTasks.length]);
-
   const startTour = useCallback(
     (tourId: string, source: ActiveTourState['source'] = 'manual') => {
       const tour = getTourById(tourId);
       if (!tour) return;
       setWelcomeVisible(false);
-      setChecklistSheetOpen(false);
       setActiveTour({ tour, stepIndex: 0, source, mode: tourMode(tourId) });
       // Bring the screen hosting the first step's anchor on screen; TourHost polls
       // for the anchor to mount before measuring.
@@ -450,7 +325,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
   const replayOrientation = useCallback(() => {
     replayMutation.mutate(
-      { orientation: true, checklist: false },
+      { orientation: true },
       {
         onSuccess: () => {
           welcomeHandledRef.current = true;
@@ -459,10 +334,6 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       }
     );
   }, [replayMutation, startTour]);
-
-  const replayChecklist = useCallback(() => {
-    showChecklist();
-  }, [showChecklist]);
 
   const markLocalFlag = useCallback(
     (flag: keyof LocalFlags, value: boolean | number = true) => {
@@ -484,15 +355,16 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
           if (!activeTour && progress && can(PERMISSION.productsManage)) {
             const tip = getTourById('products-speed-v1');
             const tipState = progress.tips['products-speed-v1'];
-            if (tip && (!tipState || tipState.status === 'pending') && requiredTasksComplete(progress, tip.requiredTasks)) {
+            if (tip && (!tipState || tipState.status === 'pending') && (!tip.requiresInvoice || hints?.hasInvoices)) {
               startTour('products-speed-v1', 'auto');
             }
           }
         }
+        // First share is the activation moment — confetti once, then never again.
+        if (flag === 'sharedInvoice' && nextValue === true) setCelebration({ kind: 'activation' });
       }
-      if (flag === 'sharedInvoice' && value === true) completeTask('share_invoice', 'action');
     },
-    [completeTask, activeTour, progress, can, startTour, user?.businessId]
+    [activeTour, progress, hints?.hasInvoices, can, startTour, user?.businessId]
   );
 
   const notifyRouteFocus = useCallback(
@@ -504,26 +376,17 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       }
       if (activeTour || welcomeVisible || !progress) return;
 
-      if (routeName === 'Reports') {
-        markLocalFlag('openedReports', true);
-        completeTask('open_reports', 'action');
-      }
-      if (routeName === 'InvoiceList') {
-        markLocalFlag('viewedInvoices', true);
-        completeTask('view_invoices', 'action');
-      }
-
       const tip = FEATURE_TOURS.find((t) => t.trigger === 'route_focus' && t.route === routeName);
       if (!tip) return;
       if (tip.requiredPermissions?.some((p) => !can(p))) return;
-      if (!requiredTasksComplete(progress, tip.requiredTasks)) return;
+      if (tip.requiresInvoice && !hints?.hasInvoices) return;
       const tipState = progress.tips[tip.id];
       if (tipState && tipState.status !== 'pending') return;
       if (tipState?.snoozedUntil && new Date(tipState.snoozedUntil) > new Date()) return;
 
       routeTipTimerRef.current = setTimeout(() => startTour(tip.id, 'auto'), 1000);
     },
-    [activeTour, welcomeVisible, progress, can, completeTask, markLocalFlag, startTour]
+    [activeTour, welcomeVisible, progress, hints?.hasInvoices, can, startTour]
   );
 
   const value = useMemo<OnboardingContextValue>(
@@ -531,23 +394,15 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       ready: progressQuery.isSuccess || progressQuery.isError,
       progress,
       hints,
-      checklistTasks,
-      checklistVisible,
-      checklistSheetOpen,
-      setChecklistSheetOpen,
       welcomeVisible,
       acceptWelcome,
       declineWelcome,
       activeTour,
-      completeTask,
-      dismissChecklist,
-      showChecklist,
       startTour,
       nextTourStep,
       prevTourStep,
       dismissTour,
       replayOrientation,
-      replayChecklist,
       notifyRouteFocus,
       markLocalFlag,
       celebration,
@@ -558,22 +413,15 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       progressQuery.isError,
       progress,
       hints,
-      checklistTasks,
-      checklistVisible,
-      checklistSheetOpen,
       welcomeVisible,
       acceptWelcome,
       declineWelcome,
       activeTour,
-      completeTask,
-      dismissChecklist,
-      showChecklist,
       startTour,
       nextTourStep,
       prevTourStep,
       dismissTour,
       replayOrientation,
-      replayChecklist,
       notifyRouteFocus,
       markLocalFlag,
       celebration

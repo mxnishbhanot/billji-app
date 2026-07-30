@@ -287,6 +287,28 @@ export function InvoicesScreen({ navigation, route }: InvoicesScreenProps) {
         </Pressable>
       ) : null}
 
+      {/* Orders used to be reachable only from an unlabelled Dashboard button; quotations,
+          challans and credit notes had no entry point at all. Both live here now, beside
+          the invoices they turn into. */}
+      <View style={styles.docLinksRow}>
+        <Pressable
+          onPress={() => navigation.navigate('Documents')}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.docLink, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), opacity: pressed ? 0.9 : 1 }]}
+        >
+          <Feather name="file-plus" size={15} color={theme.colors.primary} />
+          <Text style={[styles.docLinkText, { color: theme.colors.onSurface }]}>Quotes & notes</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => navigation.navigate('OrderList')}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.docLink, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), opacity: pressed ? 0.9 : 1 }]}
+        >
+          <Feather name="clipboard" size={15} color={theme.colors.primary} />
+          <Text style={[styles.docLinkText, { color: theme.colors.onSurface }]}>Orders</Text>
+        </Pressable>
+      </View>
+
       {activeFilterTags.length ? (
         <View style={styles.filterTagsRow}>
           {activeFilterTags.map((tag) => (
@@ -385,6 +407,9 @@ const styles = StyleSheet.create({
   countBold: { ...fontStyles.bold },
   countStrip: { alignItems: 'center', flexDirection: 'row', gap: 8, justifyContent: 'space-between', marginTop: 4, paddingHorizontal: 2 },
   countText: { ...typeScale.caption, fontSize: 12 },
+  docLink: { alignItems: 'center', borderRadius: radii.md, borderWidth: 1, flex: 1, flexDirection: 'row', gap: 8, justifyContent: 'center', paddingVertical: 11 },
+  docLinkText: { ...fontStyles.semiBold, fontSize: 13 },
+  docLinksRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
   draftsLink: { alignItems: 'center', alignSelf: 'flex-start', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingVertical: 6 },
   draftsLinkText: { ...fontStyles.semiBold, fontSize: 12 },
   emptyLoader: { marginTop: 40 },
