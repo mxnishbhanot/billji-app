@@ -737,6 +737,7 @@ export type CustomerQuery = PageQuery & {
 
 export type InvoiceQuery = PageQuery & {
   search?: string;
+  customerId?: string;
   status?: '' | InvoiceStatus;
   from?: string;
   to?: string;

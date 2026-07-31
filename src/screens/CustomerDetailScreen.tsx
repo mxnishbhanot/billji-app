@@ -3,14 +3,17 @@ import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-n
 import { Feather } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Text, useTheme } from 'react-native-paper';
-import { paymentsApi } from '@/api/endpoints';
+import { invoicesApi, paymentsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
+import { useAppToast } from '@/components/AppToast';
 import { CollectDuesSheet } from '@/components/CollectDuesSheet';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
 import { StatCard } from '@/components/StatCard';
 import { StatusPill } from '@/components/StatusPill';
+import { navigateToTarget } from '@/navigation/navigationRef';
 import { CustomerDetailScreenProps } from '@/navigation/types';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
@@ -41,9 +44,12 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
   const colors = appColors(isDark);
   const queryClient = useQueryClient();
   const { showDialog } = useAppDialog();
+  const { showToast } = useAppToast();
   const { can } = usePermissions();
   const canRecordPayment = can(PERMISSION.paymentsRecord);
+  const canRepeat = can(PERMISSION.invoicesCreate) && can(PERMISSION.invoicesView);
   const [collectVisible, setCollectVisible] = useState(false);
+  const [repeatConfirm, setRepeatConfirm] = useState(false);
   const query = useQuery({
     queryKey: queryKeys.payments.customer(customer._id),
     queryFn: () => paymentsApi.list({ customerId: customer._id })
@@ -70,6 +76,34 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
       queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
     },
     onError: (error) => showDialog({ title: 'Could not record payment', message: apiErrorMessage(error), tone: 'error' })
+  });
+
+  // One-tap repeat: shops that bill the same customer the same items weekly re-issue
+  // the last bill instead of retyping it. Server-side duplicate handles numbering,
+  // stock and the per-item GST identity.
+  const lastInvoiceQuery = useQuery({
+    queryKey: queryKeys.invoices.list({ customerId: customer._id, last: true }),
+    queryFn: () => invoicesApi.lastForCustomer(customer._id),
+    enabled: canRepeat
+  });
+  const lastInvoice = lastInvoiceQuery.data ?? null;
+
+  const repeatLastBill = useMutation({
+    mutationFn: () => invoicesApi.duplicate(lastInvoice!._id),
+    onSuccess: (invoice) => {
+      setRepeatConfirm(false);
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.customerOutstanding(customer._id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
+      showToast(`Invoice ${invoice.invoiceNumber} created`);
+      navigateToTarget({ tab: 'InvoicesTab', screen: 'InvoiceDetail', params: { id: invoice._id } });
+    },
+    onError: (error) => {
+      setRepeatConfirm(false);
+      showDialog({ title: 'Could not repeat the bill', message: apiErrorMessage(error), tone: 'error' });
+    }
   });
 
   const canCollect = canRecordPayment && outstanding.totalOutstanding > 0;
@@ -138,6 +172,22 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
         </Pressable>
       ) : null}
 
+      {lastInvoice ? (
+        <Pressable
+          onPress={() => setRepeatConfirm(true)}
+          disabled={repeatLastBill.isPending}
+          style={({ pressed }) => [
+            styles.repeatBtn,
+            { borderColor: alpha(colors.primary, isDark ? 0.4 : 0.28), backgroundColor: alpha(colors.primary, pressed ? 0.12 : 0.04), opacity: repeatLastBill.isPending ? 0.6 : 1 }
+          ]}
+        >
+          <Feather name="repeat" size={15} color={theme.colors.primary} />
+          <Text style={[styles.repeatBtnLabel, { color: theme.colors.primary }]}>
+            Repeat last bill · {formatCurrency(lastInvoice.total)}
+          </Text>
+        </Pressable>
+      ) : null}
+
       <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Payments</Text>
       {query.isLoading ? (
         <ActivityIndicator color={theme.colors.primary} style={styles.loader} />
@@ -172,6 +222,19 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
         onClose={() => setCollectVisible(false)}
         onSubmit={(payload) => collectDues.mutate(payload)}
       />
+
+      <ConfirmDialog
+        visible={repeatConfirm}
+        title="Repeat last bill?"
+        message={
+          lastInvoice
+            ? `This issues a new invoice with the same items as ${lastInvoice.invoiceNumber} (${formatCurrency(lastInvoice.total)}) and deducts stock.`
+            : ''
+        }
+        confirmLabel="Create invoice"
+        onCancel={() => setRepeatConfirm(false)}
+        onConfirm={() => repeatLastBill.mutate()}
+      />
     </Screen>
   );
 }
@@ -192,6 +255,8 @@ const styles = StyleSheet.create({
   nameRow: { alignItems: 'center', flexDirection: 'row', gap: 12 },
   paymentRow: { alignItems: 'center', borderRadius: radii.lg, borderWidth: 1, flexDirection: 'row', gap: 12, marginBottom: 10, padding: 14 },
   profileCard: { borderRadius: radii.lg, borderWidth: 1, marginBottom: 16, padding: 18 },
+  repeatBtn: { alignItems: 'center', borderRadius: radii.input, borderStyle: 'dashed', borderWidth: 1, flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 16, paddingVertical: 12 },
+  repeatBtnLabel: { ...fontStyles.bold, fontSize: 13 },
   sectionTitle: { ...fontStyles.bold, fontSize: 16, marginBottom: 12, marginTop: 4 },
   statRow: { flexDirection: 'row', marginBottom: 16, marginHorizontal: -6 }
 });

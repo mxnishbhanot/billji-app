@@ -166,6 +166,8 @@ export const draftsApi = {
 
 export const invoicesApi = {
   list: (params?: InvoiceQuery) => api.get<{ invoices: Invoice[] }>('/invoices', { params }).then((res) => res.data.invoices),
+  lastForCustomer: (customerId: string) =>
+    api.get<{ invoices: Invoice[] }>('/invoices', { params: { customerId, sort: 'newest', limit: 1 } }).then((res) => res.data.invoices[0] ?? null),
   page: (params: InvoiceQuery) => api.get<InvoicePage>('/invoices', { params: { ...params, paginated: true } }).then((res) => res.data),
   create: (payload: InvoiceCreatePayload) =>
     api.post<{ invoice: Invoice }>('/invoices', payload, { headers: { 'Idempotency-Key': idempotencyKey('invoice') } }).then((res) => res.data.invoice),

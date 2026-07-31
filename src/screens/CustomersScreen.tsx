@@ -22,6 +22,7 @@ import { CustomerFormSheet } from '@/components/CustomerFormSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
 import { CustomersStackParamList } from '@/navigation/types';
+import { useOpenCreateParam } from '@/shared/hooks/useOpenCreateParam';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { queryKeys } from '@/shared/query/queryKeys';
@@ -157,6 +158,7 @@ export function CustomersScreen() {
   const [draftFilterValues, setDraftFilterValues] = useState<CustomerFilterValues>(defaultCustomerFilterValues);
   const [editing, setEditing] = useState<Customer | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<Customer | null>(null);
+  useOpenCreateParam(() => { if (canManage) setEditing(null); });
   const form = useForm<CustomerFormValues>({ defaultValues: blankCustomer, resolver: zodResolver(customerSchema) });
   const debouncedSearch = useDebouncedValue(filters.search, 300);
   const queryFilters = useMemo(() => ({ ...filters, search: debouncedSearch }), [filters, debouncedSearch]);
