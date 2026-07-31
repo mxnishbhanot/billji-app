@@ -153,7 +153,7 @@ export function DataImportScreen() {
       <AppCard>
         <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Bring your list across</Text>
         <Text style={[styles.body, { color: theme.colors.onSurfaceVariant }]}>
-          Coming from Vyapar, Tally or a spreadsheet? Export your list, save it as CSV, and pick it below.
+          Coming from another billing app or a spreadsheet? Export your list, save it as CSV, and pick it below.
           We show you exactly what will happen before anything is written.
         </Text>
 
