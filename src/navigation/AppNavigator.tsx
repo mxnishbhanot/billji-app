@@ -3,9 +3,9 @@ import { NavigationContainer, RouteProp, StackActions } from '@react-navigation/
 import { BottomTabNavigationProp, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, useTheme } from 'react-native-paper';
-import { AppState, BackHandler, Platform, StyleSheet, View } from 'react-native';
+import { AppState, BackHandler, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { authApi } from '@/api/endpoints';
-import { ReactNode, Suspense, lazy, useEffect, useRef } from 'react';
+import { ComponentProps, ReactNode, Suspense, lazy, useEffect, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Dashboard and Login stay static — they are the first screens painted after splash.
 import { DashboardScreen } from '@/screens/DashboardScreen';
@@ -81,6 +81,13 @@ const tabIcons: Record<keyof TabParamList, { active: keyof typeof MaterialCommun
   CatalogTab: { active: 'package-variant-closed', inactive: 'cube' },
   CustomersTab: { active: 'account-group', inactive: 'account-group' },
   SettingsTab: { active: 'cog', inactive: 'cog' }
+};
+// Anchored on the whole tab button, not the icon, so a coach mark highlights the label too.
+const tabAnchors: Partial<Record<keyof TabParamList, string>> = {
+  InvoicesTab: ANCHOR.tabInvoices,
+  CustomersTab: ANCHOR.tabCustomers,
+  CatalogTab: ANCHOR.tabCatalog,
+  SettingsTab: ANCHOR.tabSettings
 };
 
 // Suspense boundary for lazy screens — shows a spinner for the brief moment a
@@ -240,26 +247,25 @@ function AppTabs() {
             shadowRadius: 14
           },
           tabBarItemStyle: styles.tabItem,
+          tabBarButton: (props) => {
+            const anchorId = tabAnchors[route.name as keyof TabParamList];
+            // Cast: bottom-tabs types the button's ref against its own PlatformPressable,
+            // which resolves to the same View at runtime.
+            const button = <Pressable {...(props as ComponentProps<typeof Pressable>)} />;
+            if (!anchorId) return button;
+            return (
+              <TourAnchor anchorId={anchorId} style={styles.tabButtonAnchor}>
+                {button}
+              </TourAnchor>
+            );
+          },
           tabBarIcon: ({ color, focused }) => {
             const icon = tabIcons[route.name as keyof TabParamList];
-            const pill = (
+            return (
               <View style={[styles.iconPill, focused && { backgroundColor: alpha(theme.colors.primary, isDark ? 0.2 : 0.14) }]}>
                 <MaterialCommunityIcons name={focused ? icon.active : icon.inactive} size={focused ? 22 : 21} color={color} />
               </View>
             );
-            if (route.name === 'InvoicesTab') {
-              return <TourAnchor anchorId={ANCHOR.tabInvoices}>{pill}</TourAnchor>;
-            }
-            if (route.name === 'CustomersTab') {
-              return <TourAnchor anchorId={ANCHOR.tabCustomers}>{pill}</TourAnchor>;
-            }
-            if (route.name === 'CatalogTab') {
-              return <TourAnchor anchorId={ANCHOR.tabCatalog}>{pill}</TourAnchor>;
-            }
-            if (route.name === 'SettingsTab') {
-              return <TourAnchor anchorId={ANCHOR.tabSettings}>{pill}</TourAnchor>;
-            }
-            return pill;
           }
         })}
       >
@@ -382,6 +388,7 @@ const styles = StyleSheet.create({
     width: 56
   },
   lazyFallback: { alignItems: 'center', flex: 1, justifyContent: 'center' },
+  tabButtonAnchor: { flex: 1 },
   tabItem: { flex: 1, paddingTop: 0 },
   tabLabel: { ...typeScale.smallCaption, ...fontStyles.medium, fontSize: 11, lineHeight: 14, marginTop: 2 }
 });
