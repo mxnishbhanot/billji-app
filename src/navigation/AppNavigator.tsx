@@ -149,8 +149,6 @@ function CatalogNavigator() {
   return (
     <CatalogStack.Navigator screenOptions={{ headerShown: false }} screenLayout={renderWithSuspense}>
       <CatalogStack.Screen name="Products" component={ProductsScreen} />
-      <CatalogStack.Screen name="Customers" component={CustomersScreen} />
-      <CatalogStack.Screen name="CustomerDetail" component={CustomerDetailScreen} />
     </CatalogStack.Navigator>
   );
 }

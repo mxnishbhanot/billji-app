@@ -1,5 +1,6 @@
-import { ReactNode, RefObject } from 'react';
-import { ScrollView, ScrollViewProps, StyleSheet, View, ViewStyle } from 'react-native';
+import { ReactNode, RefObject, useState } from 'react';
+import { Pressable, ScrollView, ScrollViewProps, StyleSheet, View, ViewStyle } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Appbar, Text, useTheme } from 'react-native-paper';
@@ -9,6 +10,7 @@ import { alpha, appColors, radii, spacing, typeScale } from '@/theme/theme';
 import { AppNavigation } from '@/navigation/types';
 import { BrandMark } from './BrandMark';
 import { NotificationButton } from './NotificationButton';
+import { QuickActionsSheet } from './QuickActionsSheet';
 
 type Props = { title: string; children: ReactNode; scroll?: boolean; showNotifications?: boolean; headerAction?: ReactNode; titleAccessory?: ReactNode; contentStyle?: ViewStyle; scrollViewProps?: ScrollViewProps; scrollRef?: RefObject<ScrollView | null> };
 const CONTENT_BOTTOM_PADDING = 96;
@@ -21,6 +23,8 @@ export function Screen({ title, children, scroll = true, showNotifications = tru
   const businessProfile = useAuthStore((state) => state.user?.businessProfile);
   const businessName = businessProfile?.businessName?.trim();
   const insets = useSafeAreaInsets();
+  // Search-anything / create-anything, in the one header every screen already renders.
+  const [quickOpen, setQuickOpen] = useState(false);
   const navigationState = navigation.getState();
   const currentRoute = navigationState.routes[navigationState.index];
   const rootRoute = navigationState.routes[0];
@@ -54,8 +58,21 @@ export function Screen({ title, children, scroll = true, showNotifications = tru
               {titleAccessory}
             </View>
           </View>
+          <Pressable
+            onPress={() => setQuickOpen(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Search or create"
+            style={({ pressed }) => [
+              styles.quickBtn,
+              { backgroundColor: alpha(colors.primary, isDark ? (pressed ? 0.28 : 0.18) : pressed ? 0.16 : 0.08) }
+            ]}
+          >
+            <Feather name="search" size={17} color={theme.colors.onSurface} />
+          </Pressable>
           {headerAction ?? (showNotifications ? <NotificationButton /> : null)}
         </View>
+        <QuickActionsSheet visible={quickOpen} onClose={() => setQuickOpen(false)} />
         {scroll ? (
           <KeyboardAwareScrollView
             ref={scrollRef as never}
@@ -98,6 +115,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
     width: 48
   },
+  quickBtn: { alignItems: 'center', borderRadius: radii.full, height: 38, justifyContent: 'center', marginRight: 6, width: 38 },
   subtitle: { ...typeScale.bodyPrimaryMedium, fontSize: 14, lineHeight: 20 },
   title: { ...typeScale.screenTitle, flexShrink: 1, fontSize: 26, lineHeight: 34, letterSpacing: -0.52 },
   titleBlock: { flex: 1, minWidth: 0 },

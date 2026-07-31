@@ -25,6 +25,7 @@ import {
 } from '@/components/ProductFilterSheet';
 import { Screen } from '@/components/Screen';
 import { ProductsScreenProps } from '@/navigation/types';
+import { useOpenCreateParam } from '@/shared/hooks/useOpenCreateParam';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { queryKeys } from '@/shared/query/queryKeys';
@@ -181,6 +182,7 @@ export function ProductsScreen({ navigation, route }: ProductsScreenProps) {
   const [draftFilterValues, setDraftFilterValues] = useState<ProductFilterValues>(defaultProductFilterValues);
   const [editing, setEditing] = useState<Product | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<Product | null>(null);
+  useOpenCreateParam(() => { if (canManage) setEditing(null); });
   const [historyProduct, setHistoryProduct] = useState<Product | null>(null);
   const form = useForm<ProductFormValues>({ defaultValues: blankProduct, resolver: zodResolver(productSchema) });
   const highlighted = route?.params?.highlight;

@@ -25,7 +25,7 @@ export type DashboardStackParamList = {
   Payments: undefined;
   PaymentReminders: undefined;
   GstReturns: undefined;
-  Expenses: undefined;
+  Expenses: { openCreate?: boolean } | undefined;
   Purchases: undefined;
 };
 
@@ -48,6 +48,8 @@ export type InvoiceStackParamList = {
   OrderDetail: { id: string };
 };
 
+// Customers live in their own tab stack — a second copy here made the back button
+// depend on which tab you arrived from.
 export type CatalogStackParamList = {
   Products: {
     highlight?: string;
@@ -55,13 +57,12 @@ export type CatalogStackParamList = {
     from?: string;
     to?: string;
     sort?: ProductSortParam;
+    openCreate?: boolean;
   } | undefined;
-  Customers: undefined;
-  CustomerDetail: { customer: Customer };
 };
 
 export type CustomersStackParamList = {
-  Customers: undefined;
+  Customers: { openCreate?: boolean } | undefined;
   CustomerDetail: { customer: Customer };
 };
 

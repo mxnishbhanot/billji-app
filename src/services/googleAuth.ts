@@ -5,8 +5,9 @@ import {
 } from '@react-native-google-signin/google-signin';
 
 // Web client ID from the Firebase Console (Authentication → Sign-in method →
-// Google → Web SDK configuration). Required so the device-issued ID token is
-// audienced for our backend's verifyIdToken. Injected at build time via EAS.
+// Google → Web SDK configuration). Becomes the "aud" of the ID token Google
+// mints, so the backend must list this same value in GOOGLE_OAUTH_CLIENT_IDS.
+// Injected at build time via EAS.
 const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
 
 let configured = false;
