@@ -9,7 +9,7 @@ import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { useAuthStore } from '@/store/authStore';
 import { track } from '@/services/analytics';
 import { useOnboardingOptional } from '@/features/onboarding';
-import { Customer, DiscountType, InvoiceCreatePayload, InvoiceDraftPayload, InvoiceItem, Product, SalesDocumentKind, StockShortage } from '@/types';
+import { Customer, DiscountType, Invoice, InvoiceCreatePayload, InvoiceDraftPayload, InvoiceItem, Product, SalesDocumentKind, StockShortage } from '@/types';
 import { calculateClientTotals } from '@/utils/format';
 import {
   addProductToItems,
@@ -34,12 +34,15 @@ const stockShortagesFromError = (error: unknown) => {
 export const useInvoiceBuilder = ({
   onCreated,
   showDialog,
-  documentType
+  documentType,
+  documentNoun = 'invoice'
 }: {
-  onCreated: (invoiceId: string) => void;
+  onCreated: (document: Invoice) => void;
   showDialog: (dialog: { title: string; message?: string; tone?: 'default' | 'success' | 'error' | 'warning' }) => void;
   /** Absent = tax invoice. A quotation or challan posts to /documents instead. */
   documentType?: SalesDocumentKind;
+  /** Lower-case noun for user-facing copy — "quotation", "challan", … */
+  documentNoun?: string;
 }) => {
   const queryClient = useQueryClient();
   const onboarding = useOnboardingOptional();
@@ -172,7 +175,7 @@ export const useInvoiceBuilder = ({
         return;
       }
 
-      showDialog({ title: 'Could not create invoice', message: apiErrorMessage(error), tone: 'error' });
+      showDialog({ title: `Could not create ${documentNoun}`, message: apiErrorMessage(error), tone: 'error' });
     }
   });
 
@@ -230,18 +233,18 @@ export const useInvoiceBuilder = ({
     if (createInvoiceMutation.isPending) return;
 
     if (!selectedCustomerId) {
-      showDialog({ title: 'Select or add a customer', message: 'Choose a saved customer or quick add a new one before generating the invoice.', tone: 'warning' });
+      showDialog({ title: 'Select or add a customer', message: `Choose a saved customer or quick add a new one before generating the ${documentNoun}.`, tone: 'warning' });
       return;
     }
 
     if (!items.length) {
-      showDialog({ title: 'Add at least one item', message: 'Pick a product or add a custom item before generating the invoice.', tone: 'warning' });
+      showDialog({ title: 'Add at least one item', message: `Pick a product or add a custom item before generating the ${documentNoun}.`, tone: 'warning' });
       return;
     }
 
     try {
       const invoice = await createInvoiceMutation.mutateAsync(buildPayload(true));
-      onCreated(invoice._id);
+      onCreated(invoice);
     } catch {
       // Stock warning / error already surfaced in createInvoiceMutation.onError.
     }
@@ -253,7 +256,7 @@ export const useInvoiceBuilder = ({
     setStockWarning(null);
     try {
       const invoice = await createInvoiceMutation.mutateAsync(payload);
-      onCreated(invoice._id);
+      onCreated(invoice);
     } catch {
       // Error already surfaced in createInvoiceMutation.onError.
     }

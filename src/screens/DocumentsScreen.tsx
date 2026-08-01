@@ -13,6 +13,7 @@ import { Screen } from '@/components/Screen';
 import { StatusPill } from '@/components/StatusPill';
 import { DocumentsScreenProps } from '@/navigation/types';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
+import { openOrSharePdf } from '@/services/pdf';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { documentNumberOf, Invoice, SalesDocumentKind } from '@/types';
@@ -43,6 +44,21 @@ export function DocumentsScreen({ navigation, route }: DocumentsScreenProps) {
   const canCreate = can(PERMISSION.invoicesCreate);
   const [kind, setKind] = useState<SalesDocumentKind>(route.params?.documentType ?? 'quotation');
   const [pendingCancel, setPendingCancel] = useState<Invoice | null>(null);
+  const [sharingId, setSharingId] = useState<string | null>(null);
+
+  // Customers routinely forward a quotation for internal approval before ordering, so
+  // sending it is a first-class action here — the PDF itself is watermarked and states
+  // that it is not a tax invoice.
+  const share = async (document: Invoice) => {
+    setSharingId(document._id);
+    try {
+      await openOrSharePdf(document.pdfUrl, documentNumberOf(document));
+    } catch (error) {
+      showDialog({ title: 'Could not share', message: apiErrorMessage(error), tone: 'error' });
+    } finally {
+      setSharingId(null);
+    }
+  };
 
   const active = KINDS.find((item) => item.key === kind) ?? KINDS[0];
 
@@ -124,6 +140,7 @@ export function DocumentsScreen({ navigation, route }: DocumentsScreenProps) {
           const meta = statusMetaFor(document);
           const canConvert = Boolean(active.convertLabel) && document.documentStatus === 'issued';
           const canCancelRow = document.documentStatus === 'issued';
+          const canShare = document.documentStatus !== 'cancelled' && Boolean(document.pdfUrl);
           return (
             <View key={document._id} style={[styles.card, { backgroundColor: colors.card, borderColor: cardBorder }]}>
               <View style={styles.cardHead}>
@@ -139,8 +156,22 @@ export function DocumentsScreen({ navigation, route }: DocumentsScreenProps) {
                 </View>
               </View>
 
-              {canConvert || canCancelRow ? (
+              {canConvert || canCancelRow || canShare ? (
                 <View style={[styles.actionRow, { borderTopColor: cardBorder }]}>
+                  {canShare ? (
+                    <Pressable
+                      onPress={() => void share(document)}
+                      disabled={sharingId === document._id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Send ${documentNumberOf(document)}`}
+                      style={styles.action}
+                    >
+                      <Feather name="send" size={14} color={theme.colors.primary} />
+                      <Text style={[styles.actionLabel, { color: theme.colors.primary }]}>
+                        {sharingId === document._id ? 'Preparing…' : 'Send'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                   {canConvert && canCreate ? (
                     <Pressable
                       onPress={() => convert.mutate(document._id)}

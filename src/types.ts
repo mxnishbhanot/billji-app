@@ -394,6 +394,8 @@ export type InvoiceCreatePayload = {
   // Optional override; the server resolves place of supply from the customer otherwise.
   placeOfSupplyCode?: string;
   allowOversell?: boolean;
+  /** Preview only — makes the rendered sheet a quotation/challan instead of a tax invoice. */
+  documentType?: SalesDocumentKind;
 };
 
 export type InvoiceDraftPayload = {

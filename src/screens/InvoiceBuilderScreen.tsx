@@ -16,33 +16,47 @@ import {
 import { useInvoiceBuilder } from '@/features/invoices/hooks/useInvoiceBuilder';
 import { customerDefaults, customItemDefaults } from '@/features/invoices/services/invoiceBuilderService';
 import { useAppDialog } from '@/components/AppDialog';
+import { useAppToast } from '@/components/AppToast';
 import { BarcodeScannerSheet } from '@/components/BarcodeScannerSheet';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Screen } from '@/components/Screen';
 import { InvoiceBuilderScreenProps } from '@/navigation/types';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
-import { CustomerFormValues, CustomItemFormValues } from '@/types';
+import { CustomerFormValues, CustomItemFormValues, documentNumberOf } from '@/types';
 import { customItemSchema, customerSchema } from '@/validation/schemas';
 
 const TITLES: Record<string, string> = { quotation: 'New Quotation', delivery_challan: 'New Challan', credit_note: 'New Credit Note' };
+const NOUNS: Record<string, string> = { quotation: 'quotation', delivery_challan: 'challan', credit_note: 'credit note' };
 
 export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreenProps) {
   // Same builder for every sales document; the type only changes the title and the endpoint.
   const documentType = route.params?.documentType;
+  const noun = (documentType && NOUNS[documentType]) || 'invoice';
   const [scannerOpen, setScannerOpen] = useState(false);
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
+  const { showToast } = useAppToast();
   const [leavePromptVisible, setLeavePromptVisible] = useState(false);
   const pendingLeaveAction = useRef<NavigationAction | null>(null);
   const allowLeave = useRef(false);
   const customerForm = useForm<CustomerFormValues>({ defaultValues: customerDefaults, resolver: zodResolver(customerSchema) });
   const customForm = useForm<CustomItemFormValues>({ defaultValues: customItemDefaults, resolver: zodResolver(customItemSchema) });
   const builder = useInvoiceBuilder({
-    onCreated: (invoiceId) => navigation.replace('InvoiceDetail', { id: invoiceId }),
+    // Quotations and challans live under /documents — the invoice detail screen cannot load
+    // them, so land on the Documents list for that kind instead.
+    onCreated: (document) => {
+      if (documentType) {
+        showToast(`${TITLES[documentType].replace('New ', '')} ${documentNumberOf(document)} created`, 'success');
+        navigation.replace('Documents', { documentType });
+        return;
+      }
+      navigation.replace('InvoiceDetail', { id: document._id });
+    },
     showDialog,
-    documentType
+    documentType,
+    documentNoun: noun
   });
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.08);
   const subSurface = isDark ? colors.surface : alpha(colors.primary, 0.04);
@@ -78,14 +92,14 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
   };
   const openPreview = () => {
     if (!builder.activeCustomer) {
-      showDialog({ title: 'Select or add a customer', message: 'Choose a saved customer or quick add a new one before previewing the invoice.', tone: 'warning' });
+      showDialog({ title: 'Select or add a customer', message: `Choose a saved customer or quick add a new one before previewing the ${noun}.`, tone: 'warning' });
       return;
     }
     if (!builder.items.length) {
-      showDialog({ title: 'Add at least one item', message: 'Pick a product or add a custom item before previewing the invoice.', tone: 'warning' });
+      showDialog({ title: 'Add at least one item', message: `Pick a product or add a custom item before previewing the ${noun}.`, tone: 'warning' });
       return;
     }
-    navigation.navigate('InvoicePreview', { payload: builder.buildPayload(false) });
+    navigation.navigate('InvoicePreview', { payload: { ...builder.buildPayload(false), ...(documentType ? { documentType } : {}) } });
   };
 
   return (
@@ -170,7 +184,7 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
           contentStyle={styles.generateButtonContent}
           labelStyle={styles.generateButtonLabel}
         >
-          Generate invoice
+          Generate {noun}
         </Button>
       </View>
       <InvoiceBuilderDialogs
@@ -209,7 +223,7 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
       />
       <ConfirmDialog
         visible={leavePromptVisible}
-        title="Leave invoice builder?"
+        title={`Leave ${noun} builder?`}
         message="Your draft is saved and can be resumed later."
         confirmLabel="Leave"
         onCancel={() => {
