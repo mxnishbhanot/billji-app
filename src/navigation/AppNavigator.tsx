@@ -1,11 +1,12 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { NavigationContainer, RouteProp, StackActions } from '@react-navigation/native';
 import { BottomTabNavigationProp, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { PlatformPressable } from '@react-navigation/elements';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, useTheme } from 'react-native-paper';
-import { AppState, BackHandler, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { AppState, BackHandler, Platform, StyleSheet, View } from 'react-native';
 import { authApi } from '@/api/endpoints';
-import { ComponentProps, ReactNode, Suspense, lazy, useEffect, useRef } from 'react';
+import { ReactNode, Suspense, lazy, useEffect, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Dashboard and Login stay static — they are the first screens painted after splash.
 import { DashboardScreen } from '@/screens/DashboardScreen';
@@ -249,9 +250,11 @@ function AppTabs() {
           tabBarItemStyle: styles.tabItem,
           tabBarButton: (props) => {
             const anchorId = tabAnchors[route.name as keyof TabParamList];
-            // Cast: bottom-tabs types the button's ref against its own PlatformPressable,
-            // which resolves to the same View at runtime.
-            const button = <Pressable {...(props as ComponentProps<typeof Pressable>)} />;
+            // Must be PlatformPressable, not a plain Pressable: bottom-tabs passes an
+            // `href` to the tab button, react-native-web renders that as a real <a>, and
+            // only PlatformPressable preventDefault()s the click. A plain Pressable lets
+            // the browser follow the link, which full-page-reloads the web app.
+            const button = <PlatformPressable {...props} />;
             if (!anchorId) return button;
             return (
               <TourAnchor anchorId={anchorId} style={styles.tabButtonAnchor}>
