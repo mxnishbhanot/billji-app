@@ -2,13 +2,14 @@ import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { onlineManager } from '@tanstack/react-query';
 import { subscribeToChanges } from '../db/changeBus';
-import { isDatabaseAvailable } from '../db/connection';
-import { countOperations } from '../db/outbox';
+import { isDatabaseAvailable, openDatabase } from '../db/connection';
+import { countOperations, getOperation } from '../db/outbox';
 import { getSetting, setSetting } from '../db/settings';
 import { useAuthStore } from '../store/authStore';
 import { ensureDeviceSeries } from './deviceSeries';
 import { createPullEngine, type PullEngine } from './pullEngine';
 import { createPushEngine, type PushEngine } from './pushEngine';
+import type { DeadLetter } from './queueManager';
 import { getSyncPreferences, loadSyncPreferences, subscribeToSyncPreferences } from './syncPreferences';
 
 /**
@@ -86,6 +87,11 @@ const set = (patch: Partial<SyncSnapshot>) => {
 };
 
 export const getSyncSnapshot = () => snapshot;
+
+/** Surfaces a fail-closed local write so the Sync badge / Settings can point at Sync Issues. */
+export const reportLocalWriteFailure = (message: string) => {
+  set({ error: message || 'Local save failed' });
+};
 
 const activeBusinessId = () => useAuthStore.getState().user?.businessId ?? null;
 
@@ -174,6 +180,72 @@ export const retrySync = async (): Promise<void> => {
       console.warn('[syncStatus] could not requeue failed operations', error);
     }
   }
+  await syncNow();
+};
+
+const pushForActiveBusiness = () => {
+  const businessId = activeBusinessId();
+  if (!businessId || !isDatabaseAvailable()) return null;
+  return enginesFor(businessId, engines?.deviceId).push;
+};
+
+/** Failed / conflict / dead operations for the Sync Issues screen. */
+export const listSyncIssues = async (): Promise<DeadLetter[]> => {
+  const push = pushForActiveBusiness();
+  if (!push) return [];
+  try {
+    return await push.deadLetters();
+  } catch (error) {
+    console.warn('[syncStatus] could not list sync issues', error);
+    return [];
+  }
+};
+
+export const retrySyncIssue = async (opId: string): Promise<void> => {
+  const push = pushForActiveBusiness();
+  if (!push) return;
+  await push.retry(opId);
+  await refreshSyncCounts();
+  await syncNow();
+};
+
+export const discardSyncIssue = async (opId: string): Promise<void> => {
+  const push = pushForActiveBusiness();
+  if (!push) return;
+  await push.discard(opId);
+  await refreshSyncCounts();
+};
+
+/**
+ * Keep the device's edit: rebase onto the current server version (new baseVersion) and push.
+ * Never retries the stale op — that is what caused the 409 loop.
+ */
+export const keepLocalSyncIssue = async (opId: string): Promise<void> => {
+  const businessId = activeBusinessId();
+  if (!businessId || !isDatabaseAvailable()) return;
+
+  const { rebaseKeepLocal } = await import('./keepLocal');
+  await rebaseKeepLocal(opId, { businessId });
+  await refreshSyncCounts();
+  await syncNow();
+};
+
+/**
+ * Accept the server's copy: abandon local ops for this record and mark the row synced so
+ * the next pull fast-forwards over the local payload.
+ */
+export const keepServerSyncIssue = async (opId: string): Promise<void> => {
+  const push = pushForActiveBusiness();
+  if (!push) return;
+  const operation = await getOperation(opId);
+  await push.discard(opId);
+  if (operation) {
+    const db = await openDatabase();
+    await db.runAsync(`UPDATE ${operation.entityType} SET sync_state = 'synced' WHERE local_id = ?`, [
+      operation.entityLocalId
+    ]);
+  }
+  await refreshSyncCounts();
   await syncNow();
 };
 

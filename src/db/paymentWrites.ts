@@ -248,6 +248,15 @@ export const recordCustomerPaymentLocally = async (
       throw new LocalRuleError('INVOICES_REQUIRED', 'At least one invoice is required');
     }
 
+    const seenInvoiceIds = new Set<string>();
+    for (const invoiceId of payload.invoiceIds) {
+      const key = String(invoiceId);
+      if (seenInvoiceIds.has(key)) {
+        throw new LocalRuleError('DUPLICATE_INVOICE_IDS', 'Duplicate invoice ids are not allowed in one payment');
+      }
+      seenInvoiceIds.add(key);
+    }
+
     const customer = await customerByAnyId(customerId, db);
     if (!customer) throw new DatabaseError('DB_QUERY_FAILED', 'That customer is not held on this device');
 

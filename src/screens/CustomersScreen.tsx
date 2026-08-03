@@ -32,7 +32,19 @@ import { formatCurrency } from '@/utils/format';
 import { customerSchema } from '@/validation/schemas';
 
 const PAGE_SIZE = 10;
-const blankCustomer = { name: '', phone: '', countryCode: '+91', email: '', address: '' };
+const blankCustomer = { name: '', phone: '', countryCode: '+91', email: '', address: '', gstNumber: '' };
+
+const toFormValues = (customer: Customer | null): CustomerFormValues =>
+  customer
+    ? {
+        name: customer.name || '',
+        phone: customer.phone || '',
+        countryCode: customer.countryCode || '+91',
+        email: customer.email || '',
+        address: customer.address || '',
+        gstNumber: customer.gstNumber || customer.taxIdentifiers?.gstNumber || ''
+      }
+    : blankCustomer;
 type CustomerFilters = CustomerFilterValues & { search: string };
 const emptyCustomerFilters: CustomerFilters = { search: '', ...defaultCustomerFilterValues };
 const BILLING_LABELS: Record<CustomerBillingStatus, string> = {
@@ -215,7 +227,9 @@ export function CustomersScreen() {
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.customers.all })
   });
-  useEffect(() => { if (editing !== undefined) form.reset(editing || blankCustomer); }, [editing, form]);
+  useEffect(() => {
+    if (editing !== undefined) form.reset(toFormValues(editing));
+  }, [editing, form]);
 
   const loadMoreCustomers = () => {
     if (!query.hasNextPage || query.isFetching || isInitialLoading) return;

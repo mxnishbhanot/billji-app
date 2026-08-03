@@ -249,7 +249,8 @@ export const useInvoiceBuilder = ({
     }
 
     try {
-      const invoice = await createInvoiceMutation.mutateAsync(buildPayload(true));
+      // First attempt never forces oversell — shortage surfaces as stockWarning for confirm.
+      const invoice = await createInvoiceMutation.mutateAsync(buildPayload(false));
       onCreated(invoice);
     } catch {
       // Stock warning / error already surfaced in createInvoiceMutation.onError.

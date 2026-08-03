@@ -51,6 +51,24 @@ describe('create', () => {
     expect(operation.priority).toBe(3);
   });
 
+  it('rejects a second customer with the same normalised phone', async () => {
+    await createCustomerLocally({ name: 'Ravi Traders', phone: '9876543210' }, options());
+
+    await expect(
+      createCustomerLocally({ name: 'Ravi Again', phone: '+91 98765 43210' }, options())
+    ).rejects.toMatchObject({ code: 'CUSTOMER_PHONE_EXISTS' });
+  });
+
+  it('persists gstNumber on create', async () => {
+    const record = await createCustomerLocally(
+      { name: 'Acme Traders', phone: '9000012345', gstNumber: '27AAPFU0939F1ZV' },
+      options()
+    );
+
+    expect(record.doc?.gstNumber).toBe('27AAPFU0939F1ZV');
+    expect((await getCustomer(record.localId, txn))?.doc?.gstNumber).toBe('27AAPFU0939F1ZV');
+  });
+
   it('is findable by the normalised phone before it has ever been synced', async () => {
     await createCustomerLocally({ name: 'Ravi Traders', phone: '+91 98765 43210' }, options());
 

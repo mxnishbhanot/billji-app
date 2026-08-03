@@ -1,7 +1,7 @@
 import { ReactNode, useCallback, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Switch, Text, useTheme } from 'react-native-paper';
 import { useAppDialog } from '@/components/AppDialog';
@@ -9,6 +9,7 @@ import { useAppToast } from '@/components/AppToast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Screen } from '@/components/Screen';
 import { OfflineBanner, QueueCounter, SyncRetryButton } from '@/components/SyncStatus';
+import { AppNavigation } from '@/navigation/types';
 import { clearCachedData, formatBytes, readStorageUsage, type StorageUsage } from '@/services/storage';
 import { useSyncPreferences } from '@/shared/hooks/useSyncPreferences';
 import { useSyncStatus } from '@/shared/hooks/useSyncStatus';
@@ -85,6 +86,7 @@ export function SyncSettingsScreen() {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
+  const navigation = useNavigation<AppNavigation>();
   const queryClient = useQueryClient();
   const { showDialog } = useAppDialog();
   const { showToast } = useAppToast();
@@ -133,10 +135,22 @@ export function SyncSettingsScreen() {
     : 'Nothing syncs until you tap Sync now';
 
   return (
-    <Screen title="Sync" contentStyle={styles.screenContent}>
+    <Screen title="Sync" hideOfflineBanner contentStyle={styles.screenContent}>
       <OfflineBanner style={styles.banner} />
 
-      <QueueCounter style={styles.counter} />
+      <QueueCounter style={styles.counter} onPress={() => navigation.navigate('SyncIssues')} />
+
+      {failed > 0 ? (
+        <Pressable
+          onPress={() => navigation.navigate('SyncIssues')}
+          style={[styles.issuesLink, { backgroundColor: colors.destructiveSoft, borderColor: alpha(colors.destructive, 0.35) }]}
+        >
+          <MaterialCommunityIcons name="cloud-alert" size={18} color={colors.destructive} />
+          <Text style={[styles.issuesLinkText, { color: colors.destructive }]}>
+            {failed} sync issue{failed === 1 ? '' : 's'} — review
+          </Text>
+        </Pressable>
+      ) : null}
 
       <Group title="MANUAL SYNC">
         <Row
@@ -292,6 +306,17 @@ const styles = StyleSheet.create({
   divider: { height: 1, marginLeft: 60 },
   footnote: { ...typeScale.caption, marginTop: 2, paddingHorizontal: 2 },
   groupTitle: { ...fontStyles.bold, fontSize: 11, letterSpacing: 1.1, marginBottom: 8, marginLeft: 2, marginTop: 4 },
+  issuesLink: {
+    alignItems: 'center',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12
+  },
+  issuesLinkText: { ...fontStyles.semiBold, fontSize: 14 },
   row: { alignItems: 'center', flexDirection: 'row', gap: 12, minHeight: 58, paddingHorizontal: 14, paddingVertical: 10 },
   rowIcon: { alignItems: 'center', borderRadius: radii.md, height: 34, justifyContent: 'center', width: 34 },
   rowSubtitle: { ...typeScale.caption, fontSize: 12, marginTop: 2 },

@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
-import { openDatabaseAsync, SQLiteDatabase } from 'expo-sqlite';
+import { deleteDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
+import { getOrCreateDbEncryptionKey, pragmaKeySql } from '@/db/encryptionKey';
 import { DocumentType, DraftDocument } from '@/types';
 
 const DATABASE_NAME = 'billji-drafts.db';
@@ -47,7 +48,9 @@ const database = async () => {
   if (!dbPromise) {
     dbPromise = (async () => {
       try {
+        const key = await getOrCreateDbEncryptionKey();
         const db = await openDatabaseAsync(DATABASE_NAME);
+        await db.execAsync(pragmaKeySql(key));
         await db.execAsync(`
           PRAGMA user_version = ${SCHEMA_VERSION};
           CREATE TABLE IF NOT EXISTS ${TABLE} (
@@ -78,6 +81,18 @@ const database = async () => {
     })();
   }
   return dbPromise;
+};
+
+/** Logout / business-switch: drop the drafts file so the next account sees nothing. */
+export const resetDraftDatabase = async () => {
+  const pending = dbPromise;
+  dbPromise = null;
+  if (pending) {
+    const db = await pending.catch(() => null);
+    await db?.closeAsync().catch(() => undefined);
+  }
+  if (Platform.OS === 'web') return;
+  await deleteDatabaseAsync(DATABASE_NAME).catch(() => undefined);
 };
 
 const rowToDraft = <TPayload,>(row: DraftRow): DraftDocument<TPayload> => ({

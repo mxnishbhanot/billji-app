@@ -88,10 +88,15 @@ describe('wire mapping', () => {
 
   it('carries the local id as clientId and the server id as targetId', () => {
     const wire = toWireOperation(
-      operation('a', { opType: 'update', entityLocalId: 'local-9', payload: { targetId: 'srv-9', name: 'X' } })
+      operation('a', {
+        opType: 'update',
+        entityLocalId: 'local-9',
+        baseVersion: 3,
+        payload: { targetId: 'srv-9', name: 'X' }
+      })
     );
 
-    expect(wire).toMatchObject({ clientId: 'local-9', targetId: 'srv-9', opType: 'update' });
+    expect(wire).toMatchObject({ clientId: 'local-9', targetId: 'srv-9', opType: 'update', baseVersion: 3 });
   });
 
   it('refuses what protocol 1 cannot express', () => {

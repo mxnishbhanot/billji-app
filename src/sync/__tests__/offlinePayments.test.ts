@@ -297,6 +297,18 @@ describe('one receipt across several bills', () => {
     ).rejects.toMatchObject({ code: 'CREDIT_NOT_ALLOWED' });
   });
 
+  it('rejects duplicate invoice ids that would double-allocate', async () => {
+    await twoBills();
+
+    await expect(
+      recordCustomerPaymentLocally(
+        'srv-c1',
+        { amount: 500, invoiceIds: ['srv-i1', 'srv-i1'], method: 'cash' },
+        options()
+      )
+    ).rejects.toMatchObject({ code: 'DUPLICATE_INVOICE_IDS' });
+  });
+
   it('parks the remainder as credit when credit is allowed', async () => {
     await twoBills();
 

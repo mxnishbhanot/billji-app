@@ -42,6 +42,8 @@ export const createFakeDatabase = (): FakeDatabase => {
 
     async getFirstAsync(source: string) {
       if (/PRAGMA user_version/i.test(source)) return { user_version: db.userVersion };
+      // SQLCipher canRead probe — a readable file answers.
+      if (/FROM sqlite_master/i.test(source)) return { ok: 1 };
       db.statements.push(source);
       return null;
     },

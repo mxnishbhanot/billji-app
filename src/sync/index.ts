@@ -13,6 +13,16 @@ export {
 } from './conflictResolver';
 export { DEVICE_ID_KEY, ensureDeviceSeries, getDeviceId } from './deviceSeries';
 export {
+  clearConflictServerRecord,
+  conflictServerKey,
+  readConflictServerRecord,
+  rebaseKeepLocal,
+  rebasePatch,
+  storeConflictServerRecord,
+  type KeepLocalResult,
+  type ServerRecordFetcher
+} from './keepLocal';
+export {
   CURSOR_KEY_PREFIX,
   PULL_COLLECTIONS,
   createPullEngine,
@@ -58,11 +68,17 @@ export {
 export {
   LAST_SYNC_KEY,
   autoSyncBlockedBy,
+  discardSyncIssue,
   formatLastSync,
   getSyncSnapshot,
+  keepLocalSyncIssue,
+  keepServerSyncIssue,
+  listSyncIssues,
   refreshSyncCounts,
+  reportLocalWriteFailure,
   resetSyncStatus,
   retrySync,
+  retrySyncIssue,
   subscribeToSync,
   syncNow,
   syncPhase,

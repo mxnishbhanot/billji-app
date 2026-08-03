@@ -1,10 +1,17 @@
 /**
  * The only module the rest of the app imports for local database access.
  *
- * Keeping every SQLite call behind this boundary is what makes the planned move to
- * op-sqlite (for SQLCipher encryption at rest) a driver swap rather than a rewrite.
+ * Keeping every SQLite call behind this boundary is what makes a future driver swap
+ * (if needed) a one-module change. Encryption at rest is SQLCipher via expo-sqlite.
  */
 export { DATABASE_NAME, closeDatabase, isDatabaseAvailable, openDatabase, resetDatabase } from './connection';
+export {
+  DB_ENCRYPTION_KEY,
+  clearDbEncryptionKey,
+  getOrCreateDbEncryptionKey,
+  pragmaKeySql
+} from './encryptionKey';
+export { pendingLocalSyncCount, wipeLocalBusinessData, type WipeLocalOptions } from './wipeLocalData';
 export {
   emitChange,
   resetChangeBus,

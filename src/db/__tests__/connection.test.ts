@@ -11,6 +11,14 @@ jest.mock('expo-sqlite', () => ({
   deleteDatabaseAsync: jest.fn(async () => undefined)
 }));
 
+jest.mock('@/store/sessionStorage', () => ({
+  sessionStorage: {
+    getItemAsync: jest.fn(async () => 'test-encryption-key'),
+    setItemAsync: jest.fn(async () => undefined),
+    deleteItemAsync: jest.fn(async () => undefined)
+  }
+}));
+
 const mockOpen = openDatabaseAsync as jest.MockedFunction<typeof openDatabaseAsync>;
 const mockDelete = deleteDatabaseAsync as jest.MockedFunction<typeof deleteDatabaseAsync>;
 
@@ -47,7 +55,10 @@ describe('openDatabase', () => {
   it('sets WAL and foreign keys before any migration runs', async () => {
     await openDatabase([migration(1)]);
 
-    expect(fake.statements.slice(0, 2)).toEqual(['PRAGMA journal_mode = WAL', 'PRAGMA foreign_keys = ON']);
+    expect(fake.statements[0]).toMatch(/^PRAGMA key = '/);
+    expect(fake.statements).toEqual(
+      expect.arrayContaining(['PRAGMA journal_mode = WAL', 'PRAGMA foreign_keys = ON'])
+    );
     // Both pragmas are invalid inside a transaction, so they must precede the schema work.
     expect(fake.statements.indexOf('PRAGMA foreign_keys = ON')).toBeLessThan(
       fake.statements.indexOf('CREATE TABLE t1 (id TEXT)')

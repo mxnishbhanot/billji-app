@@ -1,5 +1,12 @@
-import { hasLocalData, isDatabaseAvailable, isDatabaseUnavailable, isLocalRuleError, type EntityType } from '@/db';
+import {
+  hasLocalData,
+  isDatabaseAvailable,
+  isDatabaseUnavailable,
+  isLocalRuleError,
+  type EntityType
+} from '@/db';
 import { useAuthStore } from '@/store/authStore';
+import { refreshSyncCounts, reportLocalWriteFailure } from '@/sync/syncStatus';
 
 /**
  * The read switch. React Query's queryFn no longer decides where data comes from — this does,
@@ -34,13 +41,41 @@ export type LocalFirstOptions = {
 };
 
 /**
+ * A local write that may already have committed. Never retried against the network — that
+ * path is how offline creates get duplicated. The user is pointed at Sync Issues / Retry.
+ */
+export class LocalWriteFailedError extends Error {
+  readonly code = 'LOCAL_WRITE_FAILED' as const;
+
+  constructor(
+    message = 'Could not finish saving on this device. Check Sync Issues, then try again.',
+    options?: { cause?: unknown }
+  ) {
+    super(message);
+    this.name = 'LocalWriteFailedError';
+    if (options?.cause !== undefined) this.cause = options.cause;
+  }
+}
+
+export const isLocalWriteFailedError = (error: unknown): error is LocalWriteFailedError =>
+  error instanceof LocalWriteFailedError;
+
+const surfaceLocalWriteFailure = async (error: unknown) => {
+  try {
+    reportLocalWriteFailure((error as Error)?.message ?? 'Local save failed');
+    await refreshSyncCounts();
+  } catch {
+    // Badge projection is best-effort; the thrown LocalWriteFailedError is the user path.
+  }
+};
+
+/**
  * The write switch. Same rule as a read, one consequence more: a local write is the record —
  * it commits to SQLite and queues its own push, so the mutation returns without a network
  * call and the sync engine catches up later.
  *
- * The network path is not a fallback for a *failed* local write, it is the path taken when
- * there is no local store to write to (web) or no business to scope it by. A local write
- * that throws is rolled back whole, so retrying it against the server cannot duplicate it.
+ * The network path is taken only when there is no local store (web) or no business to scope
+ * by — never as a fallback after a local attempt that may already have committed. Fail closed.
  */
 export const localWrite = async <T>(local: (businessId: string) => Promise<T>, remote: () => Promise<T>): Promise<T> => {
   const businessId = activeBusinessId();
@@ -49,12 +84,15 @@ export const localWrite = async <T>(local: (businessId: string) => Promise<T>, r
   try {
     return await local(businessId);
   } catch (error) {
+    // Platform has no SQLite at all — there was no local attempt with side effects.
     if (isDatabaseUnavailable(error)) return remote();
-    // A rule the server enforces too — not enough stock for the sale as billed. Retrying it
-    // online would fail the same way, or succeed and produce a document nobody confirmed.
+    // Domain refusal (oversell, overpayment): same answer online; never invent a document.
     if (isLocalRuleError(error)) throw error;
-    console.warn('[localWrite] fell back to the network', error);
-    return remote();
+    if (isLocalWriteFailedError(error)) throw error;
+
+    console.warn('[localWrite] local write failed; not falling back to network', error);
+    await surfaceLocalWriteFailure(error);
+    throw new LocalWriteFailedError(undefined, { cause: error });
   }
 };
 

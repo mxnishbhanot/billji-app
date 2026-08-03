@@ -60,6 +60,8 @@ export type WireOperation = {
   opType: 'create' | 'update' | 'delete';
   clientId: string | null;
   targetId: string | null;
+  /** Server version the edit was authored against. Null/omitted on creates and older clients. */
+  baseVersion: number | null;
   payload: Record<string, unknown> | null;
 };
 
@@ -135,6 +137,8 @@ export const toWireOperation = (operation: OutboxOperation): WireOperation | nul
     // The device's local id, echoed back on create so the row can be matched to its record.
     clientId: (payload.clientId as string) ?? operation.entityLocalId,
     targetId: (payload.targetId as string) ?? (payload._id as string) ?? null,
+    // Optimistic concurrency: the server rejects when its version no longer matches.
+    baseVersion: operation.baseVersion,
     payload
   };
 };

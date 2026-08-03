@@ -5,8 +5,10 @@ import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppDialog } from '@/components/AppDialog';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { apiErrorMessage } from '@/api/client';
 import { authApi } from '@/api/endpoints';
+import { pendingLocalSyncCount, wipeLocalBusinessData } from '@/db/wipeLocalData';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
@@ -21,21 +23,36 @@ export function WorkspaceSwitcherSheet({ visible, onClose }: Props) {
   const queryClient = useQueryClient();
   const { showDialog } = useAppDialog();
   const setUser = useAuthStore((state) => state.setUser);
+  const currentBusinessId = useAuthStore((state) => state.user?.businessId ?? null);
   const [translateY] = useState(() => new Animated.Value(700));
   const [backdropOpacity] = useState(() => new Animated.Value(0));
+  const [pendingSwitchId, setPendingSwitchId] = useState<string | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.1);
 
   const businessesQuery = useQuery({ queryKey: queryKeys.businesses.all, queryFn: authApi.businesses, enabled: visible });
   const switchBusiness = useMutation({
     mutationFn: authApi.switchBusiness,
     onSuccess: async (user) => {
+      // Two businesses must never share one local file.
+      await wipeLocalBusinessData();
       await setUser(user);
-      // The active business changed — every scoped query is now stale.
+      queryClient.clear();
       await queryClient.invalidateQueries();
       onClose();
     },
     onError: (error) => showDialog({ title: 'Could not switch business', message: apiErrorMessage(error), tone: 'error' })
   });
+
+  const requestSwitch = async (businessId: string) => {
+    const pending = await pendingLocalSyncCount(currentBusinessId);
+    if (pending > 0) {
+      setPendingCount(pending);
+      setPendingSwitchId(businessId);
+      return;
+    }
+    switchBusiness.mutate(businessId);
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -71,7 +88,7 @@ export function WorkspaceSwitcherSheet({ visible, onClose }: Props) {
                 <Pressable
                   key={business.businessId}
                   disabled={business.current || switchBusiness.isPending}
-                  onPress={() => switchBusiness.mutate(business.businessId)}
+                  onPress={() => void requestSwitch(business.businessId)}
                   style={({ pressed }) => [
                     styles.option,
                     {
@@ -92,6 +109,19 @@ export function WorkspaceSwitcherSheet({ visible, onClose }: Props) {
           </ScrollView>
         </Animated.View>
       </View>
+
+      <ConfirmDialog
+        visible={Boolean(pendingSwitchId)}
+        title="Unsynced changes on this device"
+        message={`${pendingCount} change${pendingCount === 1 ? '' : 's'} have not synced for the current business. Switching discards the offline copy on this phone.`}
+        confirmLabel="Discard and switch"
+        onCancel={() => setPendingSwitchId(null)}
+        onConfirm={() => {
+          const id = pendingSwitchId;
+          setPendingSwitchId(null);
+          if (id) switchBusiness.mutate(id);
+        }}
+      />
     </Modal>
   );
 }

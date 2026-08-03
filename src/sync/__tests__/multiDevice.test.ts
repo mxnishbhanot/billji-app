@@ -5,6 +5,7 @@ import { recordInvoicePaymentLocally } from '../../db/paymentWrites';
 import { createProductLocally, deleteProductLocally, updateProductLocally } from '../../db/productWrites';
 import { localCustomerPage, localInvoice, localInvoicePage, localProductPage } from '../../db/readModel';
 import { createFakeServer, createTestDevice, type FakeServer, type TestDevice } from './fakeServer';
+import { rebaseKeepLocal } from '../keepLocal';
 
 /**
  * Two tills, one shop, one server.
@@ -142,7 +143,7 @@ describe('convergence', () => {
     expect(server.count('customers')).toBe(1);
   });
 
-  it('merges two devices editing different fields of one customer', async () => {
+  it('conflicts the later of two concurrent edits, and Keep local rebases it onto both', async () => {
     const { customerLocalId } = await sharedCatalogue();
     const vanCustomer = localIdFor(van, 'customers', serverIdOf(counter, 'customers', customerLocalId));
 
@@ -151,9 +152,18 @@ describe('convergence', () => {
 
     await counter.sync();
     await van.sync();
+
+    // The van authored its edit against the pre-phone version, so optimistic concurrency
+    // stops it rather than letting it write over a revision nobody on this device has seen.
+    const [conflicted] = await listOperations({ businessId: BIZ, entityType: 'customers', status: ['conflict'], txn: van.txn });
+    expect(conflicted).toMatchObject({ opType: 'update', entityLocalId: vanCustomer });
+
+    // Keep local: rebase the van's field onto the counter's revision and push that.
+    await rebaseKeepLocal(conflicted.opId, { businessId: BIZ, txn: van.txn, now: van.clock() });
+    await van.sync();
     await counter.sync();
 
-    // Each device sent only what it changed, so neither claimed the other's field as its own.
+    // Neither field claimed the other: both survive once the conflict is resolved.
     const [onCounter] = (await localCustomerPage(BIZ, {}, counter.txn)).customers;
     expect(onCounter).toMatchObject({ phone: '9111111111', email: 'ramesh@example.com' });
   });

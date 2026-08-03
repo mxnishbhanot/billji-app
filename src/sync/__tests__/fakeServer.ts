@@ -22,9 +22,8 @@ import { createPushEngine, type PushResponse, type PushResult, type PushTranspor
  *   - a receipt is allocated *here*, greedily, oldest first, against the server's balances
  *   - updatedAt is monotonic, so the cursor is total-ordered and pull is replayable
  *
- * What is not: permissions, GST maths, the ledger, and update-conflict detection — the wire
- * carries no baseVersion (see pushEngine.toWireOperation), so an update is last-write-wins
- * here exactly as it is against the real /sync/push.
+ * What is not: permissions, GST maths, the ledger. Update conflicts honour baseVersion when
+ * the client sends it (same as production); older clients that omit it stay last-write-wins.
  */
 
 export type ServerRecord = Record<string, unknown> & {
@@ -53,7 +52,9 @@ class Refusal extends Error {
     readonly statusCode: number,
     readonly code: string,
     message: string,
-    readonly status: 'conflict' | 'rejected' = 'rejected'
+    readonly status: 'conflict' | 'rejected' = 'rejected',
+    /** A VERSION_CONFLICT carries the current record, the same as /sync/push does. */
+    readonly record: ServerRecord | null = null
   ) {
     super(message);
   }
@@ -242,7 +243,11 @@ export const createFakeServer = ({ startedAt = '2026-08-02T10:00:00.000Z', idPre
       target.deletedAt = stamp();
       touch(target);
     } else {
-      // No baseVersion on the wire, so this is last-write-wins — the same as production.
+      if (op.baseVersion != null && Number(target.version) !== Number(op.baseVersion)) {
+        throw new Refusal(409, 'VERSION_CONFLICT', 'This record changed since your last edit', 'conflict', {
+          ...target
+        });
+      }
       Object.assign(target, payload);
       touch(target);
     }
@@ -275,7 +280,9 @@ export const createFakeServer = ({ startedAt = '2026-08-02T10:00:00.000Z', idPre
           status: error.status,
           statusCode: error.statusCode,
           code: error.code,
-          message: error.message
+          message: error.message,
+          version: error.record ? error.record.version : null,
+          record: error.record
         });
       }
     }

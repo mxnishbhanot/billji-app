@@ -30,6 +30,7 @@
       "versionCode": 1,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": ["POST_NOTIFICATIONS"],
+      "allowBackup": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FC7A0E"
@@ -40,7 +41,13 @@
       [
         "expo-secure-store",
         {
-          "configureAndroidBackup": true
+          "configureAndroidBackup": false
+        }
+      ],
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
         }
       ],
       "expo-sharing",

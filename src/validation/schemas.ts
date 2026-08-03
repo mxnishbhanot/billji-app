@@ -11,7 +11,14 @@ export const resetPasswordSchema = z
     confirmPassword: z.string().min(1, 'Confirm your password')
   })
   .refine((data) => data.password === data.confirmPassword, { message: 'Passwords do not match', path: ['confirmPassword'] });
-export const customerSchema = z.object({ name: z.string().trim().min(1, 'Customer name is required').max(120), phone: z.string().trim().regex(/^\d{10}$/, 'Phone must be exactly 10 digits'), countryCode: z.string().default('+91'), email: z.union([z.literal(''), z.email('Enter a valid email')]).optional(), address: z.string().max(500).optional() });
+export const customerSchema = z.object({
+  name: z.string().trim().min(1, 'Customer name is required').max(120),
+  phone: z.string().trim().regex(/^\d{10}$/, 'Phone must be exactly 10 digits'),
+  countryCode: z.string().default('+91'),
+  email: z.union([z.literal(''), z.email('Enter a valid email')]).optional(),
+  address: z.string().max(500).optional(),
+  gstNumber: z.union([z.literal(''), z.string().trim().refine(isValidGstin, 'Enter a valid 15-character GSTIN')]).optional()
+});
 const decimalAmount = (label: string) =>
   z.string().trim().min(1, `${label} is required`)
     .refine((v) => /^\d+(\.\d{1,2})?$/.test(v), `Enter a valid ${label.toLowerCase()}`)

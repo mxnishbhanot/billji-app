@@ -4,6 +4,7 @@ import { upsertEntityRow } from '../db/entityRepository';
 import { fromRow, isUuid, toRow, type EntityRow, type EntityType, type MongoDoc } from '../db/mappers';
 import { listOperations, type OutboxOperation } from '../db/outbox';
 import { withTransaction } from '../db/transaction';
+import { storeConflictServerRecord } from './keepLocal';
 
 /**
  * What the local row learns from a push result.
@@ -192,7 +193,12 @@ export const acknowledgePush = async (
 
     if (result.status === 'conflict') {
       // The user has to choose. The row says so, and the operation stays in `conflict`
-      // alongside it — see queueManager.settle.
+      // alongside it — see queueManager.settle. Stash the server record when the 409
+      // carried one so Keep Local can rebase onto that version.
+      await storeConflictServerRecord(operation.opId, result.record as MongoDoc | null | undefined, {
+        txn: db,
+        now
+      });
       await db.runAsync(`UPDATE ${entity} SET sync_state = 'conflict' WHERE local_id = ?`, operation.entityLocalId);
       emitChange({ entity, type: 'updated', localId: operation.entityLocalId, origin: 'sync' });
       return;

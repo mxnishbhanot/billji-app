@@ -771,6 +771,7 @@ export type CustomerFormValues = {
   countryCode?: string;
   email?: string;
   address?: string;
+  gstNumber?: string;
 };
 
 export type ProductFormValues = {
