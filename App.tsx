@@ -20,6 +20,7 @@ import { AppDialogProvider } from '@/components/AppDialog';
 import { AppToastProvider } from '@/components/AppToast';
 import { queryClient } from '@/query/queryClient';
 import { queryPersistOptions } from '@/query/persistence';
+import { setupChangeBridge } from '@/query/changeBridge';
 import { setupNetworkBridge } from '@/query/networkBridge';
 import { reportsApi } from '@/api/endpoints';
 import { queryKeys } from '@/shared/query/queryKeys';
@@ -75,6 +76,8 @@ function App() {
 
   useEffect(() => { void hydrate(); }, [hydrate]);
   useEffect(() => setupNetworkBridge(), []);
+  // Local writes and sync merges invalidate the queries they affect — see changeBridge.
+  useEffect(() => setupChangeBridge(queryClient), []);
   useEffect(() => { void initAnalytics(); }, []);
   // Push the signed-in identity to analytics on login and clear it on logout,
   // without coupling authStore to the analytics module. Seed once for the

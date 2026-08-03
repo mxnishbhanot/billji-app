@@ -24,10 +24,16 @@ import {
 const PICKER_PAGE_SIZE = 20;
 
 type StockWarning = { items: StockShortage[]; payload: InvoiceCreatePayload };
-type ApiErrorWithDetails = { response?: { data?: { details?: { code?: string; items?: StockShortage[] } } } };
+type StockDetails = { code?: string; items?: StockShortage[] };
+type ApiErrorWithDetails = { response?: { data?: { details?: StockDetails } }; details?: StockDetails };
 
+/**
+ * The shortfall behind a refused sale, from either path: the server's 409, or the same
+ * refusal raised locally when the bill is being written offline (db/errors.LocalRuleError).
+ */
 const stockShortagesFromError = (error: unknown) => {
-  const details = (error as ApiErrorWithDetails)?.response?.data?.details;
+  const wrapped = error as ApiErrorWithDetails;
+  const details = wrapped?.response?.data?.details ?? wrapped?.details;
   return details?.code === 'INSUFFICIENT_STOCK' && Array.isArray(details.items) ? details.items : null;
 };
 

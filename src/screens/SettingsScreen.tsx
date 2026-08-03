@@ -18,6 +18,7 @@ import { BrandMark } from '@/components/BrandMark';
 import { SecuritySessionsSheet } from '@/components/SecuritySessionsSheet';
 import { WorkspaceSwitcherSheet } from '@/components/WorkspaceSwitcherSheet';
 import { Screen } from '@/components/Screen';
+import { PendingBadge } from '@/components/SyncStatus';
 import { AppNavigation } from '@/navigation/types';
 import { unregisterFromPush } from '@/services/push';
 import { disconnectSocket } from '@/services/socket';
@@ -485,6 +486,15 @@ export function SettingsScreen() {
           subtitle="Choose which alerts you see"
           tone={colors.violet}
           onPress={() => navigation.navigate('NotificationSettings')}
+        />
+        <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
+        <SettingsRow
+          icon="cloud-sync-outline"
+          title="Sync & storage"
+          subtitle="Offline sync, Wi-Fi only, cached data"
+          tone={colors.primary}
+          onPress={() => navigation.navigate('SyncSettings')}
+          trailing={<PendingBadge />}
         />
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow icon="shield-key-outline" title="Security & Sessions" subtitle="See where you're signed in" tone={colors.warning} onPress={() => setSessionsSheetVisible(true)} />

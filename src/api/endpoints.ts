@@ -1,4 +1,57 @@
+import {
+  canIssueDocumentsLocally,
+  canServeCustomersLocally,
+  canServeInvoicesLocally,
+  canServeProductsLocally,
+  createCustomerLocally,
+  createExpenseLocally,
+  createInvoiceLocally,
+  createProductLocally,
+  createPurchaseLocally,
+  createSupplierLocally,
+  deleteCustomerLocally,
+  deleteExpenseLocally,
+  deleteProductLocally,
+  findCustomerByAnyId,
+  findExpenseByAnyId,
+  findProductByAnyId,
+  findSupplierByAnyId,
+  localExpenseList,
+  localPurchases,
+  localVendors,
+  updateCustomerLocally,
+  updateExpenseLocally,
+  updateProductLocally,
+  updateSupplierLocally,
+  type CustomerDoc,
+  type CustomerRecord,
+  type ExpenseDoc,
+  type ExpenseRecord,
+  type InvoiceRecord,
+  type PaymentRecord,
+  type LocalExpenseQuery,
+  type LocalPurchaseQuery,
+  type PurchaseDoc,
+  type PurchaseRecord,
+  type ProductDoc,
+  type ProductRecord,
+  type SupplierDoc,
+  type SupplierRecord,
+  localCustomerOutstanding,
+  localCustomerPage,
+  localInvoice,
+  localInvoicePage,
+  localPayments,
+  recordCustomerPaymentLocally,
+  recordInvoicePaymentLocally,
+  localProductCategories,
+  localProductPage
+} from '@/db';
+// The header constants only, imported from the engine module rather than the sync barrel:
+// the barrel pulls in deviceSeries, which imports this file.
+import { SYNC_DEVICE_HEADER, SYNC_PROTOCOL_HEADER, SYNC_PROTOCOL_VERSION } from '../sync/pushEngine';
 import { api } from './client';
+import { localFirst, localWrite } from './localFirst';
 import {
   AuditLogEntry,
   AuthSession,
@@ -140,22 +193,105 @@ export const rolesApi = {
   remove: (id: string) => api.delete<{ success: boolean }>(`/roles/${id}`).then((res) => res.data)
 };
 
+// Reads below are local-first: SQLite when the collection is synced and the query is one the
+// device can answer, the API otherwise. Shapes and signatures are unchanged — see localFirst.
+
+/**
+ * A stored product as the screens expect it. Before the first push there is no server id, so
+ * the local id stands in — the same substitution the local read model makes, which is what
+ * lets an offline-created product be edited and deleted like any other.
+ */
+const asProduct = (record: ProductRecord): Product =>
+  ({ ...(record.doc ?? {}), _id: record.doc?._id ?? record.localId }) as Product;
+
 export const productsApi = {
-  list: (params?: ProductQuery) => api.get<{ products: Product[] }>('/products', { params }).then((res) => res.data.products),
-  page: (params: ProductQuery) => api.get<ProductPage>('/products', { params: { ...params, paginated: true } }).then((res) => res.data),
-  categories: () => api.get<{ success: boolean; categories: string[] }>('/products/categories').then((res) => res.data.categories),
-  create: (payload: ProductFormValues | Partial<Product>) => api.post<{ product: Product }>('/products', payload).then((res) => res.data.product),
-  update: (id: string, payload: ProductFormValues | Partial<Product>) => api.patch<{ product: Product }>(`/products/${id}`, payload).then((res) => res.data.product),
+  list: (params?: ProductQuery) =>
+    localFirst(
+      { entity: 'products', supported: canServeProductsLocally(params ?? {}) },
+      async (businessId) => (await localProductPage(businessId, { ...params, page: 1, limit: params?.limit ?? 200 })).products,
+      () => api.get<{ products: Product[] }>('/products', { params }).then((res) => res.data.products)
+    ),
+  page: (params: ProductQuery) =>
+    localFirst(
+      { entity: 'products', supported: canServeProductsLocally(params) },
+      (businessId) => localProductPage(businessId, params),
+      () => api.get<ProductPage>('/products', { params: { ...params, paginated: true } }).then((res) => res.data)
+    ),
+  categories: () =>
+    localFirst(
+      { entity: 'products' },
+      (businessId) => localProductCategories(businessId),
+      () => api.get<{ success: boolean; categories: string[] }>('/products/categories').then((res) => res.data.categories)
+    ),
+  // Writes are local-first too: the row and its queued push commit together, so a product
+  // created on a train exists immediately and reaches the server when the phone does.
+  create: (payload: ProductFormValues | Partial<Product>) =>
+    localWrite(
+      async (businessId) => asProduct(await createProductLocally(payload as ProductDoc, { businessId })),
+      () => api.post<{ product: Product }>('/products', payload).then((res) => res.data.product)
+    ),
+  update: (id: string, payload: ProductFormValues | Partial<Product>) =>
+    localWrite(async (businessId) => {
+      const existing = await findProductByAnyId(id);
+      // Nothing local under that id — it belongs to a collection this device has not synced.
+      if (!existing) return api.patch<{ product: Product }>(`/products/${id}`, payload).then((res) => res.data.product);
+
+      const updated = await updateProductLocally(existing.localId, payload as Partial<ProductDoc>, { businessId });
+      if (!updated) throw new Error('That product no longer exists on this device');
+      return asProduct(updated);
+    }, () => api.patch<{ product: Product }>(`/products/${id}`, payload).then((res) => res.data.product)),
   stockMovementsPage: (id: string, params: ProductStockMovementQuery) => api.get<ProductStockHistory>(`/products/${id}/stock-movements`, { params: { ...params, paginated: true } }).then((res) => res.data),
-  remove: (id: string) => api.delete(`/products/${id}`).then((res) => res.data)
+  remove: (id: string) =>
+    localWrite(async (businessId) => {
+      const existing = await findProductByAnyId(id);
+      if (!existing) return api.delete(`/products/${id}`).then((res) => res.data);
+      await deleteProductLocally(existing.localId, { businessId });
+      return { success: true };
+    }, () => api.delete(`/products/${id}`).then((res) => res.data))
 };
 
+/** A stored customer as the screens expect it — see asProduct for why the id can be local. */
+const asCustomer = (record: CustomerRecord): Customer =>
+  ({ ...(record.doc ?? {}), _id: record.doc?._id ?? record.localId }) as Customer;
+
 export const customersApi = {
-  list: (params?: CustomerQuery) => api.get<{ customers: Customer[] }>('/customers', { params }).then((res) => res.data.customers),
-  page: (params: CustomerQuery) => api.get<CustomerPage>('/customers', { params: { ...params, paginated: true } }).then((res) => res.data),
-  create: (payload: CustomerFormValues | Partial<Customer>) => api.post<{ customer: Customer }>('/customers', payload).then((res) => res.data.customer),
-  update: (id: string, payload: CustomerFormValues | Partial<Customer>) => api.patch<{ customer: Customer }>(`/customers/${id}`, payload).then((res) => res.data.customer),
-  remove: (id: string) => api.delete(`/customers/${id}`).then((res) => res.data)
+  list: (params?: CustomerQuery) =>
+    localFirst(
+      { entity: 'customers', supported: canServeCustomersLocally(params ?? {}) },
+      async (businessId) =>
+        (await localCustomerPage(businessId, { ...params, page: 1, limit: params?.limit ?? 200 })).customers,
+      () => api.get<{ customers: Customer[] }>('/customers', { params }).then((res) => res.data.customers)
+    ),
+  page: (params: CustomerQuery) =>
+    localFirst(
+      { entity: 'customers', supported: canServeCustomersLocally(params) },
+      (businessId) => localCustomerPage(businessId, params),
+      () => api.get<CustomerPage>('/customers', { params: { ...params, paginated: true } }).then((res) => res.data)
+    ),
+  // Writes are local-first, exactly as products are: the row and its queued push commit
+  // together, so a customer added at the counter with no signal exists immediately.
+  create: (payload: CustomerFormValues | Partial<Customer>) =>
+    localWrite(
+      async (businessId) => asCustomer(await createCustomerLocally(payload as CustomerDoc, { businessId })),
+      () => api.post<{ customer: Customer }>('/customers', payload).then((res) => res.data.customer)
+    ),
+  update: (id: string, payload: CustomerFormValues | Partial<Customer>) =>
+    localWrite(async (businessId) => {
+      const existing = await findCustomerByAnyId(id);
+      // Nothing local under that id — it belongs to a collection this device has not synced.
+      if (!existing) return api.patch<{ customer: Customer }>(`/customers/${id}`, payload).then((res) => res.data.customer);
+
+      const updated = await updateCustomerLocally(existing.localId, payload as Partial<CustomerDoc>, { businessId });
+      if (!updated) throw new Error('That customer no longer exists on this device');
+      return asCustomer(updated);
+    }, () => api.patch<{ customer: Customer }>(`/customers/${id}`, payload).then((res) => res.data.customer)),
+  remove: (id: string) =>
+    localWrite(async (businessId) => {
+      const existing = await findCustomerByAnyId(id);
+      if (!existing) return api.delete(`/customers/${id}`).then((res) => res.data);
+      await deleteCustomerLocally(existing.localId, { businessId });
+      return { success: true };
+    }, () => api.delete(`/customers/${id}`).then((res) => res.data))
 };
 
 export const draftsApi = {
@@ -164,16 +300,90 @@ export const draftsApi = {
   remove: (localDraftId: string) => api.delete(`/drafts/${localDraftId}`).then((res) => res.data)
 };
 
+/**
+ * The sync protocol's own calls. Device registration is here rather than in the sync engine
+ * because it is an ordinary authenticated request — the engine consumes it, it does not own it.
+ */
+export type DeviceSeriesResponse = {
+  deviceId: string;
+  deviceIndex: number;
+  segment: string;
+  documentType: string;
+  prefix: string;
+  financialYear: string;
+  /** Last sequence issued in this series; the device's counter starts above it. */
+  currentSequence: number;
+  maxDeviceIndex: number;
+};
+
+export const syncApi = {
+  registerDevice: (payload: { deviceId: string; name?: string; platform?: 'android' | 'ios' | 'web' }) =>
+    api
+      .post<{ series: DeviceSeriesResponse }>('/sync/device', payload, {
+        headers: { [SYNC_PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION), [SYNC_DEVICE_HEADER]: payload.deviceId }
+      })
+      .then((res) => res.data.series)
+};
+
+/** A stored sales document as the screens expect it — see asProduct for the id fallback. */
+const asInvoice = (record: InvoiceRecord): Invoice =>
+  ({ ...(record.doc ?? {}), _id: record.doc?._id ?? record.localId }) as Invoice;
+
 export const invoicesApi = {
-  list: (params?: InvoiceQuery) => api.get<{ invoices: Invoice[] }>('/invoices', { params }).then((res) => res.data.invoices),
+  list: (params?: InvoiceQuery) =>
+    localFirst(
+      { entity: 'invoices', supported: canServeInvoicesLocally(params ?? {}) },
+      async (businessId) => (await localInvoicePage(businessId, { ...params, page: 1, limit: params?.limit ?? 200 })).invoices,
+      () => api.get<{ invoices: Invoice[] }>('/invoices', { params }).then((res) => res.data.invoices)
+    ),
   lastForCustomer: (customerId: string) =>
-    api.get<{ invoices: Invoice[] }>('/invoices', { params: { customerId, sort: 'newest', limit: 1 } }).then((res) => res.data.invoices[0] ?? null),
-  page: (params: InvoiceQuery) => api.get<InvoicePage>('/invoices', { params: { ...params, paginated: true } }).then((res) => res.data),
-  create: (payload: InvoiceCreatePayload) =>
-    api.post<{ invoice: Invoice }>('/invoices', payload, { headers: { 'Idempotency-Key': idempotencyKey('invoice') } }).then((res) => res.data.invoice),
+    localFirst(
+      { entity: 'invoices' },
+      async (businessId) =>
+        (await localInvoicePage(businessId, { customerId, sort: 'newest', page: 1, limit: 1 })).invoices[0] ?? null,
+      () =>
+        api.get<{ invoices: Invoice[] }>('/invoices', { params: { customerId, sort: 'newest', limit: 1 } }).then((res) => res.data.invoices[0] ?? null)
+    ),
+  page: (params: InvoiceQuery) =>
+    localFirst(
+      { entity: 'invoices', supported: canServeInvoicesLocally(params) },
+      (businessId) => localInvoicePage(businessId, params),
+      () => api.get<InvoicePage>('/invoices', { params: { ...params, paginated: true } }).then((res) => res.data)
+    ),
+  /**
+   * Issuing a bill. Local-first once the device holds a numbering series: the document, its
+   * number and its queued push commit together, so the customer gets a final, permanent
+   * invoice number with no network at all.
+   *
+   * Until a series has been allocated (first run, or a device that has never been online) the
+   * number would have to be invented, and an invented GST number can collide with another
+   * device's. So that case goes to the server, which is the only party that can number safely.
+   */
+  create: async (payload: InvoiceCreatePayload) => {
+    const online = () =>
+      api
+        .post<{ invoice: Invoice }>('/invoices', payload, { headers: { 'Idempotency-Key': idempotencyKey('invoice') } })
+        .then((res) => res.data.invoice);
+
+    return localWrite(async (businessId) => {
+      if (!(await canIssueDocumentsLocally())) return online();
+      const { record } = await createInvoiceLocally(payload as unknown as Record<string, unknown>, {
+        businessId,
+        // Refused with the shortfall unless the user has already confirmed the force sale —
+        // the same contract the server applies, so one screen handles both paths.
+        allowOversell: payload.allowOversell === true
+      });
+      return asInvoice(record);
+    }, online);
+  },
   preview: (payload: InvoiceCreatePayload) =>
     api.post<string>('/invoices/preview', payload, { responseType: 'text', transformResponse: (data) => data }).then((res) => res.data),
-  get: (id: string) => api.get<{ invoice: Invoice }>(`/invoices/${id}`).then((res) => res.data.invoice),
+  get: (id: string) =>
+    localFirst(
+      { entity: 'invoices' },
+      async (businessId) => (await localInvoice(businessId, id)) ?? Promise.reject(new Error('not held locally')),
+      () => api.get<{ invoice: Invoice }>(`/invoices/${id}`).then((res) => res.data.invoice)
+    ),
   status: (id: string, status: string, cancelReason?: string) =>
     api.patch<{ invoice: Invoice }>(`/invoices/${id}/status`, { status, ...(cancelReason ? { cancelReason } : {}) }).then((res) => res.data.invoice),
   duplicate: (id: string) => api.post<{ invoice: Invoice }>(`/invoices/${id}/duplicate`).then((res) => res.data.invoice),
@@ -221,52 +431,161 @@ export const ordersApi = {
     api.post<{ order: Order }>(`/orders/${id}/cancel`, {}, { headers: { 'Idempotency-Key': idempotencyKey(`order-cancel-${id}`) } }).then((res) => res.data.order)
 };
 
+/**
+ * A stored receipt in the response shape the screens expect. Allocation, the customer balance
+ * and the ledger are server-computed, so the local answer states only what it knows: the
+ * receipt itself. Both call sites read the mutation's success, not its body.
+ */
+const asPaymentResult = (record: PaymentRecord): RecordPaymentResponse => ({
+  success: true,
+  payment: { ...(record.doc ?? {}), _id: record.doc?._id ?? record.localId } as Payment,
+  allocation: null,
+  invoice: null as unknown as Invoice,
+  customerBalance: null
+});
+
 export const paymentsApi = {
-  list: (params?: { invoiceId?: string; customerId?: string }) => api.get<{ payments: Payment[] }>('/payments', { params }).then((res) => res.data.payments),
-  recordInvoicePayment: (invoiceId: string, payload: RecordPaymentPayload) =>
-    api
-      .post<RecordPaymentResponse>(`/payments/invoices/${invoiceId}/record`, payload, {
-        headers: { 'Idempotency-Key': idempotencyKey(`payment-${invoiceId}`) }
-      })
-      .then((res) => res.data),
+  list: (params?: { invoiceId?: string; customerId?: string }) =>
+    localFirst(
+      { entity: 'payments' },
+      (businessId) => localPayments(businessId, params ?? {}),
+      () => api.get<{ payments: Payment[] }>('/payments', { params }).then((res) => res.data.payments)
+    ),
+  /**
+   * Money against one bill. Local-first: cash that crossed the counter is recorded before
+   * anything else can go wrong, and the queue carries it to the server. The server owns what
+   * the receipt settles — this only records that it was taken.
+   */
+  recordInvoicePayment: (invoiceId: string, payload: RecordPaymentPayload) => {
+    const online = () =>
+      api
+        .post<RecordPaymentResponse>(`/payments/invoices/${invoiceId}/record`, payload, {
+          headers: { 'Idempotency-Key': idempotencyKey(`payment-${invoiceId}`) }
+        })
+        .then((res) => res.data);
+
+    return localWrite(async (businessId) => {
+      const { record } = await recordInvoicePaymentLocally(invoiceId, payload, { businessId });
+      return asPaymentResult(record);
+    }, online);
+  },
   customerOutstanding: (customerId: string) =>
-    api.get<CustomerOutstanding>(`/payments/customers/${customerId}/outstanding`).then((res) => res.data),
+    localFirst(
+      { entity: 'invoices' },
+      (businessId) => localCustomerOutstanding(businessId, customerId),
+      () => api.get<CustomerOutstanding>(`/payments/customers/${customerId}/outstanding`).then((res) => res.data)
+    ),
   markRefundProcessed: (invoiceId: string) =>
     api
       .post<{ payments: Payment[] }>(`/payments/invoices/${invoiceId}/refund-processed`, {}, {
         headers: { 'Idempotency-Key': idempotencyKey(`refund-${invoiceId}`) }
       })
       .then((res) => res.data.payments),
-  recordCustomerPayment: (customerId: string, payload: CustomerPaymentPayload) =>
-    api
-      .post<CustomerPaymentResponse>(`/payments/customers/${customerId}/record`, payload, {
-        headers: { 'Idempotency-Key': idempotencyKey(`cust-payment-${customerId}`) }
-      })
-      .then((res) => res.data)
+  /** One payment settling several of a customer's bills — the dues-collection path. */
+  recordCustomerPayment: (customerId: string, payload: CustomerPaymentPayload) => {
+    const online = () =>
+      api
+        .post<CustomerPaymentResponse>(`/payments/customers/${customerId}/record`, payload, {
+          headers: { 'Idempotency-Key': idempotencyKey(`cust-payment-${customerId}`) }
+        })
+        .then((res) => res.data);
+
+    return localWrite(async (businessId) => {
+      const { record } = await recordCustomerPaymentLocally(customerId, payload, { businessId });
+      const result = asPaymentResult(record);
+      return { success: true, payment: result.payment, allocations: [], invoices: [], customerBalance: null };
+    }, online);
+  }
 };
+
+/** A stored expense as the screens expect it — see asProduct for the id fallback. */
+const asExpense = (record: ExpenseRecord): Expense =>
+  ({ ...(record.doc ?? {}), _id: record.doc?._id ?? record.localId }) as Expense;
 
 export const expensesApi = {
-  list: (params?: { search?: string; category?: string; from?: string; to?: string }) =>
-    api.get<ExpenseListResponse>('/expenses', { params }).then((res) => res.data),
+  list: (params?: LocalExpenseQuery) =>
+    localFirst(
+      { entity: 'expenses' },
+      (businessId) => localExpenseList(businessId, params ?? {}),
+      () => api.get<ExpenseListResponse>('/expenses', { params }).then((res) => res.data)
+    ),
   create: (payload: ExpensePayload) =>
-    api.post<{ expense: Expense }>('/expenses', payload, { headers: { 'Idempotency-Key': idempotencyKey('expense') } }).then((res) => res.data.expense),
-  update: (id: string, payload: ExpensePayload) => api.patch<{ expense: Expense }>(`/expenses/${id}`, payload).then((res) => res.data.expense),
-  remove: (id: string) => api.delete<{ expense: Expense }>(`/expenses/${id}`).then((res) => res.data.expense)
+    localWrite(
+      async (businessId) => asExpense(await createExpenseLocally(payload as ExpenseDoc, { businessId })),
+      () =>
+        api
+          .post<{ expense: Expense }>('/expenses', payload, { headers: { 'Idempotency-Key': idempotencyKey('expense') } })
+          .then((res) => res.data.expense)
+    ),
+  update: (id: string, payload: ExpensePayload) =>
+    localWrite(async (businessId) => {
+      const existing = await findExpenseByAnyId(id);
+      if (!existing) return api.patch<{ expense: Expense }>(`/expenses/${id}`, payload).then((res) => res.data.expense);
+
+      const updated = await updateExpenseLocally(existing.localId, payload as Partial<ExpenseDoc>, { businessId });
+      if (!updated) throw new Error('That expense no longer exists on this device');
+      return asExpense(updated);
+    }, () => api.patch<{ expense: Expense }>(`/expenses/${id}`, payload).then((res) => res.data.expense)),
+  remove: (id: string) =>
+    localWrite(async (businessId) => {
+      const existing = await findExpenseByAnyId(id);
+      if (!existing) return api.delete<{ expense: Expense }>(`/expenses/${id}`).then((res) => res.data.expense);
+      await deleteExpenseLocally(existing.localId, { businessId });
+      return asExpense(existing);
+    }, () => api.delete<{ expense: Expense }>(`/expenses/${id}`).then((res) => res.data.expense))
 };
 
+/** A stored purchase bill as the screens expect it — see asProduct for the id fallback. */
+const asPurchase = (record: PurchaseRecord): PurchaseBill =>
+  ({ ...(record.doc ?? {}), _id: record.doc?._id ?? record.localId }) as PurchaseBill;
+
+/** A stored supplier as the purchase sheet expects it — see asProduct for the id fallback. */
+const asVendor = (record: SupplierRecord): Vendor =>
+  ({ ...(record.doc ?? {}), _id: record.doc?._id ?? record.localId }) as Vendor;
+
 export const purchasesApi = {
-  list: (params?: { search?: string; status?: string; vendorId?: string }) =>
-    api.get<{ purchases: PurchaseBill[] }>('/purchases', { params }).then((res) => res.data.purchases),
+  list: (params?: LocalPurchaseQuery) =>
+    localFirst(
+      { entity: 'purchases' },
+      (businessId) => localPurchases(businessId, params ?? {}),
+      () => api.get<{ purchases: PurchaseBill[] }>('/purchases', { params }).then((res) => res.data.purchases)
+    ),
+  // Online only: the bill's payments are not held locally, so a local answer would show a
+  // settled bill as unpaid.
   get: (id: string) => api.get<{ purchase: PurchaseBill; payments: Payment[] }>(`/purchases/${id}`).then((res) => res.data),
   create: (payload: PurchaseCreatePayload) =>
-    api
-      .post<{ purchase: PurchaseBill }>('/purchases', payload, { headers: { 'Idempotency-Key': idempotencyKey('purchase') } })
-      .then((res) => res.data.purchase),
+    localWrite(
+      async (businessId) => asPurchase(await createPurchaseLocally(payload as PurchaseDoc, { businessId })),
+      () =>
+        api
+          .post<{ purchase: PurchaseBill }>('/purchases', payload, { headers: { 'Idempotency-Key': idempotencyKey('purchase') } })
+          .then((res) => res.data.purchase)
+    ),
   cancel: (id: string, cancelReason?: string) =>
     api.post<{ purchase: PurchaseBill }>(`/purchases/${id}/cancel`, { cancelReason }).then((res) => res.data.purchase),
 
-  vendors: (search?: string) => api.get<{ vendors: Vendor[] }>('/purchases/vendors', { params: { search } }).then((res) => res.data.vendors),
-  createVendor: (payload: Partial<Vendor>) => api.post<{ vendor: Vendor }>('/purchases/vendors', payload).then((res) => res.data.vendor),
+  // Suppliers are local-first, reads and writes: the purchase sheet has to be able to add a
+  // vendor at the godown gate. The bills themselves stay online-only — see purchasesApi.create.
+  vendors: (search?: string) =>
+    localFirst(
+      { entity: 'suppliers' },
+      (businessId) => localVendors(businessId, search),
+      () => api.get<{ vendors: Vendor[] }>('/purchases/vendors', { params: { search } }).then((res) => res.data.vendors)
+    ),
+  createVendor: (payload: Partial<Vendor>) =>
+    localWrite(
+      async (businessId) => asVendor(await createSupplierLocally(payload as SupplierDoc, { businessId })),
+      () => api.post<{ vendor: Vendor }>('/purchases/vendors', payload).then((res) => res.data.vendor)
+    ),
+  updateVendor: (id: string, payload: Partial<Vendor>) =>
+    localWrite(async (businessId) => {
+      const existing = await findSupplierByAnyId(id);
+      if (!existing) return api.patch<{ vendor: Vendor }>(`/purchases/vendors/${id}`, payload).then((res) => res.data.vendor);
+
+      const updated = await updateSupplierLocally(existing.localId, payload as Partial<SupplierDoc>, { businessId });
+      if (!updated) throw new Error('That supplier no longer exists on this device');
+      return asVendor(updated);
+    }, () => api.patch<{ vendor: Vendor }>(`/purchases/vendors/${id}`, payload).then((res) => res.data.vendor)),
   vendorOutstanding: (id: string) => api.get<VendorOutstanding>(`/purchases/vendors/${id}/outstanding`).then((res) => res.data),
   payVendor: (id: string, payload: VendorPaymentPayload) =>
     api
