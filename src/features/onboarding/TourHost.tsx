@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Dimensions, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { BackHandler, Dimensions, Pressable, StyleSheet, View } from 'react-native';
 import { Button, Text, useTheme } from 'react-native-paper';
 import Reanimated, {
   Easing,
@@ -70,9 +70,11 @@ function useAnchorRect(anchorId: string | undefined, winW: number, winH: number)
     let last: AnchorRect | null = null;
     const same = (a: AnchorRect | null, b: AnchorRect) =>
       !!a && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
-    // Keep measuring and let the cutout follow — the target may still be scrolling
-    // into view when the tour opens. Lock in only once the position stops changing
-    // (two identical reads), so we never freeze onto a mid-scroll frame.
+    // Keep measuring for the whole poll window and let the cutout follow — the target
+    // may still be scrolling into view (DashboardScreen animates scrollTo when a step
+    // targets Reports). Never stop early on a stable read: an animated scroll reads
+    // identical twice before it starts moving, which used to freeze the cutout on the
+    // pre-scroll position.
     const attempt = async () => {
       const result = await measureAnchor(anchorId);
       if (cancelled) return;
@@ -80,7 +82,6 @@ function useAnchorRect(anchorId: string | undefined, winW: number, winH: number)
         // Only commit when the rect actually moved — an unchanged read must not
         // re-render the host (the cutout/tooltip positions are state now).
         if (!same(last, result)) setMeasured({ id: anchorId, rect: result });
-        else clearInterval(id);
         last = result;
       }
       if (++tries > ANCHOR_POLL_TRIES) clearInterval(id); // hard cap ~4s
@@ -133,6 +134,11 @@ function SpotlightTour() {
 
   const rect = useAnchorRect(step?.anchorId, winW, winH);
   const [tooltipH, setTooltipH] = useState(0);
+  // Own size, not Dimensions: anchors are measured with measureInWindow (app-window
+  // coords), so the dim layer must live in that same space. Rendering it in a Modal
+  // put its origin at the screen top instead, shifting every cutout up by the
+  // status-bar inset — 43dp on the reporter's device, different on every other.
+  const [overlay, setOverlay] = useState({ w: winW, h: winH });
 
   const tooltipWidth = Math.min(340, winW - 32);
 
@@ -161,14 +167,14 @@ function SpotlightTour() {
     if (!tooltipH) return null;
     if (!hole) {
       return {
-        x: (winW - tooltipWidth) / 2,
-        y: Math.max(insets.top + 32, winH * 0.4),
+        x: (overlay.w - tooltipWidth) / 2,
+        y: Math.max(insets.top + 32, overlay.h * 0.4),
         caret: null as { side: 'top' | 'bottom'; x: number } | null
       };
     }
     const centerX = hole.left + hole.width / 2;
-    const x = clamp(centerX - tooltipWidth / 2, 16, Math.max(16, winW - tooltipWidth - 16));
-    const fitsBelow = hole.top + hole.height + TOOLTIP_GAP + tooltipH <= winH - insets.bottom - 12;
+    const x = clamp(centerX - tooltipWidth / 2, 16, Math.max(16, overlay.w - tooltipWidth - 16));
+    const fitsBelow = hole.top + hole.height + TOOLTIP_GAP + tooltipH <= overlay.h - insets.bottom - 12;
     const fitsAbove = hole.top - TOOLTIP_GAP - tooltipH >= insets.top + 12;
     const placeBelow = step?.placement === 'top' ? !fitsAbove : fitsBelow || !fitsAbove;
     return {
@@ -181,7 +187,7 @@ function SpotlightTour() {
         x: clamp(centerX - x - CARET_SIZE / 2, 20, tooltipWidth - 20 - CARET_SIZE)
       }
     };
-  }, [hole, tooltipH, winW, winH, insets.top, insets.bottom, step?.placement, tooltipWidth]);
+  }, [hole, tooltipH, overlay.w, overlay.h, insets.top, insets.bottom, step?.placement, tooltipWidth]);
 
   // Entrance: reset on step change, play once the box has a position.
   const positioned = Boolean(place);
@@ -206,18 +212,34 @@ function SpotlightTour() {
 
   const dots = useMemo(() => Array.from({ length: stepCount }, (_, i) => i), [stepCount]);
 
+  // No Modal any more, so hardware back has to be intercepted here or it would pop the
+  // navigation stack behind the (still visible) tour.
+  const { dismissTour } = onboarding;
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      dismissTour();
+      return true;
+    });
+    return () => sub.remove();
+  }, [dismissTour]);
+
   if (!active || !step) return null;
 
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.12);
 
   return (
-    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onboarding.dismissTour}>
-      <View style={styles.fill}>
-        {/* Dim layer with a real rounded-rect cutout */}
-        <Svg width={winW} height={winH} style={StyleSheet.absoluteFill} pointerEvents="none">
+    <View
+      style={styles.fill}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        setOverlay((prev) => (prev.w === width && prev.h === height ? prev : { w: width, h: height }));
+      }}
+    >
+      {/* Dim layer with a real rounded-rect cutout */}
+      <Svg width={overlay.w} height={overlay.h} style={StyleSheet.absoluteFill} pointerEvents="none">
           <Defs>
             <Mask id="tour-spotlight-mask">
-              <Rect x={0} y={0} width={winW} height={winH} fill="#FFFFFF" />
+              <Rect x={0} y={0} width={overlay.w} height={overlay.h} fill="#FFFFFF" />
               {hole ? (
                 <Rect
                   x={hole.left}
@@ -231,7 +253,7 @@ function SpotlightTour() {
               ) : null}
             </Mask>
           </Defs>
-          <Rect x={0} y={0} width={winW} height={winH} fill="rgba(10, 12, 26, 0.72)" mask="url(#tour-spotlight-mask)" />
+          <Rect x={0} y={0} width={overlay.w} height={overlay.h} fill="rgba(10, 12, 26, 0.72)" mask="url(#tour-spotlight-mask)" />
         </Svg>
 
         {/* Backdrop swallows taps but never dismisses — only Skip does */}
@@ -277,8 +299,8 @@ function SpotlightTour() {
               width: tooltipWidth,
               backgroundColor: colors.card,
               borderColor: cardBorder,
-              left: place?.x ?? (winW - tooltipWidth) / 2,
-              top: place?.y ?? winH * 0.4
+              left: place?.x ?? (overlay.w - tooltipWidth) / 2,
+              top: place?.y ?? overlay.h * 0.4
             },
             tooltipStyle
           ]}
@@ -325,8 +347,7 @@ function SpotlightTour() {
             </Button>
           </View>
         </Reanimated.View>
-      </View>
-    </Modal>
+    </View>
   );
 }
 
@@ -441,7 +462,8 @@ const styles = StyleSheet.create({
   cutoutTap: { position: 'absolute' },
   dot: { borderRadius: radii.pill, height: 6, width: 6 },
   dotsRow: { flexDirection: 'row', gap: 5, marginBottom: 10 },
-  fill: { flex: 1 },
+  // Above the absolute tab bar (elevation 14) — on Android sibling order alone loses to it.
+  fill: { bottom: 0, elevation: 24, left: 0, position: 'absolute', right: 0, top: 0, zIndex: 100 },
   halo: { borderRadius: 20, borderWidth: 2, position: 'absolute' },
   nextBtnContent: { paddingHorizontal: 6 },
   skipBtn: { paddingVertical: 6 },

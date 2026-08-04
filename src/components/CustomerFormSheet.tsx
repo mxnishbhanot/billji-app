@@ -10,6 +10,7 @@ import { FormTextInput } from '@/components/FormTextInput';
 import { PhoneInput } from '@/components/PhoneInput';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
 import { CustomerFormValues } from '@/types';
+import { GSTIN_LENGTH } from '@/utils/gstin';
 
 // Add / edit customer as a bottom sheet (matches ProductFormSheet & CustomerPickerSheet).
 // Replaces the old Paper Dialog so the customer create/edit flow feels consistent with
@@ -81,6 +82,13 @@ export function CustomerFormSheet({ visible, isEdit, form, saving, onSubmit, onC
             <FormTextInput control={form.control} name="name" label="Name" autoCapitalize="words" />
             <PhoneInput control={form.control} name="phone" />
             <FormTextInput control={form.control} name="email" label="Email" keyboardType="email-address" />
+            <FormTextInput
+              control={form.control}
+              name="gstNumber"
+              label="GSTIN (optional)"
+              autoCapitalize="characters"
+              maxLength={GSTIN_LENGTH}
+            />
             <AddressInput form={form} name="address" />
           </ScrollView>
 

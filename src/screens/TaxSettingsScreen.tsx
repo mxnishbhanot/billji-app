@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Switch, Text, useTheme } from 'react-native-paper';
 import { authApi } from '@/api/endpoints';
@@ -10,6 +11,7 @@ import { useAppToast } from '@/components/AppToast';
 import { Screen } from '@/components/Screen';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
+import { AppNavigation } from '@/navigation/types';
 import { TaxSettings } from '@/types';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { stateCodeFromGstin, stateCodeFromName, stateNameForCode } from '@/shared/gst/gstStates';
@@ -42,6 +44,7 @@ export function TaxSettingsScreen() {
   const colors = appColors(isDark);
   const { showDialog } = useAppDialog();
   const { showToast } = useAppToast();
+  const navigation = useNavigation<AppNavigation>();
   const [settings, setSettings] = useState<TaxSettings>(taxDefaults(user?.businessProfile?.taxSettings));
 
   useEffect(() => {
@@ -69,7 +72,7 @@ export function TaxSettingsScreen() {
   const bannerTitle = gstNumber ? 'GST Registered' : 'GST not registered';
   const bannerSubtitle = gstNumber
     ? `Default rate: ${settings.defaultRate}%${gstinVerified ? ' · GSTIN verified' : ' · GSTIN needs review'}`
-    : 'Add your GSTIN in Business Profile';
+    : 'Tap to add your GSTIN in Business Profile';
 
   // Slab toggles act as a single-select default rate: turning one on clears the others.
   const toggleSlab = (rate: number) =>
@@ -96,13 +99,19 @@ export function TaxSettingsScreen() {
 
   return (
     <Screen title="Tax Settings" headerAction={headerAction} contentStyle={styles.screenContent}>
-      <View
-        style={[
+      {/* GSTIN lives on the business profile — the banner is the shortcut there so this screen
+          isn't a dead end when it's missing. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={gstNumber ? 'Edit GSTIN in Business Profile' : 'Add GSTIN in Business Profile'}
+        onPress={() => navigation.navigate('BusinessProfile')}
+        style={({ pressed }) => [
           styles.banner,
           {
             backgroundColor: alpha(colors.primary, isDark ? 0.14 : 0.07),
             borderColor: alpha(colors.primary, isDark ? 0.3 : 0.16)
-          }
+          },
+          pressed && styles.cardPressed
         ]}
       >
         <View style={[styles.bannerIcon, { backgroundColor: alpha(colors.primary, isDark ? 0.26 : 0.14) }]}>
@@ -112,7 +121,8 @@ export function TaxSettingsScreen() {
           <Text style={[styles.bannerTitle, { color: theme.colors.primary }]}>{bannerTitle}</Text>
           <Text style={[styles.bannerSubtitle, { color: theme.colors.onSurfaceVariant }]}>{bannerSubtitle}</Text>
         </View>
-      </View>
+        <MaterialCommunityIcons name="chevron-right" size={22} color={theme.colors.onSurfaceVariant} />
+      </Pressable>
 
       <SectionLabel title="GST SLAB RATES" />
       {GST_SLABS.map((slab) => {

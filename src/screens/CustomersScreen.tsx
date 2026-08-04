@@ -22,6 +22,7 @@ import { CustomerFormSheet } from '@/components/CustomerFormSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
 import { CustomersStackParamList } from '@/navigation/types';
+import { useOpenCreateParam } from '@/shared/hooks/useOpenCreateParam';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { queryKeys } from '@/shared/query/queryKeys';
@@ -31,7 +32,19 @@ import { formatCurrency } from '@/utils/format';
 import { customerSchema } from '@/validation/schemas';
 
 const PAGE_SIZE = 10;
-const blankCustomer = { name: '', phone: '', countryCode: '+91', email: '', address: '' };
+const blankCustomer = { name: '', phone: '', countryCode: '+91', email: '', address: '', gstNumber: '' };
+
+const toFormValues = (customer: Customer | null): CustomerFormValues =>
+  customer
+    ? {
+        name: customer.name || '',
+        phone: customer.phone || '',
+        countryCode: customer.countryCode || '+91',
+        email: customer.email || '',
+        address: customer.address || '',
+        gstNumber: customer.gstNumber || customer.taxIdentifiers?.gstNumber || ''
+      }
+    : blankCustomer;
 type CustomerFilters = CustomerFilterValues & { search: string };
 const emptyCustomerFilters: CustomerFilters = { search: '', ...defaultCustomerFilterValues };
 const BILLING_LABELS: Record<CustomerBillingStatus, string> = {
@@ -157,6 +170,7 @@ export function CustomersScreen() {
   const [draftFilterValues, setDraftFilterValues] = useState<CustomerFilterValues>(defaultCustomerFilterValues);
   const [editing, setEditing] = useState<Customer | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<Customer | null>(null);
+  useOpenCreateParam(() => { if (canManage) setEditing(null); });
   const form = useForm<CustomerFormValues>({ defaultValues: blankCustomer, resolver: zodResolver(customerSchema) });
   const debouncedSearch = useDebouncedValue(filters.search, 300);
   const queryFilters = useMemo(() => ({ ...filters, search: debouncedSearch }), [filters, debouncedSearch]);
@@ -213,7 +227,9 @@ export function CustomersScreen() {
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.customers.all })
   });
-  useEffect(() => { if (editing !== undefined) form.reset(editing || blankCustomer); }, [editing, form]);
+  useEffect(() => {
+    if (editing !== undefined) form.reset(toFormValues(editing));
+  }, [editing, form]);
 
   const loadMoreCustomers = () => {
     if (!query.hasNextPage || query.isFetching || isInitialLoading) return;

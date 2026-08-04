@@ -1,5 +1,6 @@
-import { ReactNode, RefObject } from 'react';
-import { ScrollView, ScrollViewProps, StyleSheet, View, ViewStyle } from 'react-native';
+import { ReactNode, RefObject, useState } from 'react';
+import { Pressable, ScrollView, ScrollViewProps, StyleSheet, View, ViewStyle } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Appbar, Text, useTheme } from 'react-native-paper';
@@ -9,11 +10,36 @@ import { alpha, appColors, radii, spacing, typeScale } from '@/theme/theme';
 import { AppNavigation } from '@/navigation/types';
 import { BrandMark } from './BrandMark';
 import { NotificationButton } from './NotificationButton';
+import { QuickActionsSheet } from './QuickActionsSheet';
+import { OfflineBanner, SyncBadge } from './SyncStatus';
 
-type Props = { title: string; children: ReactNode; scroll?: boolean; showNotifications?: boolean; headerAction?: ReactNode; titleAccessory?: ReactNode; contentStyle?: ViewStyle; scrollViewProps?: ScrollViewProps; scrollRef?: RefObject<ScrollView | null> };
+type Props = {
+  title: string;
+  children: ReactNode;
+  scroll?: boolean;
+  showNotifications?: boolean;
+  headerAction?: ReactNode;
+  titleAccessory?: ReactNode;
+  contentStyle?: ViewStyle;
+  scrollViewProps?: ScrollViewProps;
+  scrollRef?: RefObject<ScrollView | null>;
+  /** Screens that already render their own OfflineBanner (Sync settings / issues). */
+  hideOfflineBanner?: boolean;
+};
 const CONTENT_BOTTOM_PADDING = 96;
 
-export function Screen({ title, children, scroll = true, showNotifications = true, headerAction, titleAccessory, contentStyle, scrollViewProps, scrollRef }: Props) {
+export function Screen({
+  title,
+  children,
+  scroll = true,
+  showNotifications = true,
+  headerAction,
+  titleAccessory,
+  contentStyle,
+  scrollViewProps,
+  scrollRef,
+  hideOfflineBanner = false
+}: Props) {
   const theme = useTheme();
   const isDark = theme.dark;
   const colors = appColors(isDark);
@@ -21,12 +47,15 @@ export function Screen({ title, children, scroll = true, showNotifications = tru
   const businessProfile = useAuthStore((state) => state.user?.businessProfile);
   const businessName = businessProfile?.businessName?.trim();
   const insets = useSafeAreaInsets();
+  // Search-anything / create-anything, in the one header every screen already renders.
+  const [quickOpen, setQuickOpen] = useState(false);
   const navigationState = navigation.getState();
   const currentRoute = navigationState.routes[navigationState.index];
   const rootRoute = navigationState.routes[0];
   const canGoBackInStack = navigationState.type === 'stack' && navigationState.index > 0 && currentRoute?.name !== rootRoute?.name;
   const content = (
     <View style={[styles.content, { paddingBottom: CONTENT_BOTTOM_PADDING + insets.bottom }, contentStyle]}>
+      {hideOfflineBanner ? null : <OfflineBanner style={styles.offlineBanner} />}
       {children}
     </View>
   );
@@ -54,8 +83,22 @@ export function Screen({ title, children, scroll = true, showNotifications = tru
               {titleAccessory}
             </View>
           </View>
+          <SyncBadge showLabel={false} style={styles.syncBadge} />
+          <Pressable
+            onPress={() => setQuickOpen(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Search or create"
+            style={({ pressed }) => [
+              styles.quickBtn,
+              { backgroundColor: alpha(colors.primary, isDark ? (pressed ? 0.28 : 0.18) : pressed ? 0.16 : 0.08) }
+            ]}
+          >
+            <Feather name="search" size={17} color={theme.colors.onSurface} />
+          </Pressable>
           {headerAction ?? (showNotifications ? <NotificationButton /> : null)}
         </View>
+        <QuickActionsSheet visible={quickOpen} onClose={() => setQuickOpen(false)} />
         {scroll ? (
           <KeyboardAwareScrollView
             ref={scrollRef as never}
@@ -98,7 +141,10 @@ const styles = StyleSheet.create({
     marginRight: 12,
     width: 48
   },
+  offlineBanner: { marginBottom: 10 },
+  quickBtn: { alignItems: 'center', borderRadius: radii.full, height: 38, justifyContent: 'center', marginRight: 6, width: 38 },
   subtitle: { ...typeScale.bodyPrimaryMedium, fontSize: 14, lineHeight: 20 },
+  syncBadge: { marginRight: 4 },
   title: { ...typeScale.screenTitle, flexShrink: 1, fontSize: 26, lineHeight: 34, letterSpacing: -0.52 },
   titleBlock: { flex: 1, minWidth: 0 },
   titleRow: { alignItems: 'center', flexDirection: 'row', gap: 8, minWidth: 0 }

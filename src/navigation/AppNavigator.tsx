@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { NavigationContainer, RouteProp, StackActions } from '@react-navigation/native';
 import { BottomTabNavigationProp, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { PlatformPressable } from '@react-navigation/elements';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, useTheme } from 'react-native-paper';
 import { AppState, BackHandler, Platform, StyleSheet, View } from 'react-native';
@@ -41,6 +42,8 @@ const BusinessProfileScreen = lazy(() => import('@/screens/BusinessProfileScreen
 const TaxSettingsScreen = lazy(() => import('@/screens/TaxSettingsScreen').then((m) => ({ default: m.TaxSettingsScreen })));
 const InvoiceTemplateScreen = lazy(() => import('@/screens/InvoiceTemplateScreen').then((m) => ({ default: m.InvoiceTemplateScreen })));
 const NotificationSettingsScreen = lazy(() => import('@/screens/NotificationSettingsScreen').then((m) => ({ default: m.NotificationSettingsScreen })));
+const SyncSettingsScreen = lazy(() => import('@/screens/SyncSettingsScreen').then((m) => ({ default: m.SyncSettingsScreen })));
+const SyncIssuesScreen = lazy(() => import('@/screens/SyncIssuesScreen').then((m) => ({ default: m.SyncIssuesScreen })));
 const ActivityLogScreen = lazy(() => import('@/screens/ActivityLogScreen').then((m) => ({ default: m.ActivityLogScreen })));
 const LedgerScreen = lazy(() => import('@/screens/LedgerScreen').then((m) => ({ default: m.LedgerScreen })));
 const DataExportScreen = lazy(() => import('@/screens/DataExportScreen').then((m) => ({ default: m.DataExportScreen })));
@@ -48,8 +51,23 @@ const DataImportScreen = lazy(() => import('@/screens/DataImportScreen').then((m
 const TeamScreen = lazy(() => import('@/screens/TeamScreen').then((m) => ({ default: m.TeamScreen })));
 const RolesScreen = lazy(() => import('@/screens/RolesScreen').then((m) => ({ default: m.RolesScreen })));
 const RoleEditorScreen = lazy(() => import('@/screens/RoleEditorScreen').then((m) => ({ default: m.RoleEditorScreen })));
+const SubscriptionScreen = lazy(() => import('@/screens/SubscriptionScreen').then((m) => ({ default: m.SubscriptionScreen })));
+const PlansScreen = lazy(() => import('@/screens/PlansScreen').then((m) => ({ default: m.PlansScreen })));
+
+// Plan gates, mirroring exactly what the backend guards (see middlewares/entitlement.js). Declared
+// at module scope so the wrapper identity is stable — a component created during render would
+// remount the screen on every state change.
+const GatedGstReturnsScreen = withFeatureGate(FEATURE.advancedGstReports, 'GST returns', GstReturnsScreen);
+const GatedExpensesScreen = withFeatureGate(FEATURE.expenses, 'Expenses', ExpensesScreen);
+const GatedPurchasesScreen = withFeatureGate(FEATURE.purchases, 'Purchases', PurchasesScreen);
+const GatedActivityLogScreen = withFeatureGate(FEATURE.auditLogs, 'Activity log', ActivityLogScreen);
+const GatedDataExportScreen = withFeatureGate(FEATURE.dataExport, 'Export my data', DataExportScreen);
+const GatedDataImportScreen = withFeatureGate(FEATURE.dataImport, 'Import data', DataImportScreen);
+const GatedRoleEditorScreen = withFeatureGate(FEATURE.customRoles, 'Role', RoleEditorScreen);
 const AcceptInviteScreen = lazy(() => import('@/screens/AcceptInviteScreen').then((m) => ({ default: m.AcceptInviteScreen })));
 import { useAuthStore } from '@/store/authStore';
+import { FEATURE } from '@/constants/entitlements';
+import { withFeatureGate } from '@/components/FeatureGate';
 import { attachPushListeners, registerForPush } from '@/services/push';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { CelebrationOverlay, OnboardingProvider, TourAnchor, TourHost, WelcomeSheet, ANCHOR, useOnboardingOptional } from '@/features/onboarding';
@@ -81,6 +99,13 @@ const tabIcons: Record<keyof TabParamList, { active: keyof typeof MaterialCommun
   CatalogTab: { active: 'package-variant-closed', inactive: 'cube' },
   CustomersTab: { active: 'account-group', inactive: 'account-group' },
   SettingsTab: { active: 'cog', inactive: 'cog' }
+};
+// Anchored on the whole tab button, not the icon, so a coach mark highlights the label too.
+const tabAnchors: Partial<Record<keyof TabParamList, string>> = {
+  InvoicesTab: ANCHOR.tabInvoices,
+  CustomersTab: ANCHOR.tabCustomers,
+  CatalogTab: ANCHOR.tabCatalog,
+  SettingsTab: ANCHOR.tabSettings
 };
 
 // Suspense boundary for lazy screens — shows a spinner for the brief moment a
@@ -121,9 +146,9 @@ function DashboardNavigator() {
       <DashboardStack.Screen name="Reports" component={ReportsScreen} />
       <DashboardStack.Screen name="Payments" component={PaymentsScreen} />
       <DashboardStack.Screen name="PaymentReminders" component={PaymentRemindersScreen} />
-      <DashboardStack.Screen name="GstReturns" component={GstReturnsScreen} />
-      <DashboardStack.Screen name="Expenses" component={ExpensesScreen} />
-      <DashboardStack.Screen name="Purchases" component={PurchasesScreen} />
+      <DashboardStack.Screen name="GstReturns" component={GatedGstReturnsScreen} />
+      <DashboardStack.Screen name="Expenses" component={GatedExpensesScreen} />
+      <DashboardStack.Screen name="Purchases" component={GatedPurchasesScreen} />
     </DashboardStack.Navigator>
   );
 }
@@ -149,8 +174,6 @@ function CatalogNavigator() {
   return (
     <CatalogStack.Navigator screenOptions={{ headerShown: false }} screenLayout={renderWithSuspense}>
       <CatalogStack.Screen name="Products" component={ProductsScreen} />
-      <CatalogStack.Screen name="Customers" component={CustomersScreen} />
-      <CatalogStack.Screen name="CustomerDetail" component={CustomerDetailScreen} />
     </CatalogStack.Navigator>
   );
 }
@@ -172,14 +195,18 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="TaxSettings" component={TaxSettingsScreen} />
       <SettingsStack.Screen name="InvoiceTemplate" component={InvoiceTemplateScreen} />
       <SettingsStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
-      <SettingsStack.Screen name="ActivityLog" component={ActivityLogScreen} />
+      <SettingsStack.Screen name="SyncSettings" component={SyncSettingsScreen} />
+      <SettingsStack.Screen name="SyncIssues" component={SyncIssuesScreen} />
+      <SettingsStack.Screen name="ActivityLog" component={GatedActivityLogScreen} />
       <SettingsStack.Screen name="Ledger" component={LedgerScreen} />
-      <SettingsStack.Screen name="DataExport" component={DataExportScreen} />
-      <SettingsStack.Screen name="DataImport" component={DataImportScreen} />
+      <SettingsStack.Screen name="DataExport" component={GatedDataExportScreen} />
+      <SettingsStack.Screen name="DataImport" component={GatedDataImportScreen} />
       <SettingsStack.Screen name="TwoFactorSetup" component={TwoFactorSetupScreen} />
       <SettingsStack.Screen name="Team" component={TeamScreen} />
       <SettingsStack.Screen name="Roles" component={RolesScreen} />
-      <SettingsStack.Screen name="RoleEditor" component={RoleEditorScreen} />
+      <SettingsStack.Screen name="RoleEditor" component={GatedRoleEditorScreen} />
+      <SettingsStack.Screen name="Subscription" component={SubscriptionScreen} />
+      <SettingsStack.Screen name="Plans" component={PlansScreen} />
       <SettingsStack.Screen name="AcceptInvite" component={AcceptInviteScreen} />
     </SettingsStack.Navigator>
   );
@@ -242,26 +269,27 @@ function AppTabs() {
             shadowRadius: 14
           },
           tabBarItemStyle: styles.tabItem,
+          tabBarButton: (props) => {
+            const anchorId = tabAnchors[route.name as keyof TabParamList];
+            // Must be PlatformPressable, not a plain Pressable: bottom-tabs passes an
+            // `href` to the tab button, react-native-web renders that as a real <a>, and
+            // only PlatformPressable preventDefault()s the click. A plain Pressable lets
+            // the browser follow the link, which full-page-reloads the web app.
+            const button = <PlatformPressable {...props} />;
+            if (!anchorId) return button;
+            return (
+              <TourAnchor anchorId={anchorId} style={styles.tabButtonAnchor}>
+                {button}
+              </TourAnchor>
+            );
+          },
           tabBarIcon: ({ color, focused }) => {
             const icon = tabIcons[route.name as keyof TabParamList];
-            const pill = (
+            return (
               <View style={[styles.iconPill, focused && { backgroundColor: alpha(theme.colors.primary, isDark ? 0.2 : 0.14) }]}>
                 <MaterialCommunityIcons name={focused ? icon.active : icon.inactive} size={focused ? 22 : 21} color={color} />
               </View>
             );
-            if (route.name === 'InvoicesTab') {
-              return <TourAnchor anchorId={ANCHOR.tabInvoices}>{pill}</TourAnchor>;
-            }
-            if (route.name === 'CustomersTab') {
-              return <TourAnchor anchorId={ANCHOR.tabCustomers}>{pill}</TourAnchor>;
-            }
-            if (route.name === 'CatalogTab') {
-              return <TourAnchor anchorId={ANCHOR.tabCatalog}>{pill}</TourAnchor>;
-            }
-            if (route.name === 'SettingsTab') {
-              return <TourAnchor anchorId={ANCHOR.tabSettings}>{pill}</TourAnchor>;
-            }
-            return pill;
           }
         })}
       >
@@ -384,6 +412,7 @@ const styles = StyleSheet.create({
     width: 56
   },
   lazyFallback: { alignItems: 'center', flex: 1, justifyContent: 'center' },
+  tabButtonAnchor: { flex: 1 },
   tabItem: { flex: 1, paddingTop: 0 },
   tabLabel: { ...typeScale.smallCaption, ...fontStyles.medium, fontSize: 11, lineHeight: 14, marginTop: 2 }
 });

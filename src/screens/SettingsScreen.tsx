@@ -15,13 +15,19 @@ import { useAppDialog } from '@/components/AppDialog';
 import { useAppToast } from '@/components/AppToast';
 import { BrandLogoSheet } from '@/components/BrandLogoSheet';
 import { BrandMark } from '@/components/BrandMark';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { SecuritySessionsSheet } from '@/components/SecuritySessionsSheet';
 import { WorkspaceSwitcherSheet } from '@/components/WorkspaceSwitcherSheet';
 import { Screen } from '@/components/Screen';
+import { PendingBadge } from '@/components/SyncStatus';
+import { pendingLocalSyncCount, wipeLocalBusinessData } from '@/db/wipeLocalData';
 import { AppNavigation } from '@/navigation/types';
 import { unregisterFromPush } from '@/services/push';
 import { disconnectSocket } from '@/services/socket';
+import { LIMIT } from '@/constants/entitlements';
+import { useEntitlements } from '@/shared/hooks/useEntitlements';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
+import { useSyncStatus } from '@/shared/hooks/useSyncStatus';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { getAnalyticsConsent, setAnalyticsConsent } from '@/services/analytics';
@@ -212,6 +218,13 @@ export function SettingsScreen() {
   const { showDialog } = useAppDialog();
   const { showToast } = useAppToast();
   const { can } = usePermissions();
+  // The header chip used to read "Pro Plan" for everyone. It now says what the business is actually on.
+  const entitlements = useEntitlements();
+  const planLabel = entitlements.plan.name || 'Starter';
+  const documents = entitlements.usage(LIMIT.documentsPerMonth);
+  const billingSubtitle = documents
+    ? `${planLabel} · ${documents.used}${documents.unlimited ? '' : ` of ${documents.limit}`} documents this month`
+    : planLabel;
   const canViewLedger = can(PERMISSION.reportsView);
   const canViewActivity = can(PERMISSION.settingsManage);
   const canViewTeam = can(PERMISSION.teamView);
@@ -223,6 +236,9 @@ export function SettingsScreen() {
   const [workspaceSheetVisible, setWorkspaceSheetVisible] = useState(false);
   const [themeSaving, setThemeSaving] = useState(false);
   const [analyticsOn, setAnalyticsOn] = useState(true);
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  const [pendingOnLogout, setPendingOnLogout] = useState(0);
+  const { failed } = useSyncStatus();
   const onboarding = useOnboardingOptional();
 
 
@@ -263,7 +279,14 @@ export function SettingsScreen() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.auth.sessions }),
     onError: (error) => showDialog({ title: 'Could not revoke session', message: apiErrorMessage(error), tone: 'error' })
   });
+  const requestSignOut = async () => {
+    const pending = await pendingLocalSyncCount(user?.businessId ?? null);
+    setPendingOnLogout(pending);
+    setConfirmLogout(true);
+  };
+
   const signOut = async () => {
+    setConfirmLogout(false);
     // Drop the push registration while the session is still valid — afterwards the
     // DELETE would 401 and this phone would keep buzzing for the previous account.
     await unregisterFromPush();
@@ -273,6 +296,9 @@ export function SettingsScreen() {
       // Local sign out must still work if network/session already expired.
     }
     disconnectSocket();
+    // Wipe offline books before clearing the in-memory session so another account
+    // on this phone cannot read the previous tenant's SQLite data.
+    await wipeLocalBusinessData({ clearSecureSession: true });
     queryClient.clear();
     await logout();
   };
@@ -386,7 +412,7 @@ export function SettingsScreen() {
           <Text numberOfLines={1} style={styles.profileEmail}>{businessEmail || user?.email}</Text>
           <View style={styles.planPill}>
             <Feather name="shield" size={10} color={colors.primaryStrong} />
-            <Text style={styles.planText}>Pro Plan</Text>
+            <Text style={styles.planText}>{planLabel}</Text>
           </View>
         </View>
         <Pressable onPress={() => setBrandSheetVisible(true)} style={({ pressed }) => [styles.profileEdit, { backgroundColor: alpha('#1C1A4A', pressed ? 0.55 : 0.36), borderColor: alpha('#C3C0FF', 0.36) }]} hitSlop={8}>
@@ -409,6 +435,16 @@ export function SettingsScreen() {
           }
           tone={colors.warning}
           onPress={() => navigation.navigate('TaxSettings')}
+        />
+      </SettingsGroup>
+
+      <SettingsGroup title="PLAN & BILLING">
+        <SettingsRow
+          icon="crown-outline"
+          title="Plan & billing"
+          subtitle={billingSubtitle}
+          tone={colors.violet}
+          onPress={() => navigation.navigate('Subscription')}
         />
       </SettingsGroup>
 
@@ -487,6 +523,23 @@ export function SettingsScreen() {
           onPress={() => navigation.navigate('NotificationSettings')}
         />
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
+        <SettingsRow
+          icon="cloud-sync-outline"
+          title="Sync & storage"
+          subtitle="Offline sync, Wi-Fi only, cached data"
+          tone={colors.primary}
+          onPress={() => navigation.navigate('SyncSettings')}
+          trailing={<PendingBadge />}
+        />
+        <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
+        <SettingsRow
+          icon="cloud-alert"
+          title="Sync issues"
+          subtitle={failed > 0 ? `${failed} change${failed === 1 ? '' : 's'} need attention` : 'Conflicts and failed syncs'}
+          tone={failed > 0 ? colors.destructive : colors.warning}
+          onPress={() => navigation.navigate('SyncIssues')}
+        />
+        <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow icon="shield-key-outline" title="Security & Sessions" subtitle="See where you're signed in" tone={colors.warning} onPress={() => setSessionsSheetVisible(true)} />
         <View style={[styles.rowDivider, { backgroundColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08) }]} />
         <SettingsRow icon="shield-lock-outline" title="Two-factor authentication" subtitle="Add a second step at login" tone={colors.accent} onPress={() => navigation.navigate('TwoFactorSetup')} />
@@ -504,10 +557,23 @@ export function SettingsScreen() {
           title="Logout"
           subtitle="Sign out of this device"
           tone={colors.destructive}
-          onPress={signOut}
+          onPress={() => void requestSignOut()}
           trailing={<Feather name="log-out" size={17} color={theme.colors.error} />}
         />
       </SettingsGroup>
+
+      <ConfirmDialog
+        visible={confirmLogout}
+        title={pendingOnLogout > 0 ? 'Unsynced changes on this device' : 'Log out?'}
+        message={
+          pendingOnLogout > 0
+            ? `${pendingOnLogout} change${pendingOnLogout === 1 ? '' : 's'} have not synced yet. Logging out discards the offline copy of this business on this phone. Sync first if you need to keep them.`
+            : 'This clears offline data for this business on this phone so the next account cannot see it.'
+        }
+        confirmLabel={pendingOnLogout > 0 ? 'Discard and log out' : 'Log out'}
+        onCancel={() => setConfirmLogout(false)}
+        onConfirm={() => void signOut()}
+      />
 
       <Text style={[styles.versionText, { color: theme.colors.onSurfaceVariant }]}>Billji mobile v1.0.0</Text>
 

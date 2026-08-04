@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { customersApi, documentsApi, invoicesApi, productsApi } from '@/api/endpoints';
-import { apiErrorMessage } from '@/api/client';
+import { PaywallError, apiErrorMessage, isPaywallError } from '@/api/client';
 import { useDocumentDraft } from '@/shared/drafts/useDocumentDraft';
 import { resolvePlaceOfSupplyCode, stateCodeFromGstin, stateCodeFromName, supplyTypeFor } from '@/shared/gst/gstStates';
 import { queryKeys } from '@/shared/query/queryKeys';
@@ -9,7 +9,7 @@ import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { useAuthStore } from '@/store/authStore';
 import { track } from '@/services/analytics';
 import { useOnboardingOptional } from '@/features/onboarding';
-import { Customer, DiscountType, InvoiceCreatePayload, InvoiceDraftPayload, InvoiceItem, Product, SalesDocumentKind, StockShortage } from '@/types';
+import { Customer, DiscountType, Invoice, InvoiceCreatePayload, InvoiceDraftPayload, InvoiceItem, Product, SalesDocumentKind, StockShortage } from '@/types';
 import { calculateClientTotals } from '@/utils/format';
 import {
   addProductToItems,
@@ -24,22 +24,31 @@ import {
 const PICKER_PAGE_SIZE = 20;
 
 type StockWarning = { items: StockShortage[]; payload: InvoiceCreatePayload };
-type ApiErrorWithDetails = { response?: { data?: { details?: { code?: string; items?: StockShortage[] } } } };
+type StockDetails = { code?: string; items?: StockShortage[] };
+type ApiErrorWithDetails = { response?: { data?: { details?: StockDetails } }; details?: StockDetails };
 
+/**
+ * The shortfall behind a refused sale, from either path: the server's 409, or the same
+ * refusal raised locally when the bill is being written offline (db/errors.LocalRuleError).
+ */
 const stockShortagesFromError = (error: unknown) => {
-  const details = (error as ApiErrorWithDetails)?.response?.data?.details;
+  const wrapped = error as ApiErrorWithDetails;
+  const details = wrapped?.response?.data?.details ?? wrapped?.details;
   return details?.code === 'INSUFFICIENT_STOCK' && Array.isArray(details.items) ? details.items : null;
 };
 
 export const useInvoiceBuilder = ({
   onCreated,
   showDialog,
-  documentType
+  documentType,
+  documentNoun = 'invoice'
 }: {
-  onCreated: (invoiceId: string) => void;
+  onCreated: (document: Invoice) => void;
   showDialog: (dialog: { title: string; message?: string; tone?: 'default' | 'success' | 'error' | 'warning' }) => void;
   /** Absent = tax invoice. A quotation or challan posts to /documents instead. */
   documentType?: SalesDocumentKind;
+  /** Lower-case noun for user-facing copy — "quotation", "challan", … */
+  documentNoun?: string;
 }) => {
   const queryClient = useQueryClient();
   const onboarding = useOnboardingOptional();
@@ -58,6 +67,7 @@ export const useInvoiceBuilder = ({
   const [discountValue, setDiscountValue] = useState('0');
   const [notes, setNotes] = useState('');
   const [stockWarning, setStockWarning] = useState<StockWarning | null>(null);
+  const [paywall, setPaywall] = useState<PaywallError | null>(null);
   const debouncedCustomerSearch = useDebouncedValue(customerSearch, 300);
   const debouncedProductSearch = useDebouncedValue(productSearch, 300);
 
@@ -163,6 +173,16 @@ export const useInvoiceBuilder = ({
       queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
     },
     onError: (error) => {
+      // The monthly document quota is spent. Shown as the upgrade sheet rather than an error
+      // dialog: the work is still in the builder and still saved as a draft, so this is a
+      // decision to make, not a failure to dismiss. Documents created offline are never
+      // refused — the server counts those as overage — so this only happens online.
+      if (isPaywallError(error)) {
+        track('quota_blocked', { metric: error.metric || 'documents_per_month' });
+        setPaywall(error);
+        return;
+      }
+
       const shortages = stockShortagesFromError(error);
       if (shortages) {
         setStockWarning({
@@ -172,7 +192,7 @@ export const useInvoiceBuilder = ({
         return;
       }
 
-      showDialog({ title: 'Could not create invoice', message: apiErrorMessage(error), tone: 'error' });
+      showDialog({ title: `Could not create ${documentNoun}`, message: apiErrorMessage(error), tone: 'error' });
     }
   });
 
@@ -230,18 +250,19 @@ export const useInvoiceBuilder = ({
     if (createInvoiceMutation.isPending) return;
 
     if (!selectedCustomerId) {
-      showDialog({ title: 'Select or add a customer', message: 'Choose a saved customer or quick add a new one before generating the invoice.', tone: 'warning' });
+      showDialog({ title: 'Select or add a customer', message: `Choose a saved customer or quick add a new one before generating the ${documentNoun}.`, tone: 'warning' });
       return;
     }
 
     if (!items.length) {
-      showDialog({ title: 'Add at least one item', message: 'Pick a product or add a custom item before generating the invoice.', tone: 'warning' });
+      showDialog({ title: 'Add at least one item', message: `Pick a product or add a custom item before generating the ${documentNoun}.`, tone: 'warning' });
       return;
     }
 
     try {
-      const invoice = await createInvoiceMutation.mutateAsync(buildPayload(true));
-      onCreated(invoice._id);
+      // First attempt never forces oversell — shortage surfaces as stockWarning for confirm.
+      const invoice = await createInvoiceMutation.mutateAsync(buildPayload(false));
+      onCreated(invoice);
     } catch {
       // Stock warning / error already surfaced in createInvoiceMutation.onError.
     }
@@ -253,7 +274,7 @@ export const useInvoiceBuilder = ({
     setStockWarning(null);
     try {
       const invoice = await createInvoiceMutation.mutateAsync(payload);
-      onCreated(invoice._id);
+      onCreated(invoice);
     } catch {
       // Error already surfaced in createInvoiceMutation.onError.
     }
@@ -308,6 +329,8 @@ export const useInvoiceBuilder = ({
     setStockWarning,
     setTaxRate,
     stockWarning,
+    paywall,
+    dismissPaywall: () => setPaywall(null),
     taxRate,
     totals,
     updateQuantity,

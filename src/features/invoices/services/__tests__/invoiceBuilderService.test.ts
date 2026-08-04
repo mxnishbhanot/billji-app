@@ -67,6 +67,19 @@ describe('invoiceBuilderService', () => {
     expect(payload.items[0]).toMatchObject({ productId: 'product-1', quantity: 2, price: 120 });
   });
 
+  it('defaults allowOversell to false so the first save must confirm shortage', () => {
+    const payload = buildInvoicePayload({
+      selectedCustomerId: 'customer-1',
+      items: [{ productId: 'product-1', name: 'Notebook', quantity: 2, price: 120 }],
+      taxRate: '0',
+      discountType: 'flat',
+      discountValue: '0',
+      notes: ''
+    });
+
+    expect(payload.allowOversell).toBe(false);
+  });
+
   it('detects stock shortages across duplicate product rows', () => {
     const shortages = findStockShortages(
       [

@@ -14,6 +14,12 @@ describe('validation schemas', () => {
     expect(customerSchema.safeParse({ name: 'Acme', phone: '9876543210', email: 'bad-email' }).success).toBe(false);
   });
 
+  it('accepts blank or valid customer GSTIN and rejects a bad checksum', () => {
+    expect(customerSchema.safeParse({ name: 'Acme', phone: '9876543210', gstNumber: '' }).success).toBe(true);
+    expect(customerSchema.safeParse({ name: 'Acme', phone: '9876543210', gstNumber: '27AAPFU0939F1ZV' }).success).toBe(true);
+    expect(customerSchema.safeParse({ name: 'Acme', phone: '9876543210', gstNumber: '27AAPFU0939F1ZW' }).success).toBe(false);
+  });
+
   it('keeps product, custom item, and settings required fields guarded', () => {
     expect(productSchema.safeParse({ name: '', price: '', stockQuantity: '' }).success).toBe(false);
     // unit is required and always seeded from customItemDefaults (invoiceBuilderService).

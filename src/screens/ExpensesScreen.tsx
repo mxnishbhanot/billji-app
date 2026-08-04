@@ -13,6 +13,7 @@ import { ExpenseFormSheet } from '@/components/ExpenseFormSheet';
 import { Screen } from '@/components/Screen';
 import { EXPENSE_CATEGORY_LABELS, MONTH_RANGE_PRESETS } from '@/constants/expenses';
 import { ExpensesScreenProps } from '@/navigation/types';
+import { useOpenCreateParam } from '@/shared/hooks/useOpenCreateParam';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
@@ -78,6 +79,7 @@ export function ExpensesScreen({ navigation }: ExpensesScreenProps) {
     setEditing(null);
     setFormOpen(true);
   };
+  useOpenCreateParam(openNew);
   const openEdit = (expense: Expense) => {
     setEditing(expense);
     setFormOpen(true);

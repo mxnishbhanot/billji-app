@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
 import { getTrustedDeviceToken } from '@/store/trustedDevice';
 import { deviceLabel } from '@/utils/deviceInfo';
-import { ApiParams, AuthSession } from '@/types';
+import { ApiParams, AuthSession, RequiredPlan } from '@/types';
 
 const SIGNED_OUT_MESSAGE = 'You were signed out. This may be because you signed out this device from another phone, or your session expired. Please sign in again.';
 
@@ -34,8 +34,61 @@ refreshApi.interceptors.request.use((config) => {
   return config;
 });
 
+/**
+ * A refusal for billing reasons, not permission ones.
+ *
+ * The backend answers 402 (never 403) when a plan does not include a feature or a limit is spent,
+ * so the two cases can never be confused: 403 means "you can't", 402 means "the business hasn't
+ * bought it". Callers that want the upgrade sheet check `isPaywallError`; everything else keeps
+ * treating it as a normal axios error and shows `apiErrorMessage`.
+ */
+export class PaywallError extends Error {
+  readonly code: PaywallCode;
+  readonly feature: string | null;
+  readonly metric: string | null;
+  readonly limit: number | null;
+  readonly used: number | null;
+  readonly currentPlan: string | null;
+  readonly requiredPlans: RequiredPlan[];
+
+  constructor(message: string, details: PaywallDetails) {
+    super(message);
+    this.name = 'PaywallError';
+    this.code = details.code;
+    this.feature = details.feature ?? null;
+    this.metric = details.metric ?? null;
+    this.limit = details.limit ?? null;
+    this.used = details.used ?? null;
+    this.currentPlan = details.currentPlan ?? null;
+    this.requiredPlans = details.requiredPlans ?? [];
+  }
+}
+
+type PaywallCode = 'FEATURE_NOT_IN_PLAN' | 'LIMIT_REACHED' | 'SUBSCRIPTION_EXPIRED';
+
+type PaywallDetails = {
+  code: PaywallCode;
+  feature?: string | null;
+  metric?: string | null;
+  limit?: number | null;
+  used?: number | null;
+  currentPlan?: string | null;
+  requiredPlans?: RequiredPlan[];
+};
+
+export const isPaywallError = (error: unknown): error is PaywallError => error instanceof PaywallError;
+
 api.interceptors.response.use((response) => response, async (error) => {
   const originalRequest = error.config as (typeof error.config & { _retry?: boolean }) | undefined;
+
+  // 402 is the billing envelope. Converted once, here, so no screen has to know the status code or
+  // dig through `response.data.details` to show an upgrade prompt.
+  if (error.response?.status === 402) {
+    const data = error.response.data as { message?: string; details?: PaywallDetails } | undefined;
+    if (data?.details?.code) {
+      return Promise.reject(new PaywallError(data.message || 'Your plan does not include this', data.details));
+    }
+  }
 
   if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
     const refreshToken = useAuthStore.getState().refreshToken;
@@ -60,6 +113,7 @@ api.interceptors.response.use((response) => response, async (error) => {
 });
 
 export const apiErrorMessage = (error: unknown, fallback = 'Something went wrong') => {
+  if (isPaywallError(error)) return error.message;
   if (isAxiosError(error)) {
     const data = error.response?.data as { details?: { msg?: string }[]; message?: string } | undefined;
     return data?.details?.[0]?.msg || data?.message || error.message || fallback;

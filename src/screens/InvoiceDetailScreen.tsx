@@ -299,6 +299,16 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   // repeat taps until the (possibly slow) PDF download/share resolves.
   const runShare = async (label: string) => {
     if (!invoice || busyAction) return;
+    // A bill issued offline has its number and its totals, but the PDF is rendered on the
+    // server — so say that plainly rather than failing on an empty URL.
+    if (!invoice.pdfUrl) {
+      showDialog({
+        title: 'Saved on this device',
+        message: `${documentNumberOf(invoice)} is saved here and will sync automatically. The PDF is generated on the server, so sharing becomes available once it has synced.`,
+        tone: 'warning'
+      });
+      return;
+    }
     setBusyAction(label);
     try {
       await openOrSharePdf(invoice.pdfUrl, documentNumberOf(invoice));

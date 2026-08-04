@@ -1,7 +1,14 @@
 import { Customer, CustomerFormValues, CustomItemFormValues, DiscountType, InvoiceCreatePayload, InvoiceDraftPayload, InvoiceItem, Product, StockShortage } from '@/types';
 import { DEFAULT_UNIT } from '@/constants/units';
 
-export const customerDefaults: CustomerFormValues = { name: '', phone: '', countryCode: '+91', email: '', address: '' };
+export const customerDefaults: CustomerFormValues = {
+  name: '',
+  phone: '',
+  countryCode: '+91',
+  email: '',
+  address: '',
+  gstNumber: ''
+};
 export const customItemDefaults: CustomItemFormValues = { name: '', price: '', quantity: '1', unit: DEFAULT_UNIT };
 
 export const initials = (name: string) => {

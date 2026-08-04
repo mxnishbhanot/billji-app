@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, StyleSheet, View } from 'react-native';
-import { Button, Text, useTheme } from 'react-native-paper';
+import { Button, Text, TextInput, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { authApi } from '@/api/endpoints';
 import { BrandMark } from '@/components/BrandMark';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { useAuthStore } from '@/store/authStore';
@@ -16,12 +17,37 @@ export function WelcomeSheet() {
   const insets = useSafeAreaInsets();
   const { can } = usePermissions();
   const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
 
   const visible = onboarding?.welcomeVisible ?? false;
   // Keep the modal mounted through the exit animation.
   const [mounted, setMounted] = useState(visible);
   const translateY = useRef(new Animated.Value(480)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
+
+  // Signup names the workspace "<Name>'s Business" (Google gives us the account name).
+  // Ask for the real one here so it's set whether or not they take the tour.
+  const currentName = user?.businessProfile?.businessName || '';
+  const needsName = Boolean(user?.name) && currentName === `${user?.name}'s Business`;
+  const [name, setName] = useState(currentName);
+  const [saving, setSaving] = useState(false);
+
+  const saveThen = async (next: () => void) => {
+    const trimmed = name.trim();
+    if (!needsName || !trimmed || trimmed === currentName) {
+      next();
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await authApi.updateSettings({ businessName: trimmed });
+      await setUser(response.user);
+    } catch {
+      // Non-blocking — they can rename any time in Business Profile.
+    }
+    setSaving(false);
+    next();
+  };
 
   useEffect(() => {
     if (visible) setMounted(true);
@@ -76,15 +102,31 @@ export function WelcomeSheet() {
             </Text>
             <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>{valueProp}</Text>
 
+            {needsName ? (
+              <TextInput
+                mode="outlined"
+                label="Business name"
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+                maxLength={120}
+                outlineColor={isDark ? colors.border : alpha(colors.primaryStrong, 0.14)}
+                activeOutlineColor={theme.colors.primary}
+                style={[styles.nameInput, { backgroundColor: isDark ? colors.surface : colors.card }]}
+              />
+            ) : null}
+
             <Button
               mode="contained"
-              onPress={onboarding.acceptWelcome}
+              loading={saving}
+              disabled={saving}
+              onPress={() => void saveThen(onboarding.acceptWelcome)}
               style={styles.primaryBtn}
               contentStyle={styles.primaryBtnContent}
             >
               Show me around
             </Button>
-            <Pressable onPress={onboarding.declineWelcome} hitSlop={8} style={styles.secondaryBtn}>
+            <Pressable onPress={() => void saveThen(onboarding.declineWelcome)} hitSlop={8} style={styles.secondaryBtn}>
               <Text style={[styles.secondaryText, { color: theme.colors.onSurfaceVariant }]}>I'll explore myself</Text>
             </Pressable>
           </View>
@@ -107,6 +149,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     width: 84
   },
+  nameInput: { alignSelf: 'stretch', marginTop: 18 },
   primaryBtn: { alignSelf: 'stretch', borderRadius: radii.input, marginTop: 24 },
   primaryBtnContent: { paddingVertical: 4 },
   secondaryBtn: { marginTop: 14, paddingVertical: 6 },
