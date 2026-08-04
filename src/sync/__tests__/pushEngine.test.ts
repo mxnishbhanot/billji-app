@@ -117,6 +117,45 @@ describe('result classification', () => {
     expect(classifyResult({ opId: 'a', status: 'rejected', statusCode: 500 })).toMatchObject({ outcome: 'retry' });
     expect(classifyResult({ opId: 'a', status: 'rejected', statusCode: 429 })).toMatchObject({ outcome: 'retry' });
   });
+
+  it('abandons a referral the server has permanently settled instead of asking the user to resolve it', () => {
+    // These arrive as 409s, which normally mean two writers disagree about a version. An already-used
+    // referral code is not that: there is nothing to rebase and nothing for the user to choose, so
+    // offering Keep Local / Keep Server on the Sync Issues screen would be nonsense.
+    for (const code of [
+      'REFERRAL_ALREADY_APPLIED',
+      'REFERRAL_REWARD_ALREADY_RECEIVED',
+      'REFERRAL_NOT_ELIGIBLE_PAID'
+    ]) {
+      expect(classifyResult({ opId: 'a', status: 'conflict', statusCode: 409, code, message: 'no' })).toMatchObject({
+        outcome: 'dead'
+      });
+    }
+
+    // A genuine version conflict still goes to the resolver.
+    expect(
+      classifyResult({ opId: 'a', status: 'conflict', statusCode: 409, code: 'VERSION_CONFLICT' })
+    ).toMatchObject({ outcome: 'conflict' });
+  });
+});
+
+describe('referral operations on the wire', () => {
+  it('maps an APPLY_REFERRAL onto the referral entity the server registry expects', () => {
+    const wire = toWireOperation(
+      operation('ref-1', {
+        entityType: 'referrals',
+        entityLocalId: 'ref-local-1',
+        payload: { code: 'BILLJI8X', clientId: 'ref-local-1' }
+      })
+    );
+
+    expect(wire).toMatchObject({
+      entity: 'referral',
+      opType: 'create',
+      clientId: 'ref-local-1',
+      payload: { code: 'BILLJI8X' }
+    });
+  });
 });
 
 describe('push', () => {

@@ -96,6 +96,14 @@ export const queryKeys = {
     all: ['exports'] as const,
     detail: (id: string) => ['exports', id] as const
   },
+  referrals: {
+    all: ['referrals'] as const,
+    me: ['referrals', 'me'] as const,
+    stats: ['referrals', 'stats'] as const,
+    rewards: ['referrals', 'rewards'] as const,
+    list: ['referrals', 'list'] as const,
+    eligibility: ['referrals', 'eligibility'] as const
+  },
   billing: {
     all: ['billing'] as const,
     subscription: ['billing', 'subscription'] as const,

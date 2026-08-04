@@ -32,7 +32,10 @@ export type EntityType =
   | 'expenses'
   | 'purchases'
   | 'suppliers'
-  | 'business';
+  | 'business'
+  // Not a synced collection: never pulled, and its only local column beyond the envelope is the code.
+  // Present as an EntityType because the outbox, pushAck and the Sync Inspector are all keyed on one.
+  | 'referrals';
 
 export type ToRowContext = {
   /** Tenant scope. Falls back to the document's own `business` ref. */
@@ -267,6 +270,9 @@ const SPECS: Record<EntityType, Field[]> = {
     f('outstanding_payable', 'outstandingPayable', 'num', 0),
     f('is_active', 'isActive', 'bool', 1)
   ],
+  // Only the two things a screen shows: the code the user entered, and what the server last said
+  // about it. The reward itself is never here — it arrives as a subscription.
+  referrals: [f('code', 'code', 'text'), f('status', 'status', 'text')],
   business: [
     f('name', (doc) => doc.businessName ?? doc.name, 'text'),
     f('gst_number', 'gstNumber', 'text'),
@@ -278,6 +284,7 @@ const SPECS: Record<EntityType, Field[]> = {
 /** Columns that are NOT NULL in the schema and have no server value to fall back on. */
 const REQUIRED_TEXT: Partial<Record<EntityType, Record<string, () => string>>> = {
   products: { name: () => '' },
+  referrals: { code: () => '', status: () => 'pending' },
   customers: { name: () => '' },
   suppliers: { name: () => '' },
   business: { name: () => '' },

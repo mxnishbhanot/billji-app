@@ -19,6 +19,8 @@ import { GoogleSignInCancelled, signInWithGoogle } from '@/services/googleAuth';
 import { LoginResult, isTwoFactorChallenge } from '@/types';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
 import { registerSchema } from '@/validation/schemas';
+import { reconcilePendingReferral } from '@/features/referrals/reconcile';
+import { savePendingReferralCode } from '@/features/referrals/pendingCode';
 
 const billjiLogo = require('../../assets/main-logo-clean.png');
 
@@ -159,8 +161,28 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
       { scale: interpolate(scrollY.value, [0, 180], [1, 0.97], Extrapolation.CLAMP) }
     ]
   }));
-  const form = useForm<{ name: string; email: string; password: string }>({ defaultValues: { name: '', email: '', password: '' }, resolver: zodResolver(registerSchema) });
-  const mutation = useMutation({ mutationFn: authApi.register, onSuccess: setSession, onError: (error) => showDialog({ title: 'Registration failed', message: apiErrorMessage(error, 'Registration failed'), tone: 'error' }) });
+  const form = useForm<{ name: string; email: string; password: string; referralCode?: string }>({
+    defaultValues: { name: '', email: '', password: '', referralCode: '' },
+    resolver: zodResolver(registerSchema)
+  });
+  const mutation = useMutation({
+    mutationFn: async (values: { name: string; email: string; password: string; referralCode?: string }) => {
+      // Saved BEFORE the request: a signup cannot happen offline (the server mints the account and the
+      // tokens), so if this attempt never reaches the server the code has to survive until one does.
+      if (values.referralCode) await savePendingReferralCode(values.referralCode);
+      return authApi.register(values);
+    },
+    onSuccess: async (session) => {
+      await setSession(session);
+      // Applied at signup, or queued as an APPLY_REFERRAL for the sync engine to deliver. Either way the
+      // reward is the server's to grant and arrives as a subscription.
+      const businessId = session.user?.businessId;
+      if (businessId) {
+        await reconcilePendingReferral({ businessId, signupResult: session.referral ?? null }).catch(() => undefined);
+      }
+    },
+    onError: (error) => showDialog({ title: 'Registration failed', message: apiErrorMessage(error, 'Registration failed'), tone: 'error' })
+  });
   const googleMutation = useMutation({
     mutationFn: async () => authApi.google(await signInWithGoogle()),
     // An existing Google account may already have 2FA on — route to the challenge.
@@ -242,6 +264,17 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
                   onPress={() => setPasswordVisible((visible) => !visible)}
                 />
               )}
+            />
+
+            {/* Last field, and optional: nobody should think a code is required to sign up. */}
+            <FormTextInput
+              control={form.control}
+              name="referralCode"
+              label="Referral code (optional)"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={12}
+              left={<TextInput.Icon icon="gift-outline" />}
             />
 
             <Button

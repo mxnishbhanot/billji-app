@@ -274,4 +274,10 @@ export {
   updateSupplierLocally,
   type SupplierWriteOptions
 } from './supplierWrites';
+export {
+  applyReferralLocally,
+  getLocalReferral,
+  type QueuedReferral,
+  type ReferralRowDoc
+} from './referralWrites';
 export { withTransaction } from './transaction';

@@ -52,8 +52,25 @@ const WIRE_ENTITY: Record<string, string> = {
   expenses: 'expense',
   suppliers: 'vendor',
   purchases: 'purchase',
-  payments: 'payment'
+  payments: 'payment',
+  referrals: 'referral'
 };
+
+/**
+ * Server codes that mean "this will never succeed, stop asking".
+ *
+ * They arrive as a 409, which the push protocol reports as `conflict` — the shape meant for two
+ * writers disagreeing about a version. A referral code that is already used is not that: there is no
+ * local version to rebase and no choice for the user to make, so offering Keep Local / Keep Server on
+ * the Sync Issues screen would be nonsense. These are abandoned like any other permanent rejection.
+ */
+const PERMANENT_REJECTION_CODES = new Set([
+  'REFERRAL_ALREADY_APPLIED',
+  'REFERRAL_REWARD_ALREADY_RECEIVED',
+  'REFERRAL_NOT_ELIGIBLE_PAID',
+  'REFERRAL_CODE_INVALID',
+  'REFERRAL_SELF'
+]);
 
 export type WireOperation = {
   opId: string;
@@ -177,6 +194,10 @@ export const classifyResult = (result: PushResult): OperationResult => {
     // Sync Issues screen for that would be wrong; it just needs asking again.
     if (result.code === 'IDEMPOTENCY_REQUEST_IN_PROGRESS') {
       return { opId: result.opId, outcome: 'retry', error: result.message ?? 'Already being processed' };
+    }
+    // A business rule that has already been decided, not a version conflict. Nothing to resolve.
+    if (result.code && PERMANENT_REJECTION_CODES.has(result.code)) {
+      return { opId: result.opId, outcome: 'dead', error: result.message ?? 'This is no longer possible' };
     }
     return { opId: result.opId, outcome: 'conflict', error: result.message ?? 'Version conflict' };
   }

@@ -10,6 +10,7 @@ import { useAppToast } from '@/components/AppToast';
 import { apiErrorMessage } from '@/api/client';
 import { formatPaise } from '@/constants/entitlements';
 import { RazorpayCheckoutSheet, type CheckoutResult } from '@/features/billing/components/RazorpayCheckoutSheet';
+import { ReferralCard } from '@/features/referrals/components/ReferralCard';
 import {
   useCancelSubscription,
   useDisableAutopay,
@@ -243,6 +244,9 @@ export function SubscriptionScreen({ navigation }: NavProps) {
           </Pressable>
         ) : null}
       </View>
+
+      <Text style={[styles.sectionLabel, { color: theme.colors.onSurfaceVariant }]}>REFER & EARN</Text>
+      <ReferralCard />
 
       <Text style={[styles.sectionLabel, { color: theme.colors.onSurfaceVariant }]}>THIS MONTH</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: cardBorder }]}>

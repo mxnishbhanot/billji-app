@@ -2,7 +2,19 @@ import { z } from 'zod';
 import { isValidGstin } from '@/utils/gstin';
 
 export const loginSchema = z.object({ email: z.email('Enter a valid email'), password: z.string().min(1, 'Password is required') });
-export const registerSchema = z.object({ name: z.string().trim().min(1, 'Name is required').max(80), email: z.email('Enter a valid email'), password: z.string().min(8, 'Use 8+ characters') });
+export const registerSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(80),
+  email: z.email('Enter a valid email'),
+  password: z.string().min(8, 'Use 8+ characters'),
+  // Optional, and only shape-checked here. Whether the code exists, whether it is the user's own and
+  // whether they are eligible are all server decisions — a wrong code never blocks the signup.
+  referralCode: z
+    .string()
+    .trim()
+    .transform((value) => value.toUpperCase())
+    .refine((value) => value === '' || /^[2-9A-HJ-KMNP-Z]{6,12}$/.test(value), 'Check the referral code')
+    .optional()
+});
 export const forgotPasswordSchema = z.object({ email: z.email('Enter a valid email') });
 export const resetPasswordSchema = z
   .object({

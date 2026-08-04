@@ -26,6 +26,8 @@ import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
  */
 
 const ENTITY_LABEL: Record<string, string> = {
+  // Shown when a referral code could not be applied — the server's reason travels with the row.
+  referrals: 'Apply Referral',
   products: 'Product',
   customers: 'Customer',
   invoices: 'Invoice',

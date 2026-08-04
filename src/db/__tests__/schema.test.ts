@@ -53,7 +53,8 @@ describe('initial schema', () => {
   it('is the first of the registered migrations', () => {
     expect(migrations.map((entry) => [entry.version, entry.name])).toEqual([
       [1, 'initial_schema'],
-      [2, 'purchases']
+      [2, 'purchases'],
+      [3, 'referrals']
     ]);
   });
 
