@@ -8,6 +8,9 @@ import { EmptyState } from '@/components/EmptyState';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { StatusPill } from '@/components/StatusPill';
 import { InviteMemberSheet } from '@/components/InviteMemberSheet';
+import { UpgradeSheet } from '@/components/UpgradeSheet';
+import { FEATURE, LIMIT } from '@/constants/entitlements';
+import { useEntitlements } from '@/shared/hooks/useEntitlements';
 import { RolePickerSheet, RoleOption } from '@/components/RolePickerSheet';
 import { useAppDialog } from '@/components/AppDialog';
 import { useAppToast } from '@/components/AppToast';
@@ -45,6 +48,10 @@ export function TeamScreen() {
   const isOwner = !currentRoleKey || currentRoleKey === 'owner';
 
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [paywall, setPaywall] = useState(false);
+  const entitlements = useEntitlements();
+  const seats = entitlements.usage(LIMIT.teamMembers);
+  const canInvite = entitlements.can(FEATURE.teams) && !entitlements.isAtLimit(LIMIT.teamMembers);
   const [reRoleTarget, setReRoleTarget] = useState<TeamMember | null>(null);
   const [removing, setRemoving] = useState<TeamMember | null>(null);
 
@@ -100,9 +107,20 @@ export function TeamScreen() {
     ];
   }, [inviteRoleOptions, rolesQuery.data]);
 
+  // The backend gates *growing* the team on the `teams` feature and on the seat ceiling, and leaves
+  // reads and removals open. This mirrors it: the list always renders, only the invite affordance
+  // reacts to the plan.
+  const openInvite = () => {
+    if (!canInvite) {
+      setPaywall(true);
+      return;
+    }
+    setInviteOpen(true);
+  };
+
   const headerAction = canManage ? (
     <TourAnchor anchorId={ANCHOR.teamInvite}>
-      <Pressable onPress={() => setInviteOpen(true)} style={[styles.addBtn, { backgroundColor: theme.colors.primary }]} hitSlop={8}>
+      <Pressable onPress={openInvite} style={[styles.addBtn, { backgroundColor: theme.colors.primary }]} hitSlop={8}>
         <Feather name="user-plus" size={18} color={theme.colors.onPrimary} />
       </Pressable>
     </TourAnchor>
@@ -118,6 +136,11 @@ export function TeamScreen() {
 
   return (
     <Screen title="Team" headerAction={headerAction}>
+      {seats && !seats.unlimited ? (
+        <Text style={[styles.seatLine, { color: theme.colors.onSurfaceVariant }]}>
+          {seats.used} of {seats.limit} seats used on {entitlements.plan.name || 'your plan'}
+        </Text>
+      ) : null}
       {membersQuery.isLoading ? (
         <ActivityIndicator style={{ marginTop: 40 }} />
       ) : members.length === 0 && invitations.length === 0 ? (
@@ -125,7 +148,7 @@ export function TeamScreen() {
           title="No teammates yet"
           message="Invite people to help run your business. You control what each role can access."
           actionLabel={canManage ? 'Invite teammate' : undefined}
-          onAction={canManage ? () => setInviteOpen(true) : undefined}
+          onAction={canManage ? openInvite : undefined}
         />
       ) : (
         <>
@@ -192,6 +215,22 @@ export function TeamScreen() {
         </>
       )}
 
+      <UpgradeSheet
+
+        visible={paywall}
+
+        feature={entitlements.can(FEATURE.teams) ? undefined : FEATURE.teams}
+
+        metric={entitlements.can(FEATURE.teams) ? LIMIT.teamMembers : undefined}
+
+        limit={seats?.limit ?? null}
+
+        currentPlan={entitlements.plan.key}
+
+        onClose={() => setPaywall(false)}
+
+      />
+
       <InviteMemberSheet
         visible={inviteOpen}
         roleOptions={reRoleOptions}
@@ -233,6 +272,7 @@ const styles = StyleSheet.create({
   name: { ...fontStyles.semiBold, fontSize: 15 },
   roleChip: { borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 3 },
   roleChipText: { ...fontStyles.semiBold, fontSize: 11, textTransform: 'capitalize' },
+  seatLine: { ...fontStyles.medium, fontSize: 12, marginBottom: 10 },
   section: { marginTop: 18 },
   sectionLabel: { ...fontStyles.semiBold, fontSize: 12, letterSpacing: 0.6, marginBottom: 12 }
 });

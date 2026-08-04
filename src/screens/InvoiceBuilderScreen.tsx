@@ -20,6 +20,9 @@ import { useAppToast } from '@/components/AppToast';
 import { BarcodeScannerSheet } from '@/components/BarcodeScannerSheet';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Screen } from '@/components/Screen';
+import { UpgradeSheet } from '@/components/UpgradeSheet';
+import { LIMIT } from '@/constants/entitlements';
+import { useEntitlements } from '@/shared/hooks/useEntitlements';
 import { InvoiceBuilderScreenProps } from '@/navigation/types';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
 import { CustomerFormValues, CustomItemFormValues, documentNumberOf } from '@/types';
@@ -60,6 +63,9 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
   });
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.08);
   const subSurface = isDark ? colors.surface : alpha(colors.primary, 0.04);
+  const entitlements = useEntitlements();
+  const documentQuota = entitlements.usage(LIMIT.documentsPerMonth);
+  const quotaTone = documentQuota && documentQuota.remaining === 0 ? colors.destructive : colors.warning;
   const inputBackground = isDark ? colors.surface : '#FFFFFF';
 
   useEffect(() => {
@@ -109,6 +115,18 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
         <DraftSyncIndicator isDirty={builder.isDraftDirty} lastSavedAt={builder.lastDraftSavedAt} status={builder.draftStatus} />
       }
     >
+      {/* Only once the month is nearly spent. A quota line on every bill would be noise, and the
+          number is the same one the settings row and the dashboard meter read. */}
+      {documentQuota && !documentQuota.unlimited && documentQuota.percentUsed >= 80 ? (
+        <View style={[styles.quotaHint, { backgroundColor: alpha(quotaTone, isDark ? 0.18 : 0.09), borderColor: alpha(quotaTone, 0.28) }]}>
+          <Feather name="alert-circle" size={14} color={quotaTone} />
+          <Text style={[styles.quotaHintText, { color: quotaTone }]}>
+            {documentQuota.remaining !== null && documentQuota.remaining > 0
+              ? `${documentQuota.remaining} of ${documentQuota.limit} documents left this month`
+              : `You have used all ${documentQuota.limit} documents on your plan`}
+          </Text>
+        </View>
+      ) : null}
       <CustomerSelectorCard
         customer={builder.activeCustomer}
         cardBorder={cardBorder}
@@ -221,6 +239,15 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
         selectedCustomerId={builder.activeCustomer?._id}
         stockWarning={builder.stockWarning}
       />
+      <UpgradeSheet
+        visible={Boolean(builder.paywall)}
+        metric={builder.paywall?.metric}
+        limit={builder.paywall?.limit}
+        currentPlan={builder.paywall?.currentPlan}
+        requiredPlans={builder.paywall?.requiredPlans}
+        message={builder.paywall?.message}
+        onClose={builder.dismissPaywall}
+      />
       <ConfirmDialog
         visible={leavePromptVisible}
         title={`Leave ${noun} builder?`}
@@ -250,6 +277,8 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
 }
 
 const styles = StyleSheet.create({
+  quotaHint: { alignItems: 'center', borderRadius: radii.md, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: 8, marginBottom: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  quotaHintText: { ...fontStyles.medium, flex: 1, fontSize: 12 },
   scanRow: { alignItems: 'center', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 10, paddingVertical: 12 },
   scanRowLabel: { ...fontStyles.semiBold, fontSize: 14 },
   actionRow: { flexDirection: 'row', gap: 12, marginBottom: 18 },

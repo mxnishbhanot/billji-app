@@ -1,5 +1,6 @@
 import { isAxiosError } from 'axios';
 import { api } from '../api/client';
+import { track } from '../services/analytics';
 import type { OutboxOperation } from '../db/outbox';
 import { acknowledgePush, resolveReferences, resolveTargetId } from './pushAck';
 import {
@@ -75,6 +76,18 @@ export type PushResult = {
   version?: number | null;
   serverUpdatedAt?: string | null;
   record?: Record<string, unknown> | null;
+  /**
+   * Plan warnings raised while this operation ran. Two matter, and neither is ever a rejection:
+   *
+   *   `LIMIT_EXCEEDED_OFFLINE`     accepted past the plan's monthly ceiling, because the document was
+   *                                already issued to a customer.
+   *   `FEATURE_NOT_IN_PLAN_OFFLINE` accepted although the plan does not include the feature, because
+   *                                the record already exists on this device.
+   *
+   * Work done offline is never taken back for a billing reason — a 402 here would strand the row in
+   * the outbox as `dead` and lose it at the next reinstall.
+   */
+  warnings?: { code: string; metric?: string; feature?: string; limit?: number | null }[];
 };
 
 export type PushResponse = { results: PushResult[]; serverTime?: string };
@@ -151,6 +164,12 @@ export const toWireOperation = (operation: OutboxOperation): WireOperation | nul
  * with its chain; a 5xx or a timeout is the server's problem and worth retrying.
  */
 export const classifyResult = (result: PushResult): OperationResult => {
+  // Counted, not blocked. Recorded for analytics; the number itself reaches the user through the
+  // usage meters, which read the refreshed subscription like every other plan number does.
+  for (const warning of result.warnings ?? []) {
+    track('quota_warning', { code: warning.code, key: warning.metric || warning.feature || 'unknown', offline: true });
+  }
+
   if (result.status === 'ok') return { opId: result.opId, outcome: 'done' };
   if (result.status === 'conflict') {
     // "Still processing" is the server saying this very operation is in flight — a duplicate

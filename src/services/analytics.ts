@@ -21,7 +21,20 @@ export type AnalyticsEvent =
   | 'onboarding_orientation_dismissed'
   | 'onboarding_coachmark_shown'
   | 'onboarding_coachmark_dismissed'
-  | 'onboarding_help_replay';
+  | 'onboarding_help_replay'
+  // Billing. Params are plan keys, feature/limit keys and counts — never amounts a customer paid,
+  // which would put revenue data in an analytics tool that does not need it.
+  | 'paywall_shown'
+  | 'upgrade_started'
+  | 'upgrade_completed'
+  | 'quota_warning'
+  | 'quota_blocked'
+  | 'trial_started'
+  | 'plan_viewed'
+  // Autopay. The mode a customer picked rides as a boolean param on upgrade_started/completed; these
+  // two are the state changes. Never the mandate amount — same reason as above.
+  | 'autopay_enabled'
+  | 'autopay_disabled';
 type AnalyticsParams = Record<string, string | number | boolean>;
 
 const CONSENT_KEY = 'billji-analytics-consent';

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { customersApi, documentsApi, invoicesApi, productsApi } from '@/api/endpoints';
-import { apiErrorMessage } from '@/api/client';
+import { PaywallError, apiErrorMessage, isPaywallError } from '@/api/client';
 import { useDocumentDraft } from '@/shared/drafts/useDocumentDraft';
 import { resolvePlaceOfSupplyCode, stateCodeFromGstin, stateCodeFromName, supplyTypeFor } from '@/shared/gst/gstStates';
 import { queryKeys } from '@/shared/query/queryKeys';
@@ -67,6 +67,7 @@ export const useInvoiceBuilder = ({
   const [discountValue, setDiscountValue] = useState('0');
   const [notes, setNotes] = useState('');
   const [stockWarning, setStockWarning] = useState<StockWarning | null>(null);
+  const [paywall, setPaywall] = useState<PaywallError | null>(null);
   const debouncedCustomerSearch = useDebouncedValue(customerSearch, 300);
   const debouncedProductSearch = useDebouncedValue(productSearch, 300);
 
@@ -172,6 +173,16 @@ export const useInvoiceBuilder = ({
       queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
     },
     onError: (error) => {
+      // The monthly document quota is spent. Shown as the upgrade sheet rather than an error
+      // dialog: the work is still in the builder and still saved as a draft, so this is a
+      // decision to make, not a failure to dismiss. Documents created offline are never
+      // refused — the server counts those as overage — so this only happens online.
+      if (isPaywallError(error)) {
+        track('quota_blocked', { metric: error.metric || 'documents_per_month' });
+        setPaywall(error);
+        return;
+      }
+
       const shortages = stockShortagesFromError(error);
       if (shortages) {
         setStockWarning({
@@ -318,6 +329,8 @@ export const useInvoiceBuilder = ({
     setStockWarning,
     setTaxRate,
     stockWarning,
+    paywall,
+    dismissPaywall: () => setPaywall(null),
     taxRate,
     totals,
     updateQuantity,

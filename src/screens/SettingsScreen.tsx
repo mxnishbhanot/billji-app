@@ -24,6 +24,8 @@ import { pendingLocalSyncCount, wipeLocalBusinessData } from '@/db/wipeLocalData
 import { AppNavigation } from '@/navigation/types';
 import { unregisterFromPush } from '@/services/push';
 import { disconnectSocket } from '@/services/socket';
+import { LIMIT } from '@/constants/entitlements';
+import { useEntitlements } from '@/shared/hooks/useEntitlements';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { useSyncStatus } from '@/shared/hooks/useSyncStatus';
 import { queryKeys } from '@/shared/query/queryKeys';
@@ -216,6 +218,13 @@ export function SettingsScreen() {
   const { showDialog } = useAppDialog();
   const { showToast } = useAppToast();
   const { can } = usePermissions();
+  // The header chip used to read "Pro Plan" for everyone. It now says what the business is actually on.
+  const entitlements = useEntitlements();
+  const planLabel = entitlements.plan.name || 'Starter';
+  const documents = entitlements.usage(LIMIT.documentsPerMonth);
+  const billingSubtitle = documents
+    ? `${planLabel} · ${documents.used}${documents.unlimited ? '' : ` of ${documents.limit}`} documents this month`
+    : planLabel;
   const canViewLedger = can(PERMISSION.reportsView);
   const canViewActivity = can(PERMISSION.settingsManage);
   const canViewTeam = can(PERMISSION.teamView);
@@ -403,7 +412,7 @@ export function SettingsScreen() {
           <Text numberOfLines={1} style={styles.profileEmail}>{businessEmail || user?.email}</Text>
           <View style={styles.planPill}>
             <Feather name="shield" size={10} color={colors.primaryStrong} />
-            <Text style={styles.planText}>Pro Plan</Text>
+            <Text style={styles.planText}>{planLabel}</Text>
           </View>
         </View>
         <Pressable onPress={() => setBrandSheetVisible(true)} style={({ pressed }) => [styles.profileEdit, { backgroundColor: alpha('#1C1A4A', pressed ? 0.55 : 0.36), borderColor: alpha('#C3C0FF', 0.36) }]} hitSlop={8}>
@@ -426,6 +435,16 @@ export function SettingsScreen() {
           }
           tone={colors.warning}
           onPress={() => navigation.navigate('TaxSettings')}
+        />
+      </SettingsGroup>
+
+      <SettingsGroup title="PLAN & BILLING">
+        <SettingsRow
+          icon="crown-outline"
+          title="Plan & billing"
+          subtitle={billingSubtitle}
+          tone={colors.violet}
+          onPress={() => navigation.navigate('Subscription')}
         />
       </SettingsGroup>
 

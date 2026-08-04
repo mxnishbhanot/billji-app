@@ -57,6 +57,8 @@ import {
   AuthSession,
   BusinessProfile,
   BusinessSummary,
+  Checkout,
+  CouponQuote,
   Customer,
   CustomerFormValues,
   CustomerOutstanding,
@@ -80,6 +82,10 @@ import {
   ImportResult,
   Invoice,
   InvoiceCreatePayload,
+  Plan,
+  Subscription,
+  SubscriptionPayment,
+  UsageRow,
   InvoiceDraftPayload,
   InvoiceQuery,
   InvoiceTemplate,
@@ -127,6 +133,28 @@ type OrderPage = Page<Order, 'orders'>;
 type NotificationPage = Page<NotificationItem, 'notifications'> & { unreadCount: number };
 type InvoiceDraftDocument = DraftDocument<InvoiceDraftPayload>;
 const idempotencyKey = (scope: string) => `${scope}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+/**
+ * A key that is the SAME for repeated attempts at the same purchase, unlike `idempotencyKey` above.
+ *
+ * Randomising it would defeat the point here: two taps on Upgrade would carry two keys and mint two
+ * Razorpay orders, both payable. Derived from the terms plus a coarse time bucket, so a retry or a
+ * double tap replays the first order while a genuine repurchase later gets its own key. The server
+ * additionally resumes any order still open for these terms, which covers the bucket boundary.
+ */
+const CHECKOUT_KEY_BUCKET_MS = 5 * 60 * 1000;
+const checkoutIdempotencyKey = (payload: { planId?: string; planKey?: string; interval: string; couponCode?: string; autopay?: boolean }) =>
+  [
+    'checkout',
+    payload.planId || payload.planKey || 'plan',
+    payload.interval,
+    payload.couponCode || 'nocoupon',
+    // The payment mode is part of the terms, not a detail: autopay mints a mandate and manual mints an
+    // order. Leaving it out of the key would make a customer who switches modes inside one bucket
+    // replay the other mode's checkout.
+    payload.autopay ? 'autopay' : 'manual',
+    Math.floor(Date.now() / CHECKOUT_KEY_BUCKET_MS)
+  ].join('-');
 
 export const authApi = {
   register: (payload: { name: string; email: string; password: string }) => api.post<AuthSession>('/auth/register', payload).then((res) => res.data),
@@ -179,6 +207,48 @@ export const teamApi = {
   updateStatus: (userId: string, status: 'active' | 'archived') =>
     api.patch<{ success: boolean }>(`/team/members/${userId}/status`, { status }).then((res) => res.data),
   removeMember: (userId: string) => api.delete<{ success: boolean }>(`/team/members/${userId}`).then((res) => res.data)
+};
+
+// Billing mirrors backend/src/modules/billing/routes.js one to one. No new HTTP client and no new
+// interceptor stack — the 402 branch lives in client.ts with the rest.
+export const billingApi = {
+  subscription: () => api.get<{ subscription: Subscription }>('/billing/subscription').then((res) => res.data.subscription),
+  usage: () =>
+    api
+      .get<{ usage: { usageSummary: UsageRow[]; remainingLimits: Record<string, number | null> } }>('/billing/usage')
+      .then((res) => res.data.usage),
+  plans: () => api.get<{ plans: Plan[] }>('/billing/plans').then((res) => res.data.plans),
+  payments: (params?: { limit?: number; skip?: number }) =>
+    api.get<{ payments: SubscriptionPayment[] }>('/billing/payments', { params }).then((res) => res.data.payments),
+  // The Idempotency-Key is what makes a double tap replay the first order instead of opening a second
+  // one the customer could also pay. It is stable per purchase attempt, not random — see
+  // checkoutIdempotencyKey.
+  // `autopay: true` asks for a recurring mandate instead of a single payment. Same route, because it
+  // is the same decision with a different instrument.
+  checkout: (payload: { planId?: string; planKey?: string; interval: 'month' | 'year'; couponCode?: string; autopay?: boolean }) =>
+    api
+      .post<{ checkout: Checkout }>('/billing/checkout', payload, {
+        headers: { 'Idempotency-Key': checkoutIdempotencyKey(payload) }
+      })
+      .then((res) => res.data.checkout),
+  // The webhook is the authority; this exists so the UI can unlock immediately instead of polling.
+  // `payment` comes back null when a mandate was approved but its first debit has not landed yet —
+  // that is a success, and the plan activates on the charge.
+  verifyCheckout: (payload: { orderId?: string; subscriptionId?: string; paymentId: string; signature: string }) =>
+    api
+      .post<{ payment: SubscriptionPayment | null; subscription: Subscription }>('/billing/checkout/verify', payload)
+      .then((res) => res.data),
+  previewCoupon: (payload: { code: string; planId?: string; planKey?: string; interval: 'month' | 'year' }) =>
+    api.post<{ coupon: CouponQuote }>('/billing/coupons/preview', payload).then((res) => res.data.coupon),
+  startTrial: (payload: { planId?: string; planKey?: string }) =>
+    api.post<{ subscription: Subscription }>('/billing/trial', payload).then((res) => res.data.subscription),
+  // Access continues to the end of the period already paid for; immediate cancellation is support-only.
+  cancel: (payload: { reason?: string }) =>
+    api.post<{ subscription: Subscription }>('/billing/cancel', payload).then((res) => res.data.subscription),
+  reactivate: () => api.post<{ subscription: Subscription }>('/billing/reactivate').then((res) => res.data.subscription),
+  // Stops the mandate and nothing else: the plan and the paid period stay exactly as they are, and
+  // renewal reminders resume. Deliberately not the same call as cancel().
+  disableAutopay: () => api.post<{ subscription: Subscription }>('/billing/autopay/off').then((res) => res.data.subscription)
 };
 
 export const rolesApi = {

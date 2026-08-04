@@ -97,6 +97,12 @@ export type User = {
   permissions?: string[];
   businessProfile: BusinessProfile;
   createdAt?: string;
+  /**
+   * The plan, sent on every auth response and persisted with the session. Present so gating works
+   * with no network — absent means "treat as the free tier", never "allow everything"
+   * (see useEntitlements: entitlements fail CLOSED, unlike permissions).
+   */
+  subscription?: Subscription;
 };
 
 export type MemberStatus = 'invited' | 'active' | 'archived' | 'removed';
@@ -143,6 +149,172 @@ export type BusinessSummary = {
   businessName: string;
   roleKey: NonNullable<User['roleKey']>;
   current: boolean;
+};
+
+// --- billing -----------------------------------------------------------------
+//
+// Mirrors the backend's stable contract (`backend/src/contracts/billingDto.js`). Two conventions
+// that hold in every field here: **null means unlimited** (the -1 sentinel never crosses the wire)
+// and **money is integer paise**, unformatted.
+
+export type UsageRow = {
+  key: string;
+  label: string;
+  unit: string;
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+  percentUsed: number;
+  unlimited: boolean;
+  /** Non-zero only where usage was accepted past the ceiling — documents created offline. */
+  overage: number;
+  resetsAt: string | null;
+};
+
+export type SubscriptionStatus =
+  | 'trialing'
+  | 'active'
+  | 'past_due'
+  | 'in_grace'
+  | 'cancelled'
+  | 'expired'
+  | 'paused'
+  | 'none';
+
+export type Subscription = {
+  contractVersion: number;
+  planId: string | null;
+  planName: string;
+  /** Analytics and copy lookups only. Never branch on it — features and limits are the authority. */
+  planKey: string | null;
+  snapshotVersion: number | null;
+  subscriptionStatus: SubscriptionStatus;
+  billingInterval: string | null;
+  renewalDate: string | null;
+  expiryDate: string | null;
+  gracePeriodEndsAt: string | null;
+  isTrial: boolean;
+  trialEndsAt: string | null;
+  inGracePeriod: boolean;
+  cancelAtPeriodEnd: boolean;
+  /**
+   * Autopay state. Optional because a session persisted by an older build has no such field, and
+   * useSubscription seeds its initial data from that session.
+   *
+   * `status` is a dunning signal, never an access signal — gate features on `subscriptionStatus`,
+   * features and limits, exactly as before. A halted mandate on a paid-up period is still active.
+   */
+  autopay?: AutopayState | null;
+  features: Record<string, boolean | string | number>;
+  limits: Record<string, number | null>;
+  usageSummary: UsageRow[];
+  remainingLimits: Record<string, number | null>;
+};
+
+export type AutopayStatus = 'none' | 'pending' | 'authenticated' | 'active' | 'halted' | 'cancelled' | 'completed';
+
+export type AutopayState = {
+  enabled: boolean;
+  status: AutopayStatus;
+  /** When the next automatic debit is due. Not the same instant as `renewalDate`. */
+  nextDebitAt: string | null;
+  lastChargedAt: string | null;
+  /** Integer paise. What the customer authorised — the mandate ceiling is the plan price. */
+  amount: number | null;
+  currency: string | null;
+};
+
+export type PlanPrice = {
+  interval: 'free' | 'month' | 'year' | 'lifetime' | 'custom';
+  intervalCount: number;
+  currency: string;
+  amount: number;
+  compareAtAmount: number | null;
+  /** Whether this price can be put on a mandate. False when the gateway is unconfigured. */
+  autopayAvailable?: boolean;
+};
+
+export type Plan = {
+  planId: string;
+  planKey: string;
+  name: string;
+  tagline: string;
+  description: string;
+  badge: string;
+  sortOrder: number;
+  isCurrent: boolean;
+  requiresSalesContact: boolean;
+  prices: PlanPrice[];
+  features: Record<string, boolean | string | number>;
+  limits: Record<string, number | null>;
+  trial: { enabled: boolean; days: number };
+};
+
+export type SubscriptionPayment = {
+  id: string;
+  kind: string;
+  status: string;
+  amount: number;
+  discount: number;
+  netAmount: number;
+  currency: string;
+  planKey: string;
+  billingInterval: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  couponCode: string;
+  refundedAmount: number;
+  refundedAt: string | null;
+  receiptNumber: string;
+  /** True when a mandate took this cycle rather than the customer approving it by hand. */
+  autopay?: boolean;
+  method: string;
+  paidAt: string | null;
+  createdAt: string;
+};
+
+/**
+ * An opened checkout. `providerConfig.keyId` is the publishable key — never a secret.
+ *
+ * Exactly one of `orderId` / `subscriptionId` is set, and which one decides what the gateway sheet
+ * opens: a one-time payment or an autopay mandate. Both are optional so TypeScript forces every
+ * reader to say which case it handles — a single `mode` flag could disagree with the ids.
+ */
+export type Checkout = {
+  paymentId: string;
+  orderId?: string;
+  subscriptionId?: string;
+  autopay?: boolean;
+  amount: number;
+  currency: string;
+  provider: string;
+  providerConfig: { keyId?: string };
+  plan: { planId: string; planKey: string; name: string };
+  interval: string;
+  breakdown: { gross: number; discount: number; proratedCredit: number; netAmount: number };
+  /** True when the server handed back an order that was already open instead of minting a new one. */
+  resumed?: boolean;
+};
+
+export type CouponQuote = {
+  code: string;
+  valid: boolean;
+  reason: string | null;
+  gross: number;
+  discount: number;
+  /** Unused days of the current period, credited on a mid-cycle upgrade. */
+  proratedCredit: number;
+  netAmount: number;
+  currency: string;
+  bonusDays: number;
+};
+
+/** A plan the server named as granting a blocked feature. Powers the upgrade sheet. */
+export type RequiredPlan = {
+  planId: string;
+  planKey: string;
+  name: string;
+  prices: { interval: string; amount: number; currency: string }[];
 };
 
 export type AuthSession = {

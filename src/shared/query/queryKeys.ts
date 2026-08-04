@@ -95,5 +95,12 @@ export const queryKeys = {
   exports: {
     all: ['exports'] as const,
     detail: (id: string) => ['exports', id] as const
+  },
+  billing: {
+    all: ['billing'] as const,
+    subscription: ['billing', 'subscription'] as const,
+    plans: ['billing', 'plans'] as const,
+    usage: ['billing', 'usage'] as const,
+    payments: ['billing', 'payments'] as const
   }
 } as const;
