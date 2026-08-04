@@ -51,8 +51,23 @@ const DataImportScreen = lazy(() => import('@/screens/DataImportScreen').then((m
 const TeamScreen = lazy(() => import('@/screens/TeamScreen').then((m) => ({ default: m.TeamScreen })));
 const RolesScreen = lazy(() => import('@/screens/RolesScreen').then((m) => ({ default: m.RolesScreen })));
 const RoleEditorScreen = lazy(() => import('@/screens/RoleEditorScreen').then((m) => ({ default: m.RoleEditorScreen })));
+const SubscriptionScreen = lazy(() => import('@/screens/SubscriptionScreen').then((m) => ({ default: m.SubscriptionScreen })));
+const PlansScreen = lazy(() => import('@/screens/PlansScreen').then((m) => ({ default: m.PlansScreen })));
+
+// Plan gates, mirroring exactly what the backend guards (see middlewares/entitlement.js). Declared
+// at module scope so the wrapper identity is stable — a component created during render would
+// remount the screen on every state change.
+const GatedGstReturnsScreen = withFeatureGate(FEATURE.advancedGstReports, 'GST returns', GstReturnsScreen);
+const GatedExpensesScreen = withFeatureGate(FEATURE.expenses, 'Expenses', ExpensesScreen);
+const GatedPurchasesScreen = withFeatureGate(FEATURE.purchases, 'Purchases', PurchasesScreen);
+const GatedActivityLogScreen = withFeatureGate(FEATURE.auditLogs, 'Activity log', ActivityLogScreen);
+const GatedDataExportScreen = withFeatureGate(FEATURE.dataExport, 'Export my data', DataExportScreen);
+const GatedDataImportScreen = withFeatureGate(FEATURE.dataImport, 'Import data', DataImportScreen);
+const GatedRoleEditorScreen = withFeatureGate(FEATURE.customRoles, 'Role', RoleEditorScreen);
 const AcceptInviteScreen = lazy(() => import('@/screens/AcceptInviteScreen').then((m) => ({ default: m.AcceptInviteScreen })));
 import { useAuthStore } from '@/store/authStore';
+import { FEATURE } from '@/constants/entitlements';
+import { withFeatureGate } from '@/components/FeatureGate';
 import { attachPushListeners, registerForPush } from '@/services/push';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { CelebrationOverlay, OnboardingProvider, TourAnchor, TourHost, WelcomeSheet, ANCHOR, useOnboardingOptional } from '@/features/onboarding';
@@ -131,9 +146,9 @@ function DashboardNavigator() {
       <DashboardStack.Screen name="Reports" component={ReportsScreen} />
       <DashboardStack.Screen name="Payments" component={PaymentsScreen} />
       <DashboardStack.Screen name="PaymentReminders" component={PaymentRemindersScreen} />
-      <DashboardStack.Screen name="GstReturns" component={GstReturnsScreen} />
-      <DashboardStack.Screen name="Expenses" component={ExpensesScreen} />
-      <DashboardStack.Screen name="Purchases" component={PurchasesScreen} />
+      <DashboardStack.Screen name="GstReturns" component={GatedGstReturnsScreen} />
+      <DashboardStack.Screen name="Expenses" component={GatedExpensesScreen} />
+      <DashboardStack.Screen name="Purchases" component={GatedPurchasesScreen} />
     </DashboardStack.Navigator>
   );
 }
@@ -182,14 +197,16 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
       <SettingsStack.Screen name="SyncSettings" component={SyncSettingsScreen} />
       <SettingsStack.Screen name="SyncIssues" component={SyncIssuesScreen} />
-      <SettingsStack.Screen name="ActivityLog" component={ActivityLogScreen} />
+      <SettingsStack.Screen name="ActivityLog" component={GatedActivityLogScreen} />
       <SettingsStack.Screen name="Ledger" component={LedgerScreen} />
-      <SettingsStack.Screen name="DataExport" component={DataExportScreen} />
-      <SettingsStack.Screen name="DataImport" component={DataImportScreen} />
+      <SettingsStack.Screen name="DataExport" component={GatedDataExportScreen} />
+      <SettingsStack.Screen name="DataImport" component={GatedDataImportScreen} />
       <SettingsStack.Screen name="TwoFactorSetup" component={TwoFactorSetupScreen} />
       <SettingsStack.Screen name="Team" component={TeamScreen} />
       <SettingsStack.Screen name="Roles" component={RolesScreen} />
-      <SettingsStack.Screen name="RoleEditor" component={RoleEditorScreen} />
+      <SettingsStack.Screen name="RoleEditor" component={GatedRoleEditorScreen} />
+      <SettingsStack.Screen name="Subscription" component={SubscriptionScreen} />
+      <SettingsStack.Screen name="Plans" component={PlansScreen} />
       <SettingsStack.Screen name="AcceptInvite" component={AcceptInviteScreen} />
     </SettingsStack.Navigator>
   );

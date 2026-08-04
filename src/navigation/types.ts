@@ -82,6 +82,8 @@ export type SettingsStackParamList = {
   Team: undefined;
   Roles: undefined;
   RoleEditor: { roleId?: string };
+  Subscription: undefined;
+  Plans: undefined;
   AcceptInvite: undefined;
 };
 
@@ -153,3 +155,5 @@ export type TwoFactorSetupScreenProps = NativeStackScreenProps<SettingsStackPara
 export type TeamScreenProps = NativeStackScreenProps<SettingsStackParamList, 'Team'>;
 export type RolesScreenProps = NativeStackScreenProps<SettingsStackParamList, 'Roles'>;
 export type RoleEditorScreenProps = NativeStackScreenProps<SettingsStackParamList, 'RoleEditor'>;
+export type SubscriptionScreenProps = NativeStackScreenProps<SettingsStackParamList, 'Subscription'>;
+export type PlansScreenProps = NativeStackScreenProps<SettingsStackParamList, 'Plans'>;

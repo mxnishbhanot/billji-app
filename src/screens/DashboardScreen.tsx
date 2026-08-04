@@ -13,6 +13,9 @@ import { useAppDialog } from '@/components/AppDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { Screen } from '@/components/Screen';
 import { StatCard } from '@/components/StatCard';
+import { UsageMeter } from '@/components/UsageMeter';
+import { LIMIT } from '@/constants/entitlements';
+import { useEntitlements } from '@/shared/hooks/useEntitlements';
 import { DashboardScreenProps } from '@/navigation/types';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
@@ -233,6 +236,7 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
       { scale: interpolate(scrollY.value, [0, 190], [1, 0.975], Extrapolation.CLAMP) }
     ]
   }));
+  const documentQuota = useEntitlements().usage(LIMIT.documentsPerMonth);
   const query = useQuery({ queryKey: queryKeys.report.all, queryFn: () => reportsApi.summary() });
 
   useEffect(() => {
@@ -371,6 +375,23 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
           </View>
         </View>
       </Reanimated.View>
+
+      {/* Appears only once the month is 80% spent, so it is a nudge and not furniture. Tapping goes
+          to the plan screen, which is where the number can actually be changed. */}
+      {documentQuota && !documentQuota.unlimited && documentQuota.percentUsed >= 80 ? (
+        <Pressable
+          onPress={() => navigation.navigate('SettingsTab', { screen: 'Plans' })}
+          style={({ pressed }) => [
+            styles.quotaCard,
+            { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), opacity: pressed ? 0.95 : 1 }
+          ]}
+        >
+          <UsageMeter row={documentQuota} compact />
+          <Text style={[styles.quotaCta, { color: theme.colors.primary }]}>
+            {documentQuota.remaining === 0 ? 'Upgrade to keep billing →' : 'See plans →'}
+          </Text>
+        </Pressable>
+      ) : null}
 
       <View style={styles.statRow}>{stats.slice(0, 2).map((item) => <StatCard key={item.label} {...item} />)}</View>
       <View style={styles.statRow}>{stats.slice(2).map((item) => <StatCard key={item.label} {...item} />)}</View>
@@ -532,6 +553,8 @@ const styles = StyleSheet.create({
   duesHint: { ...typeScale.caption, fontSize: 12, marginTop: 2 },
   duesIcon: { alignItems: 'center', borderRadius: radii.md, height: 36, justifyContent: 'center', width: 36 },
   duesText: { flex: 1, minWidth: 0 },
+  quotaCard: { borderRadius: radii.card, borderWidth: StyleSheet.hairlineWidth, marginBottom: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  quotaCta: { ...fontStyles.semiBold, fontSize: 12, marginTop: 8 },
   statRow: { flexDirection: 'row', marginBottom: 2, marginHorizontal: -6 },
   viewAll: { ...fontStyles.bold, fontSize: 12 }
 });
