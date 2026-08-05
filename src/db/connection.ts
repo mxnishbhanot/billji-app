@@ -38,6 +38,25 @@ const canRead = async (db: SQLiteDatabase) => {
 
 const escapedKey = (key: string) => key.replace(/'/g, "''");
 
+/**
+ * Deletes the local file(s) and returns a fresh, keyed, readable database.
+ *
+ * The only recovery for a file SQLite refuses to read at all. Nothing is lost that was not
+ * already lost: a database that cannot be opened cannot be pushed either, and the rows it held
+ * were a cache of the server plus an outbox no engine could reach.
+ */
+const wipeAndCreate = async (key: string): Promise<SQLiteDatabase> => {
+  await deleteDatabaseAsync(DATABASE_NAME).catch(() => undefined);
+  await deleteDatabaseAsync(`${DATABASE_NAME}.migrating`).catch(() => undefined);
+
+  const fresh = await openDatabaseAsync(DATABASE_NAME);
+  await fresh.execAsync(pragmaKeySql(key));
+  if (!(await canRead(fresh))) {
+    throw new DatabaseError('DB_OPEN_FAILED', 'A freshly created database is still unreadable');
+  }
+  return fresh;
+};
+
 /** Replace the live DB file with an exported encrypted copy at `fromPath`. */
 const replaceWithEncryptedFile = async (fromPath: string, key: string): Promise<SQLiteDatabase> => {
   const { moveAsync, deleteAsync } = await import('expo-file-system/legacy');
@@ -68,10 +87,8 @@ const migratePlaintextToEncrypted = async (key: string): Promise<SQLiteDatabase>
     plain = await openDatabaseAsync(DATABASE_NAME);
     if (!(await canRead(plain))) {
       await plain.closeAsync().catch(() => undefined);
-      await deleteDatabaseAsync(DATABASE_NAME).catch(() => undefined);
-      const fresh = await openDatabaseAsync(DATABASE_NAME);
-      await fresh.execAsync(pragmaKeySql(key));
-      return fresh;
+      plain = null;
+      return wipeAndCreate(key);
     }
 
     await deleteDatabaseAsync(tempName).catch(() => undefined);
@@ -91,11 +108,8 @@ const migratePlaintextToEncrypted = async (key: string): Promise<SQLiteDatabase>
   } catch (error) {
     console.warn('[db] plaintext→SQLCipher migration failed; wiping local store', error);
     await plain?.closeAsync().catch(() => undefined);
-    await deleteDatabaseAsync(DATABASE_NAME).catch(() => undefined);
     await deleteDatabaseAsync(tempName).catch(() => undefined);
-    const fresh = await openDatabaseAsync(DATABASE_NAME);
-    await fresh.execAsync(pragmaKeySql(key));
-    return fresh;
+    return wipeAndCreate(key);
   }
 };
 
@@ -108,20 +122,31 @@ const applyEncryption = async (opened: SQLiteDatabase, key: string): Promise<SQL
   return migratePlaintextToEncrypted(key);
 };
 
+const prepare = async (db: SQLiteDatabase, list: Migration[]) => {
+  await db.execAsync('PRAGMA journal_mode = WAL');
+  await db.execAsync('PRAGMA foreign_keys = ON');
+  await runMigrations(db, list);
+  return db;
+};
+
 const open = async (list: Migration[]): Promise<SQLiteDatabase> => {
   const key = await getOrCreateDbEncryptionKey();
 
   const db = await wrapDatabaseError('DB_OPEN_FAILED', `Could not open ${DATABASE_NAME}`, async () => {
     const opened = await openDatabaseAsync(DATABASE_NAME);
-    const secured = await applyEncryption(opened, key);
-
-    await secured.execAsync('PRAGMA journal_mode = WAL');
-    await secured.execAsync('PRAGMA foreign_keys = ON');
-    return secured;
+    return applyEncryption(opened, key);
   });
 
-  await runMigrations(db, list);
-  return db;
+  try {
+    return await prepare(db, list);
+  } catch (error) {
+    // A file that opens but will not migrate ("file is not a database", a half-finished
+    // encryption swap) is wedged for good: without this the same dead file is reopened on
+    // every launch and the device is offline-broken forever. Wipe once and rebuild.
+    console.warn('[db] local store unusable; wiping and rebuilding', error);
+    await db.closeAsync().catch(() => undefined);
+    return prepare(await wipeAndCreate(key), list);
+  }
 };
 
 export const openDatabase = async (list: Migration[] = migrations): Promise<SQLiteDatabase> => {
