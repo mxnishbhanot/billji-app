@@ -102,16 +102,21 @@ export function OfflineBanner({ style }: { style?: StyleProp<ViewStyle> }) {
 export function SyncBadge({
   onPress,
   style,
-  showLabel = true
+  showLabel = true,
+  hideWhenSynced = false
 }: {
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
   showLabel?: boolean;
+  /** Headers: the "all good" state is the default, so saying it costs space and says nothing. */
+  hideWhenSynced?: boolean;
 }) {
   const { phase, pending, failed, syncing, online } = useSyncStatus();
   const isDark = useTheme().dark;
   const tone = toneFor(phase, isDark);
   const press = useCallback(() => (onPress ? onPress() : void syncNow()), [onPress]);
+
+  if (hideWhenSynced && phase === 'synced') return null;
 
   return (
     <Pressable
