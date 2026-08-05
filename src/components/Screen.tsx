@@ -11,7 +11,7 @@ import { AppNavigation } from '@/navigation/types';
 import { BrandMark } from './BrandMark';
 import { NotificationButton } from './NotificationButton';
 import { QuickActionsSheet } from './QuickActionsSheet';
-import { OfflineBanner, SyncBadge } from './SyncStatus';
+import { OfflineBanner } from './SyncStatus';
 
 type Props = {
   title: string;
@@ -73,17 +73,20 @@ export function Screen({
           ]}
         >
           {canGoBackInStack ? <Appbar.BackAction onPress={() => navigation.goBack()} style={styles.backAction} /> : null}
-          <View style={[styles.logoChip, { backgroundColor: isDark ? alpha(colors.primary, 0.18) : alpha('#FFFFFF', 0.7), borderColor: isDark ? alpha(colors.primary, 0.24) : alpha(colors.primaryStrong, 0.08) }]}>
-            <BrandMark size={44} compact imageUri={businessProfile?.logoUrl} label={businessName} />
-          </View>
+          {canGoBackInStack ? null : (
+            <View style={[styles.logoChip, { backgroundColor: isDark ? alpha(colors.primary, 0.18) : alpha('#FFFFFF', 0.7), borderColor: isDark ? alpha(colors.primary, 0.24) : alpha(colors.primaryStrong, 0.08) }]}>
+              <BrandMark size={36} compact imageUri={businessProfile?.logoUrl} label={businessName} />
+            </View>
+          )}
           <View style={styles.titleBlock}>
-            <Text numberOfLines={1} style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>{businessName || 'Billji Business'}</Text>
+            {canGoBackInStack ? null : (
+              <Text numberOfLines={1} style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>{businessName || 'Billji Business'}</Text>
+            )}
             <View style={styles.titleRow}>
-              <Text numberOfLines={1} variant="titleLarge" style={[styles.title, { color: theme.colors.onBackground }]}>{title}</Text>
+              <Text numberOfLines={1} variant="titleLarge" style={[styles.title, { color: theme.colors.onBackground }, canGoBackInStack ? styles.titleCompact : null]}>{title}</Text>
               {titleAccessory}
             </View>
           </View>
-          <SyncBadge showLabel={false} style={styles.syncBadge} />
           <Pressable
             onPress={() => setQuickOpen(true)}
             hitSlop={8}
@@ -136,16 +139,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radii.full,
     borderWidth: 1,
-    height: 48,
+    height: 40,
     justifyContent: 'center',
-    marginRight: 12,
-    width: 48
+    marginRight: 10,
+    width: 40
   },
   offlineBanner: { marginBottom: 10 },
-  quickBtn: { alignItems: 'center', borderRadius: radii.full, height: 38, justifyContent: 'center', marginRight: 6, width: 38 },
-  subtitle: { ...typeScale.bodyPrimaryMedium, fontSize: 14, lineHeight: 20 },
-  syncBadge: { marginRight: 4 },
+  quickBtn: { alignItems: 'center', borderRadius: radii.full, height: 40, justifyContent: 'center', width: 40 },
+  subtitle: { ...typeScale.bodyPrimaryMedium, fontSize: 13, lineHeight: 18 },
   title: { ...typeScale.screenTitle, flexShrink: 1, fontSize: 26, lineHeight: 34, letterSpacing: -0.52 },
+  titleCompact: { fontSize: 22, letterSpacing: -0.4, lineHeight: 28 },
   titleBlock: { flex: 1, minWidth: 0 },
   titleRow: { alignItems: 'center', flexDirection: 'row', gap: 8, minWidth: 0 }
 });

@@ -142,10 +142,11 @@ const styles = StyleSheet.create({
   actionWrap: {
     borderRadius: radii.pill,
     borderWidth: 1,
-    height: 44,
+    alignItems: 'center',
+    height: 40,
     justifyContent: 'center',
-    marginLeft: 8,
-    width: 44
+    marginLeft: 4,
+    width: 40
   },
   badge: { position: 'absolute', right: -2, top: -4 }
 });

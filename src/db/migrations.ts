@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { DatabaseError, wrapDatabaseError } from './errors';
 import { initialSchema } from './schema/001_initial';
 import { purchasesSchema } from './schema/002_purchases';
+import { referralsSchema } from './schema/003_referrals';
 
 export type Migration = {
   /** 1-based, contiguous, never reused or reordered once shipped. */
@@ -16,7 +17,7 @@ export type Migration = {
  * version it holds, so editing a shipped migration changes the schema on new installs and
  * leaves every existing one behind.
  */
-export const migrations: Migration[] = [initialSchema, purchasesSchema];
+export const migrations: Migration[] = [initialSchema, purchasesSchema, referralsSchema];
 
 export const latestVersion = (list: Migration[] = migrations) =>
   list.reduce((highest, migration) => Math.max(highest, migration.version), 0);

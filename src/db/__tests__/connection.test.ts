@@ -99,6 +99,24 @@ describe('openDatabase', () => {
     mockOpen.mockResolvedValue(fake as never);
     await expect(openDatabase([])).resolves.toBe(fake);
   });
+
+  it('wipes and rebuilds a file that opens but will not migrate', async () => {
+    let attempt = 0;
+    const wedged: Migration = {
+      version: 1,
+      name: 'wedged',
+      up: async (db) => {
+        attempt += 1;
+        // The device symptom: "file is not a database" until the file is deleted.
+        if (attempt === 1) throw new Error('file is not a database');
+        await db.execAsync('CREATE TABLE t1 (id TEXT)');
+      }
+    };
+
+    await expect(openDatabase([wedged])).resolves.toBe(fake);
+    expect(mockDelete).toHaveBeenCalledWith(DATABASE_NAME);
+    expect(fake.statements).toContain('CREATE TABLE t1 (id TEXT)');
+  });
 });
 
 describe('platform availability', () => {

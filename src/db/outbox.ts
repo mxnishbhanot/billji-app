@@ -72,6 +72,9 @@ export type OutboxOptions = { txn?: SQLiteDatabase; now?: string };
  * the invoice it belongs to.
  */
 export const OUTBOX_PRIORITY: Record<string, number> = {
+  // Tier 1 with money: a referral code is what stands between the shopkeeper and the Pro features
+  // they were promised for entering it, so it goes out ahead of the catalogue and the masters.
+  referrals: 1,
   payments: 1,
   invoices: 2,
   orders: 2,
