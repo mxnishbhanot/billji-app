@@ -2,19 +2,23 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { withBufferedChanges } from './changeBus';
 import { openDatabase } from './connection';
 import { wrapDatabaseError } from './errors';
+import { runInTransaction } from './sqliteTransaction';
 
 /**
- * Runs `task` inside one exclusive transaction and returns its value. Throwing rolls the
- * whole thing back.
+ * Runs `task` inside one transaction and returns its value. Throwing rolls the whole thing back.
  *
- * Exclusive on purpose. expo-sqlite's `withTransactionAsync` is documented to include *any*
- * query running while it is open — "this includes query statements that are outside of the
- * scope function". A background write landing inside someone else's transaction is a
- * corruption path, so this module never uses it.
+ * Transactions run on the app's single keyed connection and are queued one at a time. Both parts
+ * are forced by SQLCipher: expo-sqlite's `withExclusiveTransactionAsync` opens a new native
+ * connection, which cannot decrypt an encrypted database (see sqliteTransaction.ts), and a shared
+ * connection has no nested transactions — so the exclusivity that used to come from a private
+ * connection now comes from the queue.
+ *
+ * What that costs, stated plainly: a read issued elsewhere while a transaction is open now runs on
+ * the same connection and can see uncommitted rows, where before it would have seen only committed
+ * ones. Writes cannot interleave, which is the part that matters for integrity, and the alternative
+ * is a local database that does not work at all on device.
  *
  * Pass `txn` to join a transaction already in progress instead of opening a nested one.
- * SQLite has no nested transactions, and a second exclusive BEGIN inside the first
- * deadlocks — the same reason the backend threads a session through its services.
  *
  *   await withTransaction(async (txn) => {
  *     await txn.runAsync('INSERT INTO thing (id) VALUES (?)', id);
@@ -31,23 +35,20 @@ export const withTransaction = async <T>(
     return runExclusive(task);
   });
 
+/**
+ * The queue. One transaction at a time on the shared connection, in call order; a failed
+ * transaction must not stop the next one, so the tail only ever tracks completion.
+ */
+let tail: Promise<unknown> = Promise.resolve();
+
 const runExclusive = async <T>(task: (txn: SQLiteDatabase) => Promise<T>): Promise<T> => {
   const db = await openDatabase();
 
-  return wrapDatabaseError('DB_QUERY_FAILED', 'Transaction failed', async () => {
-    // withExclusiveTransactionAsync resolves void, so the result is carried out by closure.
-    let result: T;
-    let assigned = false;
+  const run = tail.then(
+    () => wrapDatabaseError('DB_QUERY_FAILED', 'Transaction failed', () => runInTransaction(db, task)),
+    () => wrapDatabaseError('DB_QUERY_FAILED', 'Transaction failed', () => runInTransaction(db, task))
+  );
 
-    await db.withExclusiveTransactionAsync(async (scoped) => {
-      result = await task(scoped);
-      assigned = true;
-    });
-
-    // Unreachable unless the driver swallows a rejection: better a clear error than
-    // silently returning undefined typed as T.
-    if (!assigned) throw new Error('Transaction completed without producing a result');
-
-    return result!;
-  });
+  tail = run.catch(() => undefined);
+  return run;
 };

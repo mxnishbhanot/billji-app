@@ -1,5 +1,5 @@
 import { getLocalReferral, applyReferralLocally, isDatabaseAvailable } from '@/db';
-import { refreshSyncCounts, syncNow } from '@/sync/syncStatus';
+import { refreshSyncCounts, requestSync } from '@/sync/syncStatus';
 import { clearPendingReferralCode, readPendingReferralCode } from './pendingCode';
 import type { SignupReferralResult } from '@/types';
 
@@ -71,8 +71,10 @@ export const reconcilePendingReferral = async ({
   await applyReferralLocally({ businessId, code });
   await clearPendingReferralCode();
   await refreshSyncCounts();
-  // Best effort: offline, this does nothing and the queue keeps the intent.
-  void syncNow();
+  // Best effort, and through the funnel: this runs itself at launch, so it honours the same
+  // automatic-sync switches every other unattended pass does. Offline it does nothing and the queue
+  // keeps the intent.
+  void requestSync('referral');
 
   return { queued: true, code };
 };

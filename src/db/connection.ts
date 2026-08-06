@@ -1,5 +1,8 @@
 import { Platform } from 'react-native';
 import { deleteDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
+// The one place the database layer reports upwards. syncLog holds no reference to db/, so this is a
+// leaf dependency rather than a cycle — see the layering note there.
+import { syncLog } from '../sync/syncLog';
 import { getOrCreateDbEncryptionKey, pragmaKeySql } from './encryptionKey';
 import { DatabaseError, wrapDatabaseError } from './errors';
 import { migrations, runMigrations, type Migration } from './migrations';
@@ -39,13 +42,44 @@ const canRead = async (db: SQLiteDatabase) => {
 const escapedKey = (key: string) => key.replace(/'/g, "''");
 
 /**
+ * How much unsent work is about to be destroyed. Best effort by definition: the database is being
+ * wiped precisely because something about it is broken, so on the unreadable-file path this cannot
+ * answer and returns null. Answering "unknown" is still worth logging — the alternative was the
+ * system's only irreversible event happening with no record at all.
+ */
+const countUnsentBeforeWipe = async (db: SQLiteDatabase | null): Promise<number | null> => {
+  if (!db) return null;
+  try {
+    const row = await db.getFirstAsync<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM outbox WHERE status IN ('pending', 'inflight', 'failed', 'conflict')`
+    );
+    return row?.n ?? null;
+  } catch {
+    return null;
+  }
+};
+
+/**
  * Deletes the local file(s) and returns a fresh, keyed, readable database.
  *
  * The only recovery for a file SQLite refuses to read at all. Nothing is lost that was not
  * already lost: a database that cannot be opened cannot be pushed either, and the rows it held
  * were a cache of the server plus an outbox no engine could reach.
+ *
+ * `reason` and `pendingLost` exist only to be reported: the behaviour is unchanged.
  */
-const wipeAndCreate = async (key: string): Promise<SQLiteDatabase> => {
+const wipeAndCreate = async (
+  key: string,
+  diagnostics: { reason: string; pendingLost?: number | null; cause?: unknown } = { reason: 'unknown' }
+): Promise<SQLiteDatabase> => {
+  // Reported before the delete, so the record survives even if the rebuild itself then fails.
+  // `pendingLost` is counted by the caller, which is the only place still holding a readable handle.
+  syncLog('db_wiped', {
+    reason: diagnostics.reason,
+    pendingLost: diagnostics.pendingLost ?? null,
+    cause: diagnostics.cause ? ((diagnostics.cause as Error)?.message ?? String(diagnostics.cause)) : undefined
+  });
+
   await deleteDatabaseAsync(DATABASE_NAME).catch(() => undefined);
   await deleteDatabaseAsync(`${DATABASE_NAME}.migrating`).catch(() => undefined);
 
@@ -86,9 +120,10 @@ const migratePlaintextToEncrypted = async (key: string): Promise<SQLiteDatabase>
   try {
     plain = await openDatabaseAsync(DATABASE_NAME);
     if (!(await canRead(plain))) {
+      // Neither the key nor plaintext opens it: nothing in here can be read, counted or exported.
       await plain.closeAsync().catch(() => undefined);
       plain = null;
-      return wipeAndCreate(key);
+      return wipeAndCreate(key, { reason: 'unreadable-with-either-key' });
     }
 
     await deleteDatabaseAsync(tempName).catch(() => undefined);
@@ -107,9 +142,13 @@ const migratePlaintextToEncrypted = async (key: string): Promise<SQLiteDatabase>
     return db;
   } catch (error) {
     console.warn('[db] plaintext→SQLCipher migration failed; wiping local store', error);
+    // Counted while the handle is still open and before anything is deleted — on this path the
+    // export is usually what failed, so this is the one wipe that can say what it cost. The file
+    // must not be deleted until the handle is closed.
+    const pendingLost = await countUnsentBeforeWipe(plain);
     await plain?.closeAsync().catch(() => undefined);
     await deleteDatabaseAsync(tempName).catch(() => undefined);
-    return wipeAndCreate(key);
+    return wipeAndCreate(key, { reason: 'encryption-migration-failed', pendingLost, cause: error });
   }
 };
 
@@ -144,8 +183,11 @@ const open = async (list: Migration[]): Promise<SQLiteDatabase> => {
     // encryption swap) is wedged for good: without this the same dead file is reopened on
     // every launch and the device is offline-broken forever. Wipe once and rebuild.
     console.warn('[db] local store unusable; wiping and rebuilding', error);
+    // The file opened, so the outbox is often still queryable even though the schema is not
+    // reconcilable — count before closing, and report whatever was lost.
+    const pendingLost = await countUnsentBeforeWipe(db);
     await db.closeAsync().catch(() => undefined);
-    return prepare(await wipeAndCreate(key), list);
+    return prepare(await wipeAndCreate(key, { reason: 'migration-failed', pendingLost, cause: error }), list);
   }
 };
 

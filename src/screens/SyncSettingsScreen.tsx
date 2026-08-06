@@ -227,6 +227,25 @@ export function SyncSettingsScreen() {
         />
       </Group>
 
+      <Group title="TROUBLESHOOTING">
+        <Row
+          first
+          icon="stethoscope"
+          tone={colors.mutedForeground}
+          title="Sync diagnostics"
+          subtitle="Queue status, the last error and this device's numbering series"
+          trailing={
+            <Text
+              accessibilityRole="button"
+              onPress={() => navigation.navigate('SyncDebug')}
+              style={[styles.action, { color: colors.primary }]}
+            >
+              Open
+            </Text>
+          }
+        />
+      </Group>
+
       <Group title="STORAGE USAGE">
         <Row
           first

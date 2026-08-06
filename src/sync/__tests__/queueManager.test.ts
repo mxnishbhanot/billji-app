@@ -176,7 +176,10 @@ describe('drain', () => {
 
     const summary = await queue.drain({ txn });
 
-    expect(summary).toMatchObject({ done: 0, retried: 1 });
+    // Deferred, not retried: the handler's silence says nothing about the operation, so charging
+    // it an attempt would eventually move a healthy write onto the Sync Issues screen.
+    expect(summary).toMatchObject({ done: 0, retried: 0, deferred: 1 });
+    expect((await getOperation('a', txn))?.attempts).toBe(0);
     expect((await getOperation('a', txn))?.lastError).toMatch(/no result/);
   });
 

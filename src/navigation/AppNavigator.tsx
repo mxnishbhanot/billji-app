@@ -44,6 +44,7 @@ const InvoiceTemplateScreen = lazy(() => import('@/screens/InvoiceTemplateScreen
 const NotificationSettingsScreen = lazy(() => import('@/screens/NotificationSettingsScreen').then((m) => ({ default: m.NotificationSettingsScreen })));
 const SyncSettingsScreen = lazy(() => import('@/screens/SyncSettingsScreen').then((m) => ({ default: m.SyncSettingsScreen })));
 const SyncIssuesScreen = lazy(() => import('@/screens/SyncIssuesScreen').then((m) => ({ default: m.SyncIssuesScreen })));
+const SyncDebugScreen = lazy(() => import('@/screens/SyncDebugScreen').then((m) => ({ default: m.SyncDebugScreen })));
 const ActivityLogScreen = lazy(() => import('@/screens/ActivityLogScreen').then((m) => ({ default: m.ActivityLogScreen })));
 const LedgerScreen = lazy(() => import('@/screens/LedgerScreen').then((m) => ({ default: m.LedgerScreen })));
 const DataExportScreen = lazy(() => import('@/screens/DataExportScreen').then((m) => ({ default: m.DataExportScreen })));
@@ -197,6 +198,7 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
       <SettingsStack.Screen name="SyncSettings" component={SyncSettingsScreen} />
       <SettingsStack.Screen name="SyncIssues" component={SyncIssuesScreen} />
+      <SettingsStack.Screen name="SyncDebug" component={SyncDebugScreen} />
       <SettingsStack.Screen name="ActivityLog" component={GatedActivityLogScreen} />
       <SettingsStack.Screen name="Ledger" component={LedgerScreen} />
       <SettingsStack.Screen name="DataExport" component={GatedDataExportScreen} />

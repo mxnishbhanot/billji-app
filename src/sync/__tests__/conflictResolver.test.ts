@@ -188,17 +188,10 @@ describe('applying a resolution', () => {
       { entityType: 'invoices', entityLocalId: invoice.localId, opType: 'update', payload: { total: 250 }, opId: 'op-edit' },
       { txn }
     );
-    await manager.enqueue(
-      {
-        entityType: 'invoices',
-        entityLocalId: invoice.localId,
-        opType: 'action',
-        actionName: 'cancel',
-        payload: {},
-        opId: 'op-cancel'
-      },
-      { txn }
-    );
+    // A queued 'cancel' used to be part of this case. The queue now refuses action operations at
+    // enqueue time, because sync protocol 1 has no verb for them and the push engine was killing
+    // them as `dead` — silently, and cascading onto anything queued behind them. Cancel is an
+    // online-only action until the protocol carries actions.
 
     const applied = await applyResolution(
       txn,
@@ -209,8 +202,6 @@ describe('applying a resolution', () => {
 
     expect(applied.outcome).toBe('server-wins');
     expect((await getOperation('op-edit', txn))?.status).toBe('dead');
-    // The cancel is a domain event the server still has to run, and it is idempotent.
-    expect((await getOperation('op-cancel', txn))?.status).toBe('pending');
     expect(applied.droppedOps).toContain('op-edit');
   });
 
@@ -271,16 +262,15 @@ describe('inventory', () => {
       },
       { txn }
     );
-    await manager.enqueue(
-      {
-        entityType: 'products',
-        entityLocalId: 'prod-local-1',
-        opType: 'action',
-        actionName: 'adjust_stock',
-        payload: { productId: 'p1', delta: -2, reason: 'damaged' }
-      },
-      { txn }
-    );
+    // Inserted directly, not enqueued: the queue refuses action operations while protocol 1 has no
+    // verb for them, but the projection still has to read one correctly for the day it does.
+    raw
+      .prepare(
+        `INSERT INTO outbox (op_id, business_id, entity_type, entity_local_id, op_type, action_name,
+                             payload, depends_on, priority, status, created_at, updated_at)
+         VALUES ('op-adjust', ?, 'products', 'prod-local-1', 'action', 'adjust_stock', ?, '[]', 3, 'pending', ?, ?)`
+      )
+      .run(BIZ, JSON.stringify({ productId: 'p1', delta: -2, reason: 'damaged' }), T0, T0);
 
     const deltas = await pendingStockDeltas(txn, BIZ, 'p1');
 

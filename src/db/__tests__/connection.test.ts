@@ -183,12 +183,31 @@ describe('withTransaction', () => {
 
     expect((error as DatabaseError).code).toBe('DB_QUERY_FAILED');
     expect((error as DatabaseError).message).toMatch(/constraint violation/);
-    expect(fake.statements).not.toContain('INSERT INTO t (id) VALUES (?)');
+    // The work ran on the keyed connection and was undone by ROLLBACK. It is visible in the
+    // statement log precisely because transactions no longer open a connection of their own —
+    // that is what broke encrypted databases on device.
+    expect(fake.statements).toContain('ROLLBACK');
+    expect(fake.statements.indexOf('BEGIN IMMEDIATE')).toBeLessThan(
+      fake.statements.indexOf('INSERT INTO t (id) VALUES (?)')
+    );
   });
 
-  it('joins an existing transaction instead of nesting a second exclusive one', async () => {
+  it('runs on the keyed connection, never a new one', async () => {
     await openDatabase([]);
+    // A fresh connection cannot decrypt a SQLCipher file: PRAGMA key applies only to the
+    // connection it ran on, so this must never be reached.
     const exclusive = jest.spyOn(fake, 'withExclusiveTransactionAsync');
+
+    await withTransaction(async (txn) => {
+      await txn.runAsync('INSERT INTO t (id) VALUES (?)', 'a');
+    });
+
+    expect(exclusive).not.toHaveBeenCalled();
+    expect(fake.statements).toEqual(expect.arrayContaining(['BEGIN IMMEDIATE', 'COMMIT']));
+  });
+
+  it('joins an existing transaction instead of nesting a second one', async () => {
+    await openDatabase([]);
 
     await withTransaction(async (txn) => {
       await withTransaction(async (inner) => {
@@ -197,9 +216,28 @@ describe('withTransaction', () => {
       }, txn);
     });
 
-    // A second BEGIN EXCLUSIVE inside the first would deadlock, so there must be only one.
-    expect(exclusive).toHaveBeenCalledTimes(1);
+    // SQLite has no nested transactions, so a joined call must not issue a second BEGIN.
+    expect(fake.statements.filter((statement) => statement === 'BEGIN IMMEDIATE')).toHaveLength(1);
     expect(fake.statements).toContain('INSERT INTO t (id) VALUES (?)');
+  });
+
+  it('queues concurrent transactions instead of interleaving them on one connection', async () => {
+    await openDatabase([]);
+
+    await Promise.all([
+      withTransaction(async (txn) => {
+        await txn.runAsync('INSERT INTO t (id) VALUES (?)', 'first');
+      }),
+      withTransaction(async (txn) => {
+        await txn.runAsync('INSERT INTO t (id) VALUES (?)', 'second');
+      })
+    ]);
+
+    // Two BEGINs, and never two open at once: each is closed before the next opens.
+    const framing = fake.statements.filter((statement) =>
+      ['BEGIN IMMEDIATE', 'COMMIT', 'ROLLBACK'].includes(statement)
+    );
+    expect(framing).toEqual(['BEGIN IMMEDIATE', 'COMMIT', 'BEGIN IMMEDIATE', 'COMMIT']);
   });
 
   it('fails clearly when the local store is unavailable', async () => {

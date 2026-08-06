@@ -3,7 +3,9 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import {
   backoffDelayMs,
   claimOperations,
+  clearRetryBackoff,
   countOperations,
+  deferOperation,
   discardOperation,
   enqueueOperation,
   getOperation,
@@ -67,16 +69,26 @@ describe('create operation', () => {
   it('prices each entity into its tier and takes an explicit override', async () => {
     expect((await enqueue({ entityType: 'payments' })).priority).toBe(1);
     expect((await enqueue({ entityType: 'products' })).priority).toBe(3);
-    expect((await enqueue({ entityType: 'business' })).priority).toBe(4);
+    expect((await enqueue({ entityType: 'referrals' })).priority).toBe(1);
     expect((await enqueue({ entityType: 'products', priority: 1 })).priority).toBe(1);
   });
 
-  it('carries the base version and the action name', async () => {
+  it('carries the base version', async () => {
     const update = await enqueue({ opType: 'update', baseVersion: 7 });
     expect(update.baseVersion).toBe(7);
+  });
 
-    const action = await enqueue({ opType: 'action', actionName: 'cancel' });
-    expect(action).toMatchObject({ opType: 'action', actionName: 'cancel' });
+  /**
+   * The queue refuses what the wire cannot carry, at enqueue time. It used to accept these and let
+   * the push engine kill them as `dead` — a silent loss that also cascaded onto every operation
+   * queued behind them. Refusing here rolls the write transaction back, so the caller's local-first
+   * wrapper sends the operation online instead of pretending it was saved.
+   */
+  it('refuses an operation the sync protocol cannot express', async () => {
+    await expect(enqueue({ opType: 'action', actionName: 'cancel' })).rejects.toThrow(/cannot carry/);
+    await expect(enqueue({ entityType: 'business' })).rejects.toThrow(/cannot carry business/);
+    await expect(enqueue({ entityType: 'orders' })).rejects.toThrow(/cannot carry orders/);
+    expect(raw.prepare('SELECT COUNT(*) AS n FROM outbox').get()).toEqual({ n: 0 });
   });
 
   it('rejects an action with no name and a dependency that does not exist', async () => {
@@ -111,7 +123,7 @@ describe('dependencies', () => {
   it('holds an operation back until every dependency is done', async () => {
     const create = await enqueue({ opId: 'op-create' });
     const update = await enqueue({ opId: 'op-update', opType: 'update', dependsOn: [create.opId] });
-    await enqueue({ opId: 'op-send', opType: 'action', actionName: 'cancel', dependsOn: [create.opId, update.opId] });
+    await enqueue({ opId: 'op-send', opType: 'delete', dependsOn: [create.opId, update.opId] });
 
     expect(ids(await listReadyOperations(BIZ, { txn, now: T0 }))).toEqual(['op-create']);
 
@@ -131,6 +143,67 @@ describe('dependencies', () => {
 
     // The chain waits; everything independent of it still drains.
     expect(ids(await listReadyOperations(BIZ, { txn, now: T0 }))).toEqual(['op-unrelated']);
+  });
+});
+
+describe('defer', () => {
+  /**
+   * The distinction the whole retry budget depends on. An expired session, a client too old for the
+   * protocol, or a batch the server never answered say nothing about the operation — five such
+   * passes used to be enough to move an entirely healthy queue onto the Sync Issues screen.
+   */
+  it('asks again shortly without spending an attempt', async () => {
+    await enqueue({ opId: 'op-deferred' });
+    const deferred = await deferOperation('op-deferred', 'Not authorised to sync (401)', { txn, now: T0 });
+
+    expect(deferred).toMatchObject({
+      status: 'pending',
+      attempts: 0,
+      lastError: 'Not authorised to sync (401)',
+      nextAttemptAt: '2026-08-02T10:00:15.000Z'
+    });
+
+    expect(await listReadyOperations(BIZ, { txn, now: T0 })).toEqual([]);
+    expect(ids(await listReadyOperations(BIZ, { txn, now: '2026-08-02T10:00:15.000Z' }))).toEqual(['op-deferred']);
+  });
+
+  it('never exhausts the attempt limit, however many times it defers', async () => {
+    await enqueue({ opId: 'op-session' });
+    for (let pass = 0; pass < 10; pass += 1) {
+      await deferOperation('op-session', 'Not authorised to sync (401)', { txn, now: T0 });
+    }
+
+    // Still queued, still holding the user's work, still explaining itself.
+    expect(await getOperation('op-session', txn)).toMatchObject({ status: 'pending', attempts: 0 });
+  });
+});
+
+describe('clearing the backoff when connectivity returns', () => {
+  /**
+   * The backoff exists to stop a device hammering a network that is not there. Once it is there,
+   * making the user wait out the rest of an hour-long delay is punishing them for the outage — and
+   * on a real device it looks exactly like a dead queue: pending count frozen, nothing moving.
+   */
+  it('makes waiting operations sendable again', async () => {
+    await enqueue({ opId: 'op-waited' });
+    await markOperationFailed('op-waited', 'Network request failed', { txn, now: T0 });
+    await markOperationFailed('op-waited', 'Network request failed', { txn, now: T0 });
+    expect(await listReadyOperations(BIZ, { txn, now: T0 })).toEqual([]);
+
+    expect(await clearRetryBackoff(BIZ, { txn, now: T0 })).toBe(1);
+
+    expect(ids(await listReadyOperations(BIZ, { txn, now: T0 }))).toEqual(['op-waited']);
+    // The attempt history is kept: clearing the wait is not forgiving the failures.
+    expect((await getOperation('op-waited', txn))?.attempts).toBe(2);
+  });
+
+  it('leaves operations nobody is waiting on alone', async () => {
+    await enqueue({ opId: 'op-ready' });
+    await enqueue({ opId: 'op-gone' });
+    await markOperationConflict('op-gone', 'Version conflict', { txn, now: T0 });
+
+    expect(await clearRetryBackoff(BIZ, { txn, now: T0 })).toBe(0);
+    expect((await getOperation('op-gone', txn))?.status).toBe('conflict');
   });
 });
 

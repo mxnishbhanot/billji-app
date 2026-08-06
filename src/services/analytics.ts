@@ -34,7 +34,18 @@ export type AnalyticsEvent =
   // Autopay. The mode a customer picked rides as a boolean param on upgrade_started/completed; these
   // two are the state changes. Never the mandate amount — same reason as above.
   | 'autopay_enabled'
-  | 'autopay_disabled';
+  | 'autopay_disabled'
+  // Offline sync. Counters only — the queue's health is measured in operations, durations and
+  // error classes. Never an entity's contents: see the PRIVACY note above, which applies with
+  // extra force here because a sync payload is the user's books.
+  | 'sync_start'
+  | 'sync_end'
+  | 'sync_failed'
+  | 'queue_recovered'
+  | 'op_deferred'
+  | 'op_failed'
+  | 'op_dead'
+  | 'db_wiped';
 type AnalyticsParams = Record<string, string | number | boolean>;
 
 const CONSENT_KEY = 'billji-analytics-consent';

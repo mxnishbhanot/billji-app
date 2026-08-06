@@ -151,7 +151,7 @@ describe('what the status code means', () => {
     expect(classifyResult({ opId: 'a', status: 'conflict' })).toMatchObject({ outcome: 'conflict' });
   });
 
-  it('retries a duplicate that overlapped its own send instead of calling it a conflict', () => {
+  it('defers a duplicate that overlapped its own send instead of calling it a conflict', () => {
     // The server saw this operation twice at once and answered 409 on the second. It is the
     // same write in flight, not two writers — asking a shopkeeper to resolve it would be wrong.
     expect(
@@ -162,7 +162,9 @@ describe('what the status code means', () => {
         code: 'IDEMPOTENCY_REQUEST_IN_PROGRESS',
         message: 'A request with this idempotency key is still processing'
       })
-    ).toMatchObject({ outcome: 'retry' });
+      // Deferred rather than retried: the operation reached the server and is being applied, so
+      // spending one of its five attempts would penalise it for having been sent successfully.
+    ).toMatchObject({ outcome: 'defer' });
   });
 
   it('stops the pass on a 401 without failing the operations for it', async () => {

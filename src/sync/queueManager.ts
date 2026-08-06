@@ -1,7 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import {
   claimOperations,
+  clearRetryBackoff,
   countOperations,
+  deferOperation,
   discardOperation,
   enqueueOperation,
   listOperations,
@@ -15,6 +17,7 @@ import {
   type OutboxOperation,
   type OutboxOptions
 } from '../db/outbox';
+import { syncLog } from './syncLog';
 
 /**
  * The queue manager: one object that owns the lifecycle of queued intent for a business.
@@ -41,6 +44,13 @@ export type OperationOutcome =
   | 'done'
   /** Transient — network, 5xx, timeout. Backoff applies, attempts increments. */
   | 'retry'
+  /**
+   * Nothing was wrong with this operation: the session expired, the client is too old to speak
+   * the protocol, or the server answered the batch without mentioning it. Asked again shortly,
+   * and the attempt budget is left alone — spending it here is how a clean queue ends up on the
+   * Sync Issues screen.
+   */
+  | 'defer'
   /** The base version was stale. Needs a human decision, so no retry. */
   | 'conflict'
   /** Permanently unacceptable. Abandoned along with everything queued behind it. */
@@ -61,8 +71,12 @@ export type QueueManagerConfig = {
   businessId: string;
   /** Sends a batch. Omit for a queue that only enqueues — a drain then reports nothing sent. */
   handler?: BatchHandler;
-  /** Operations per batch. */
-  batchSize?: number;
+  /**
+   * Operations per batch. A function is read at every drain, which is what lets a transport
+   * shrink batches after the server rejects one as too large — a fixed number captured here
+   * meant the shrink never reached the code that cuts the batches.
+   */
+  batchSize?: number | (() => number);
   /** Operations claimed per drain pass. */
   drainLimit?: number;
   /** Automatic attempts before an op lands on the Failed screen. */
@@ -82,6 +96,8 @@ export type DrainSummary = {
   batches: number;
   done: number;
   retried: number;
+  /** Asked again without spending an attempt — see the 'defer' outcome. */
+  deferred: number;
   conflicts: number;
   dead: number;
   /** True when the queue still holds work that was not claimed this pass. */
@@ -137,7 +153,8 @@ export const buildBatches = (operations: OutboxOperation[], batchSize: number): 
 
 export const createQueueManager = (config: QueueManagerConfig) => {
   const { businessId, handler } = config;
-  const batchSize = config.batchSize ?? DEFAULT_BATCH_SIZE;
+  const batchSize = () =>
+    typeof config.batchSize === 'function' ? config.batchSize() : config.batchSize ?? DEFAULT_BATCH_SIZE;
   const drainLimit = config.drainLimit ?? DEFAULT_DRAIN_LIMIT;
   const maxAttempts = config.maxAttempts;
   const clock = config.clock ?? (() => new Date().toISOString());
@@ -162,7 +179,7 @@ export const createQueueManager = (config: QueueManagerConfig) => {
    */
   const dequeue = async (limit = drainLimit, extra: OutboxOptions = {}): Promise<OperationBatch[]> => {
     const claimed = await claimOperations(businessId, { ...options(extra), limit });
-    return buildBatches(claimed, batchSize);
+    return buildBatches(claimed, batchSize());
   };
 
   /** Applies one handler result to the queue. */
@@ -170,6 +187,9 @@ export const createQueueManager = (config: QueueManagerConfig) => {
     const settleOptions = options(extra);
 
     if (result.outcome === 'done') return markOperationDone(result.opId, settleOptions);
+    if (result.outcome === 'defer') {
+      return deferOperation(result.opId, result.error ?? 'Deferred', settleOptions);
+    }
     if (result.outcome === 'conflict') {
       return markOperationConflict(result.opId, result.error ?? 'Version conflict', settleOptions);
     }
@@ -201,18 +221,41 @@ export const createQueueManager = (config: QueueManagerConfig) => {
 
     for (const operation of batch.operations) {
       // An operation the handler forgot is not an operation that succeeded.
+      // An operation the handler forgot is not an operation that succeeded — and it is not one
+      // that misbehaved either, so it is deferred rather than charged an attempt.
       const result = byId.get(operation.opId) ?? {
         opId: operation.opId,
-        outcome: 'retry' as const,
+        outcome: 'defer' as const,
         error: 'The handler returned no result for this operation'
       };
 
-      await settle(result, extra);
+      const settled = await settle(result, extra);
 
       if (result.outcome === 'done') summary.done += 1;
+      else if (result.outcome === 'defer') summary.deferred += 1;
       else if (result.outcome === 'conflict') summary.conflicts += 1;
       else if (result.outcome === 'dead') summary.dead += 1;
       else summary.retried += 1;
+
+      if (result.outcome === 'defer') {
+        syncLog('op_deferred', {
+          opId: operation.opId,
+          entityType: operation.entityType,
+          attempts: operation.attempts,
+          error: result.error
+        });
+      } else if (result.outcome === 'dead') {
+        syncLog('op_dead', { opId: operation.opId, entityType: operation.entityType, error: result.error });
+      } else if (result.outcome === 'retry' && settled?.status === 'failed') {
+        // Only the transition matters: a retry that still has budget is routine, a retry that
+        // just ran out is a queued write the user now has to deal with by hand.
+        syncLog('op_failed', {
+          opId: operation.opId,
+          entityType: operation.entityType,
+          attempts: settled.attempts,
+          error: result.error
+        });
+      }
     }
   };
 
@@ -233,6 +276,7 @@ export const createQueueManager = (config: QueueManagerConfig) => {
         batches: 0,
         done: 0,
         retried: 0,
+        deferred: 0,
         conflicts: 0,
         dead: 0,
         hasMore: false
@@ -290,7 +334,19 @@ export const createQueueManager = (config: QueueManagerConfig) => {
   const discard = (opId: string, extra: OutboxOptions = {}) => discardOperation(opId, options(extra));
 
   /** At launch: an inflight operation is one nobody is holding any more. */
-  const recover = (extra: OutboxOptions = {}) => recoverInflightOperations(businessId, options(extra));
+  const recover = async (extra: OutboxOptions = {}) => {
+    const released = await recoverInflightOperations(businessId, options(extra));
+    // Zero is the normal answer, so only a real release is worth a line: it means the last run
+    // was killed mid-push, which is the case nobody can reproduce on request.
+    if (released > 0) syncLog('queue_recovered', { released });
+    return released;
+  };
+
+  /**
+   * Connectivity returned, so the waiting periods that connectivity caused are void. Returns how
+   * many operations became sendable again.
+   */
+  const clearBackoff = (extra: OutboxOptions = {}) => clearRetryBackoff(businessId, options(extra));
 
   /** Housekeeping. Keeps anything a live chain still depends on. */
   const prune = (before: string, extra: OutboxOptions = {}) => pruneCompletedOperations(before, options(extra));
@@ -306,6 +362,7 @@ export const createQueueManager = (config: QueueManagerConfig) => {
     retryAll,
     discard,
     recover,
+    clearBackoff,
     prune
   };
 };
