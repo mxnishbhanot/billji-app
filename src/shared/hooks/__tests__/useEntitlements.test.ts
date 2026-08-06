@@ -25,6 +25,8 @@ const subscription = (overrides: Partial<Subscription> = {}): Subscription => ({
   snapshotVersion: 1,
   subscriptionStatus: 'active',
   billingInterval: 'month',
+  billingOwnerName: 'Test Owner',
+  canManageBilling: true,
   renewalDate: null,
   expiryDate: null,
   gracePeriodEndsAt: null,

@@ -190,6 +190,14 @@ export type Subscription = {
   snapshotVersion: number | null;
   subscriptionStatus: SubscriptionStatus;
   billingInterval: string | null;
+  /** Who to ask. One line of copy for the non-owner screen — nothing else about the owner. */
+  billingOwnerName: string | null;
+  /**
+   * The server's answer to "may this member spend", from the same list its requireBillingOwner
+   * guard uses. Gate every money control on this and never on a permission: an admin holds every
+   * billing permission and still must not be able to buy.
+   */
+  canManageBilling: boolean;
   renewalDate: string | null;
   expiryDate: string | null;
   gracePeriodEndsAt: string | null;

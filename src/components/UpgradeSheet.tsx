@@ -6,6 +6,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { featureLabel, formatPaise } from '@/constants/entitlements';
 import { track } from '@/services/analytics';
+import { usePermissions } from '@/shared/hooks/usePermissions';
+import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
 import type { AppNavigation } from '@/navigation/types';
 import type { RequiredPlan } from '@/types';
@@ -33,6 +35,8 @@ export function UpgradeSheet({ visible, feature, metric, limit, currentPlan, req
   const colors = appColors(isDark);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<AppNavigation>();
+  const { canManageBilling } = usePermissions();
+  const billingOwnerName = useAuthStore((state) => state.user?.subscription?.billingOwnerName ?? null);
   const [translateY] = useState(() => new Animated.Value(700));
   const [backdropOpacity] = useState(() => new Animated.Value(0));
 
@@ -106,9 +110,23 @@ export function UpgradeSheet({ visible, feature, metric, limit, currentPlan, req
             </View>
           ) : null}
 
-          <Pressable onPress={openPlans} style={({ pressed }) => [styles.primaryBtn, { backgroundColor: theme.colors.primary, opacity: pressed ? 0.9 : 1 }]}>
-            <Text style={[styles.primaryLabel, { color: theme.colors.onPrimary }]}>See plans</Text>
-          </Pressable>
+          {/* This is where a cashier actually meets the paywall, so it is the one place a dead end
+              costs the most. A non-owner gets the name of the person who can act, and the way to a
+              business of their own — never a purchase button the API would refuse. */}
+          {canManageBilling ? (
+            <Pressable onPress={openPlans} style={({ pressed }) => [styles.primaryBtn, { backgroundColor: theme.colors.primary, opacity: pressed ? 0.9 : 1 }]}>
+              <Text style={[styles.primaryLabel, { color: theme.colors.onPrimary }]}>See plans</Text>
+            </Pressable>
+          ) : (
+            <>
+              <Text style={[styles.body, { color: theme.colors.onSurfaceVariant }]}>
+                {billingOwnerName ? `Ask ${billingOwnerName} to upgrade this business.` : 'Ask the business owner to upgrade.'}
+              </Text>
+              <Pressable onPress={openPlans} style={({ pressed }) => [styles.primaryBtn, { backgroundColor: alpha(colors.primary, isDark ? 0.22 : 0.1), opacity: pressed ? 0.9 : 1 }]}>
+                <Text style={[styles.primaryLabel, { color: theme.colors.primary }]}>View plan details</Text>
+              </Pressable>
+            </>
+          )}
           <Pressable onPress={onClose} style={styles.secondaryBtn}>
             <Text style={[styles.secondaryLabel, { color: theme.colors.onSurfaceVariant }]}>Not now</Text>
           </Pressable>

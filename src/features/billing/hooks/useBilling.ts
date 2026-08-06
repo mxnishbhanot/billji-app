@@ -55,8 +55,10 @@ export const usePlans = () =>
 
 export const useUsage = () => useQuery({ queryKey: queryKeys.billing.usage, queryFn: billingApi.usage, staleTime: 30_000 });
 
-export const usePayments = () =>
-  useQuery({ queryKey: queryKeys.billing.payments, queryFn: () => billingApi.payments({ limit: 50 }) });
+// `enabled` so a member without billing.invoices never fires a request the API will refuse. The
+// server is still the authority; this only keeps a guaranteed 403 out of the query cache.
+export const usePayments = ({ enabled = true }: { enabled?: boolean } = {}) =>
+  useQuery({ queryKey: queryKeys.billing.payments, queryFn: () => billingApi.payments({ limit: 50 }), enabled });
 
 export const useCancelSubscription = () => {
   const syncSession = useSyncSubscriptionToSession();

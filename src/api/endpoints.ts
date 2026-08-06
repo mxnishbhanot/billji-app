@@ -177,6 +177,10 @@ export const authApi = {
   me: () => api.get<{ success: boolean; user: User }>('/auth/me').then((res) => res.data.user),
   businesses: () => api.get<{ businesses: BusinessSummary[] }>('/auth/businesses').then((res) => res.data.businesses),
   switchBusiness: (businessId: string) => api.post<{ success: boolean; user: User }>('/auth/business/switch', { businessId }).then((res) => res.data.user),
+  // Creating a workspace switches into it, so this returns the same user payload switchBusiness
+  // does and the client adopts both through one path.
+  createBusiness: (payload: { businessName: string; email?: string }) =>
+    api.post<{ success: boolean; user: User }>('/businesses', payload).then((res) => res.data.user),
   updateSettings: (payload: Partial<BusinessProfile>) => api.patch<{ success: boolean; user: User }>('/settings', payload).then((res) => res.data),
   invoiceTemplatePreview: (payload: Partial<InvoiceTemplate>) =>
     api.post<string>('/settings/invoice-template/preview', payload, { responseType: 'text', transformResponse: (data) => data }).then((res) => res.data)

@@ -3,12 +3,14 @@ import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, View } from
 import { Feather } from '@expo/vector-icons';
 import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAppDialog } from '@/components/AppDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { apiErrorMessage } from '@/api/client';
 import { authApi } from '@/api/endpoints';
-import { pendingLocalSyncCount, wipeLocalBusinessData } from '@/db/wipeLocalData';
+import { pendingLocalSyncCount } from '@/db/wipeLocalData';
+import { CreateBusinessDialog } from '@/features/workspaces/CreateBusinessDialog';
+import { useAdoptBusiness } from '@/features/workspaces/useAdoptBusiness';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
@@ -20,10 +22,10 @@ export function WorkspaceSwitcherSheet({ visible, onClose }: Props) {
   const isDark = theme.dark;
   const colors = appColors(isDark);
   const insets = useSafeAreaInsets();
-  const queryClient = useQueryClient();
   const { showDialog } = useAppDialog();
-  const setUser = useAuthStore((state) => state.setUser);
+  const adopt = useAdoptBusiness();
   const currentBusinessId = useAuthStore((state) => state.user?.businessId ?? null);
+  const [creating, setCreating] = useState(false);
   const [translateY] = useState(() => new Animated.Value(700));
   const [backdropOpacity] = useState(() => new Animated.Value(0));
   const [pendingSwitchId, setPendingSwitchId] = useState<string | null>(null);
@@ -34,11 +36,9 @@ export function WorkspaceSwitcherSheet({ visible, onClose }: Props) {
   const switchBusiness = useMutation({
     mutationFn: authApi.switchBusiness,
     onSuccess: async (user) => {
-      // Two businesses must never share one local file.
-      await wipeLocalBusinessData();
-      await setUser(user);
-      queryClient.clear();
-      await queryClient.invalidateQueries();
+      // Shared with the create-business path: two businesses must never share one local file, and
+      // one caller skipping the wipe would be the whole bug.
+      await adopt(user);
       onClose();
     },
     onError: (error) => showDialog({ title: 'Could not switch business', message: apiErrorMessage(error), tone: 'error' })
@@ -106,6 +106,19 @@ export function WorkspaceSwitcherSheet({ visible, onClose }: Props) {
                 </Pressable>
               ))
             )}
+
+            {/* Any member can own a business of their own — being a viewer somewhere else says
+                nothing about that. Same dialog the non-owner billing screen opens. */}
+            <Pressable
+              onPress={() => setCreating(true)}
+              style={({ pressed }) => [styles.option, { backgroundColor: 'transparent', borderColor: cardBorder, opacity: pressed ? 0.85 : 1 }]}
+            >
+              <Feather name="plus-circle" size={18} color={theme.colors.primary} />
+              <View style={styles.optionText}>
+                <Text style={[styles.optionLabel, { color: theme.colors.primary }]}>Create a new business</Text>
+                <Text style={[styles.optionMeta, { color: theme.colors.onSurfaceVariant }]}>You will be its owner</Text>
+              </View>
+            </Pressable>
           </ScrollView>
         </Animated.View>
       </View>
@@ -120,6 +133,14 @@ export function WorkspaceSwitcherSheet({ visible, onClose }: Props) {
           const id = pendingSwitchId;
           setPendingSwitchId(null);
           if (id) switchBusiness.mutate(id);
+        }}
+      />
+
+      <CreateBusinessDialog
+        visible={creating}
+        onClose={() => {
+          setCreating(false);
+          onClose();
         }}
       />
     </Modal>
