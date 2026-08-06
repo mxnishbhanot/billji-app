@@ -5,6 +5,7 @@ import { apiErrorMessage } from '@/api/client';
 import { useDocumentDraft } from '@/shared/drafts/useDocumentDraft';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
+import { useSupplyType } from '@/shared/gst/useSupplyType';
 import { useAuthStore } from '@/store/authStore';
 import { Customer, DiscountType, InvoiceDraftPayload, InvoiceItem, Product } from '@/types';
 import { calculateClientTotals } from '@/utils/format';
@@ -41,6 +42,7 @@ export const useOrderBuilder = ({
   const [items, setItems] = useState<InvoiceItem[]>([]);
   // Pre-fill the business default GST rate (Tax Settings); user can still edit or clear it per order.
   const defaultTaxRate = useAuthStore((state) => state.user?.businessProfile?.taxSettings?.defaultRate) ?? 0;
+  const pricesIncludeTax = useAuthStore((state) => state.user?.businessProfile?.taxSettings?.pricesIncludeTax);
   const [taxRate, setTaxRate] = useState(() => String(defaultTaxRate));
   const [discountType, setDiscountType] = useState<DiscountType>('flat');
   const [discountValue, setDiscountValue] = useState('0');
@@ -69,7 +71,17 @@ export const useOrderBuilder = ({
     () => buildInvoiceDraftPayload({ selectedCustomerId, selectedCustomer: activeCustomer, items, taxRate, discountType, discountValue, notes }),
     [activeCustomer, discountType, discountValue, items, notes, selectedCustomerId, taxRate]
   );
-  const totals = calculateClientTotals({ items, taxRate: Number(taxRate || 0), discountType, discountValue: Number(discountValue || 0) });
+  // Same place-of-supply split as the invoice builder — an order quotes the tax its
+  // generated invoice will charge (backend orders/service.js does the same server-side).
+  const supplyType = useSupplyType(activeCustomer);
+  const totals = calculateClientTotals({
+    items,
+    taxRate: Number(taxRate || 0),
+    discountType,
+    discountValue: Number(discountValue || 0),
+    supplyType,
+    pricesIncludeTax: Boolean(pricesIncludeTax)
+  });
 
   const applyDraftPayload = useCallback((payload: InvoiceDraftPayload) => {
     setSelectedCustomerId(payload.selectedCustomerId);

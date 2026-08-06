@@ -50,6 +50,7 @@ import {
 // The header constants only, imported from the engine module rather than the sync barrel:
 // the barrel pulls in deviceSeries, which imports this file.
 import { SYNC_DEVICE_HEADER, SYNC_PROTOCOL_HEADER, SYNC_PROTOCOL_VERSION } from '../sync/pushEngine';
+import { withBillingAddress } from '@/shared/customers/customerPayload';
 import { api } from './client';
 import { localFirst, localWrite } from './localFirst';
 import {
@@ -378,13 +379,16 @@ export const customersApi = {
     ),
   // Writes are local-first, exactly as products are: the row and its queued push commit
   // together, so a customer added at the counter with no signal exists immediately.
-  create: (payload: CustomerFormValues | Partial<Customer>) =>
-    localWrite(
+  create: (input: CustomerFormValues | Partial<Customer>) => {
+    const payload = withBillingAddress(input);
+    return localWrite(
       async (businessId) => asCustomer(await createCustomerLocally(payload as CustomerDoc, { businessId })),
       () => api.post<{ customer: Customer }>('/customers', payload).then((res) => res.data.customer)
-    ),
-  update: (id: string, payload: CustomerFormValues | Partial<Customer>) =>
-    localWrite(async (businessId) => {
+    );
+  },
+  update: (id: string, input: CustomerFormValues | Partial<Customer>) => {
+    const payload = withBillingAddress(input);
+    return localWrite(async (businessId) => {
       const existing = await findCustomerByAnyId(id);
       // Nothing local under that id — it belongs to a collection this device has not synced.
       if (!existing) return api.patch<{ customer: Customer }>(`/customers/${id}`, payload).then((res) => res.data.customer);
@@ -392,7 +396,8 @@ export const customersApi = {
       const updated = await updateCustomerLocally(existing.localId, payload as Partial<CustomerDoc>, { businessId });
       if (!updated) throw new Error('That customer no longer exists on this device');
       return asCustomer(updated);
-    }, () => api.patch<{ customer: Customer }>(`/customers/${id}`, payload).then((res) => res.data.customer)),
+    }, () => api.patch<{ customer: Customer }>(`/customers/${id}`, payload).then((res) => res.data.customer));
+  },
   remove: (id: string) =>
     localWrite(async (businessId) => {
       const existing = await findCustomerByAnyId(id);

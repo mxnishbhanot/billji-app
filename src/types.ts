@@ -1001,6 +1001,11 @@ export type CustomerFormValues = {
   email?: string;
   address?: string;
   gstNumber?: string;
+  // Billing state drives the place of supply, and therefore CGST+SGST vs IGST. Flat on the
+  // form; customersApi folds these into `billingAddress` before the write.
+  state?: string;
+  city?: string;
+  pinCode?: string;
 };
 
 export type ProductFormValues = {

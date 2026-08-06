@@ -29,7 +29,10 @@ export const customerSchema = z.object({
   countryCode: z.string().default('+91'),
   email: z.union([z.literal(''), z.email('Enter a valid email')]).optional(),
   address: z.string().max(500).optional(),
-  gstNumber: z.union([z.literal(''), z.string().trim().refine(isValidGstin, 'Enter a valid 15-character GSTIN')]).optional()
+  gstNumber: z.union([z.literal(''), z.string().trim().refine(isValidGstin, 'Enter a valid 15-character GSTIN')]).optional(),
+  state: z.string().trim().max(80).optional(),
+  city: z.string().trim().max(80).optional(),
+  pinCode: z.union([z.literal(''), z.string().trim().regex(/^\d{6}$/, 'PIN must be 6 digits')]).optional()
 });
 const decimalAmount = (label: string) =>
   z.string().trim().min(1, `${label} is required`)

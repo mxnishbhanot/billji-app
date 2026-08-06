@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { UseFormReturn } from 'react-hook-form';
 import { AddressInput } from '@/components/AddressInput';
 import { FormTextInput } from '@/components/FormTextInput';
+import { IndiaAddressFields } from '@/components/IndiaAddressFields';
 import { PhoneInput } from '@/components/PhoneInput';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
 import { CustomerFormValues } from '@/types';
@@ -90,6 +91,8 @@ export function CustomerFormSheet({ visible, isEdit, form, saving, onSubmit, onC
               maxLength={GSTIN_LENGTH}
             />
             <AddressInput form={form} name="address" />
+            {/* State decides place of supply — without it every sale bills as CGST+SGST. */}
+            <IndiaAddressFields control={form.control} setValue={form.setValue} />
           </ScrollView>
 
           <Pressable
