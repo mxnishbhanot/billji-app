@@ -1,17 +1,11 @@
 import 'react-native-gesture-handler';
 import { registerRootComponent } from 'expo';
-import { Platform } from 'react-native';
+import { loadSkiaWeb } from './skiaWeb';
 
-// Web: @shopify/react-native-skia (Victory chart) needs CanvasKit WASM loaded
-// before any Skia render. Native links Skia at build time, so boot directly.
-// ponytail: WASM from jsdelivr CDN — self-host by copying canvaskit-wasm/bin/full if offline web matters.
-if (Platform.OS === 'web') {
-  const { LoadSkiaWeb } = require('@shopify/react-native-skia/lib/module/web');
-  LoadSkiaWeb({
-    locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/canvaskit-wasm@0.41.0/bin/full/${file}`
-  }).then(() => {
-    registerRootComponent(require('./App').default);
-  });
-} else {
+// Web loads CanvasKit before the first Skia render; native links Skia at build time and resolves
+// `./skiaWeb` to a no-op. The platform split has to be a module boundary rather than an
+// `if (Platform.OS === 'web')` branch: Metro's graph is static, so the web-only require was being
+// pulled into the Android bundle as well — see skiaWeb.ts.
+void loadSkiaWeb().then(() => {
   registerRootComponent(require('./App').default);
-}
+});

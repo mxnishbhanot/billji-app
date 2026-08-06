@@ -117,6 +117,45 @@ describe('result classification', () => {
     expect(classifyResult({ opId: 'a', status: 'rejected', statusCode: 500 })).toMatchObject({ outcome: 'retry' });
     expect(classifyResult({ opId: 'a', status: 'rejected', statusCode: 429 })).toMatchObject({ outcome: 'retry' });
   });
+
+  it('abandons a referral the server has permanently settled instead of asking the user to resolve it', () => {
+    // These arrive as 409s, which normally mean two writers disagree about a version. An already-used
+    // referral code is not that: there is nothing to rebase and nothing for the user to choose, so
+    // offering Keep Local / Keep Server on the Sync Issues screen would be nonsense.
+    for (const code of [
+      'REFERRAL_ALREADY_APPLIED',
+      'REFERRAL_REWARD_ALREADY_RECEIVED',
+      'REFERRAL_NOT_ELIGIBLE_PAID'
+    ]) {
+      expect(classifyResult({ opId: 'a', status: 'conflict', statusCode: 409, code, message: 'no' })).toMatchObject({
+        outcome: 'dead'
+      });
+    }
+
+    // A genuine version conflict still goes to the resolver.
+    expect(
+      classifyResult({ opId: 'a', status: 'conflict', statusCode: 409, code: 'VERSION_CONFLICT' })
+    ).toMatchObject({ outcome: 'conflict' });
+  });
+});
+
+describe('referral operations on the wire', () => {
+  it('maps an APPLY_REFERRAL onto the referral entity the server registry expects', () => {
+    const wire = toWireOperation(
+      operation('ref-1', {
+        entityType: 'referrals',
+        entityLocalId: 'ref-local-1',
+        payload: { code: 'BILLJI8X', clientId: 'ref-local-1' }
+      })
+    );
+
+    expect(wire).toMatchObject({
+      entity: 'referral',
+      opType: 'create',
+      clientId: 'ref-local-1',
+      payload: { code: 'BILLJI8X' }
+    });
+  });
 });
 
 describe('push', () => {
@@ -184,10 +223,22 @@ describe('push', () => {
     expect((await getOperation('a', txn))?.lastError).toMatch(/no result/);
   });
 
+  /**
+   * The engine still refuses to send what it cannot express, but nothing can reach it in that
+   * state any more: the queue rejects action operations and unmapped entities at enqueue time, so
+   * the caller sends them online instead of having them killed here after the user was told the
+   * write was saved. This asserts the last line of defence, with the row inserted directly.
+   */
   it('kills an operation the protocol cannot express, without sending it', async () => {
     const { sent, transport } = fakeTransport(allOk);
     const push = engine(transport);
-    await enqueue(push, 'op-action', { opType: 'action', actionName: 'cancel' });
+    raw
+      .prepare(
+        `INSERT INTO outbox (op_id, business_id, entity_type, entity_local_id, op_type, action_name,
+                             payload, depends_on, priority, status, created_at, updated_at)
+         VALUES ('op-action', ?, 'invoices', 'inv-local-1', 'action', 'cancel', '{}', '[]', 2, 'pending', ?, ?)`
+      )
+      .run(BIZ, T0, T0);
     await enqueue(push, 'op-normal');
 
     const outcome = await push.push();
@@ -219,6 +270,25 @@ describe('error handling that stops the pass', () => {
     expect(outcome).toMatchObject({ stopped: 'aborted', done: 0 });
     expect(outcome.reason).toMatch(/Not authorised/);
     expect((await getOperation('c', txn))?.status).toBe('pending');
+    // And the attempt budget is untouched, for the operation that was sent as much as for the ones
+    // that were not. Charging an attempt here is how five expired-session passes used to move a
+    // clean queue onto the Sync Issues screen and ask a shopkeeper to resolve it by hand.
+    for (const id of ['a', 'b', 'c']) {
+      expect(await getOperation(id, txn)).toMatchObject({ status: 'pending', attempts: 0 });
+    }
+    expect(outcome.deferred).toBe(3);
+  });
+
+  it('does not burn attempts when the client is too old for the protocol either', async () => {
+    const { transport } = fakeTransport(() => {
+      throw httpError(426);
+    });
+    const push = engine(transport, { onProtocolUnsupported: jest.fn() });
+    await enqueue(push, 'a');
+
+    await push.push();
+
+    expect(await getOperation('a', txn)).toMatchObject({ status: 'pending', attempts: 0 });
   });
 
   it('stops and reports when the client is too old for the protocol', async () => {
@@ -244,6 +314,38 @@ describe('error handling that stops the pass', () => {
 
     await push.push();
     expect(push.currentBatchSize()).toBe(10);
+  });
+
+  /**
+   * The shrink has to reach the code that cuts batches, which is the queue manager. It used to
+   * mutate a number the manager had already captured at construction, so a device whose batches
+   * were over the server's 1MB ceiling resent the identical oversized batch until it ran out of
+   * attempts and dropped the whole thing on the Failed screen.
+   */
+  it('actually sends smaller batches after a 413', async () => {
+    let fail = true;
+    const { sent, transport } = fakeTransport((ops) => {
+      if (fail) {
+        fail = false;
+        throw httpError(413);
+      }
+      return allOk(ops);
+    });
+    const push = engine(transport, { batchSize: 4 });
+    for (const id of ['a', 'b', 'c', 'd']) await enqueue(push, id);
+
+    // First pass: one oversized batch, rejected whole.
+    await push.push();
+    expect(sent[0]).toHaveLength(4);
+    // The size was the problem, so nobody pays an attempt for it. Shrinking 25 to 1 takes four
+    // rejections, and charging each one would exhaust the budget before the batch fit.
+    expect(await getOperation('a', txn)).toMatchObject({ status: 'pending', attempts: 0 });
+
+    // The next work to be claimed is cut to the size the server will accept.
+    for (const id of ['e', 'f', 'g', 'h']) await enqueue(push, id);
+    await push.push();
+
+    expect(sent[1]).toHaveLength(2);
   });
 });
 

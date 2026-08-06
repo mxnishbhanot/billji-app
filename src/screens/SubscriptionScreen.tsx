@@ -10,6 +10,8 @@ import { useAppToast } from '@/components/AppToast';
 import { apiErrorMessage } from '@/api/client';
 import { formatPaise } from '@/constants/entitlements';
 import { RazorpayCheckoutSheet, type CheckoutResult } from '@/features/billing/components/RazorpayCheckoutSheet';
+import { ReferralCard } from '@/features/referrals/components/ReferralCard';
+import { CreateBusinessDialog } from '@/features/workspaces/CreateBusinessDialog';
 import {
   useCancelSubscription,
   useDisableAutopay,
@@ -20,6 +22,7 @@ import {
   useVerifyCheckout
 } from '@/features/billing/hooks/useBilling';
 import { track } from '@/services/analytics';
+import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
 import type { SubscriptionScreenProps as NavProps } from '@/navigation/types';
@@ -66,8 +69,13 @@ export function SubscriptionScreen({ navigation }: NavProps) {
   const { showToast } = useAppToast();
 
   const user = useAuthStore((state) => state.user);
+  // Two different questions. `can(billingInvoices)` decides whether the payments section renders at
+  // all — it mirrors what GET /billing/payments will allow, so we never draw a section that 403s.
+  // `canManageBilling` decides whether any money control renders, and it is the server's answer,
+  // not a permission: an admin holds every billing permission and still cannot spend.
+  const { can, canManageBilling } = usePermissions();
   const subscriptionQuery = useSubscription();
-  const paymentsQuery = usePayments();
+  const paymentsQuery = usePayments({ enabled: can(PERMISSION.billingInvoices) });
   const cancel = useCancelSubscription();
   const reactivate = useReactivateSubscription();
   const startCheckout = useStartCheckout();
@@ -77,6 +85,7 @@ export function SubscriptionScreen({ navigation }: NavProps) {
   // be the same button — conflating them is how a customer loses access they meant to keep.
   const [confirming, setConfirming] = useState<'cancel' | 'autopay' | null>(null);
   const [checkout, setCheckout] = useState<Checkout | null>(null);
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
 
   const subscription = subscriptionQuery.data;
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.08);
@@ -188,16 +197,29 @@ export function SubscriptionScreen({ navigation }: NavProps) {
           </View>
         </View>
 
-        <Pressable
-          onPress={() => navigation.navigate('Plans')}
-          style={({ pressed }) => [styles.primaryBtn, { backgroundColor: theme.colors.primary, opacity: pressed ? 0.9 : 1 }]}
-        >
-          <Text style={[styles.primaryLabel, { color: theme.colors.onPrimary }]}>
-            {subscription.subscriptionStatus === 'active' && subscription.renewalDate ? 'Change plan' : 'See plans'}
-          </Text>
-        </Pressable>
+        {canManageBilling ? (
+          <Pressable
+            onPress={() => navigation.navigate('Plans')}
+            style={({ pressed }) => [styles.primaryBtn, { backgroundColor: theme.colors.primary, opacity: pressed ? 0.9 : 1 }]}
+          >
+            <Text style={[styles.primaryLabel, { color: theme.colors.onPrimary }]}>
+              {subscription.subscriptionStatus === 'active' && subscription.renewalDate ? 'Change plan' : 'See plans'}
+            </Text>
+          </Pressable>
+        ) : (
+          // Not a disabled button. A control that can never become enabled reads as a bug; naming
+          // the person who can act is the honest answer, and the way out is a workspace of their own.
+          <View style={[styles.managedBy, { borderColor: cardBorder }]}>
+            <Text style={[styles.managedByTitle, { color: theme.colors.onSurface }]}>
+              {subscription.billingOwnerName ? `Managed by ${subscription.billingOwnerName}` : 'Managed by the business owner'}
+            </Text>
+            <Text style={[styles.managedByBody, { color: theme.colors.onSurfaceVariant }]}>
+              Ask them to change the plan for this business.
+            </Text>
+          </View>
+        )}
 
-        {subscription.cancelAtPeriodEnd ? (
+        {canManageBilling && subscription.cancelAtPeriodEnd ? (
           <Pressable onPress={runReactivate} disabled={reactivate.isPending} style={styles.textBtn}>
             <Text style={[styles.textBtnLabel, { color: theme.colors.primary }]}>
               {reactivate.isPending ? 'Resuming…' : 'Resume subscription'}
@@ -210,13 +232,16 @@ export function SubscriptionScreen({ navigation }: NavProps) {
             <Text style={[styles.mandateNote, { color: theme.colors.onSurfaceVariant }]}>
               {`We debit ${formatPaise(subscription.autopay?.amount || 0)} on each renewal — your plan price, never more.`}
             </Text>
-            <Pressable onPress={() => setConfirming('autopay')} disabled={disableAutopay.isPending} style={styles.textBtn}>
-              <Text style={[styles.textBtnLabel, { color: theme.colors.onSurfaceVariant }]}>
-                {disableAutopay.isPending ? 'Turning off…' : 'Turn off autopay'}
-              </Text>
-            </Pressable>
+            {/* Revoking a bank mandate is the same money decision as granting one. */}
+            {canManageBilling ? (
+              <Pressable onPress={() => setConfirming('autopay')} disabled={disableAutopay.isPending} style={styles.textBtn}>
+                <Text style={[styles.textBtnLabel, { color: theme.colors.onSurfaceVariant }]}>
+                  {disableAutopay.isPending ? 'Turning off…' : 'Turn off autopay'}
+                </Text>
+              </Pressable>
+            ) : null}
           </>
-        ) : canOfferAutopay ? (
+        ) : canManageBilling && canOfferAutopay ? (
           // A halted mandate cannot be retried — the bank needs to authenticate a new one — so this is
           // an opt-in, not a "retry". No dialog: a toggle is not a destructive action.
           <View style={[styles.optIn, { borderColor: cardBorder }]}>
@@ -237,12 +262,31 @@ export function SubscriptionScreen({ navigation }: NavProps) {
           </View>
         ) : null}
 
-        {!subscription.cancelAtPeriodEnd && subscription.renewalDate ? (
+        {canManageBilling && !subscription.cancelAtPeriodEnd && subscription.renewalDate ? (
           <Pressable onPress={() => setConfirming('cancel')} disabled={cancel.isPending} style={styles.textBtn}>
             <Text style={[styles.textBtnLabel, { color: theme.colors.onSurfaceVariant }]}>Cancel subscription</Text>
           </Pressable>
         ) : null}
       </View>
+
+      {!canManageBilling ? (
+        // The way out of the dead end: what they usually wanted was a business of their own.
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: cardBorder }]}>
+          <Text style={[styles.optInTitle, { color: theme.colors.onSurface }]}>Need your own subscription?</Text>
+          <Text style={[styles.optInBody, { color: theme.colors.onSurfaceVariant }]}>
+            Create your own business and manage its plan yourself. This one stays exactly as it is.
+          </Text>
+          <Pressable
+            onPress={() => setCreatingWorkspace(true)}
+            style={({ pressed }) => [styles.secondaryBtn, { borderColor: theme.colors.primary, opacity: pressed ? 0.9 : 1 }]}
+          >
+            <Text style={[styles.secondaryLabel, { color: theme.colors.primary }]}>Create your own business</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      <Text style={[styles.sectionLabel, { color: theme.colors.onSurfaceVariant }]}>REFER & EARN</Text>
+      <ReferralCard />
 
       <Text style={[styles.sectionLabel, { color: theme.colors.onSurfaceVariant }]}>THIS MONTH</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: cardBorder }]}>
@@ -253,16 +297,22 @@ export function SubscriptionScreen({ navigation }: NavProps) {
         )}
       </View>
 
-      <Text style={[styles.sectionLabel, { color: theme.colors.onSurfaceVariant }]}>PAYMENTS</Text>
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: cardBorder }]}>
-        {paymentsQuery.isLoading ? (
-          <ActivityIndicator />
-        ) : (paymentsQuery.data?.length ?? 0) === 0 ? (
-          <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>No payments yet.</Text>
-        ) : (
-          paymentsQuery.data?.map(renderPayment)
-        )}
-      </View>
+      {/* Invoices are financial records — one notch narrower than plan status. An accountant sees
+          them, a viewer does not, and the section mirrors what GET /billing/payments will allow. */}
+      {can(PERMISSION.billingInvoices) ? (
+        <>
+          <Text style={[styles.sectionLabel, { color: theme.colors.onSurfaceVariant }]}>PAYMENTS</Text>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: cardBorder }]}>
+            {paymentsQuery.isLoading ? (
+              <ActivityIndicator />
+            ) : (paymentsQuery.data?.length ?? 0) === 0 ? (
+              <Text style={[styles.emptyText, { color: theme.colors.onSurfaceVariant }]}>No payments yet.</Text>
+            ) : (
+              paymentsQuery.data?.map(renderPayment)
+            )}
+          </View>
+        </>
+      ) : null}
 
       <View style={styles.footnote}>
         <Feather name="info" size={13} color={theme.colors.onSurfaceVariant} />
@@ -300,6 +350,8 @@ export function SubscriptionScreen({ navigation }: NavProps) {
           if (reason === 'failed') showDialog({ title: 'Autopay not set up', message: message || 'Please try again.', tone: 'error' });
         }}
       />
+
+      <CreateBusinessDialog visible={creatingWorkspace} onClose={() => setCreatingWorkspace(false)} />
     </Screen>
   );
 }
@@ -317,6 +369,9 @@ const styles = StyleSheet.create({
   secondaryLabel: { ...fontStyles.semiBold, fontSize: 14 },
   mandateNote: { ...fontStyles.regular, fontSize: 12, lineHeight: 17, marginTop: 12, textAlign: 'center' },
   optIn: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.md, padding: 14, marginTop: 14, gap: 8 },
+  managedBy: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.md, padding: 14, gap: 4 },
+  managedByTitle: { ...fontStyles.semiBold, fontSize: 14 },
+  managedByBody: { ...fontStyles.regular, fontSize: 13, lineHeight: 18 },
   optInTitle: { ...fontStyles.semiBold, fontSize: 14 },
   optInBody: { ...fontStyles.regular, fontSize: 12, lineHeight: 17, marginBottom: 4 },
   textBtn: { height: 42, alignItems: 'center', justifyContent: 'center' },

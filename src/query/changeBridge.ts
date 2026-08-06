@@ -57,6 +57,15 @@ const keysFor = (event: ChangeEvent): QueryKey[] => {
       break;
     }
 
+    case 'referrals': {
+      keys.push(queryKeys.referrals.all);
+      // The reward IS a subscription change, and it arrives with the server's acknowledgement of the
+      // referral. Invalidating the plan here is what makes the app go Pro through the path every other
+      // plan change already uses — no referral-specific payload, no socket, no bespoke notification.
+      if (event.origin === 'sync') keys.push(queryKeys.billing.all);
+      break;
+    }
+
     case 'payments': {
       keys.push(queryKeys.payments.all);
       keys.push(queryKeys.report.all);

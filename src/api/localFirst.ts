@@ -3,6 +3,7 @@ import {
   isDatabaseAvailable,
   isDatabaseUnavailable,
   isLocalRuleError,
+  isUnsupportedOperation,
   type EntityType
 } from '@/db';
 import { useAuthStore } from '@/store/authStore';
@@ -86,6 +87,11 @@ export const localWrite = async <T>(local: (businessId: string) => Promise<T>, r
   } catch (error) {
     // Platform has no SQLite at all — there was no local attempt with side effects.
     if (isDatabaseUnavailable(error)) return remote();
+    // The queue refused to carry this operation, and refused it *inside* the write transaction, so
+    // nothing was committed. Same situation as a platform without SQLite: send it online. This is
+    // the honest version of what used to happen — the write was accepted locally and then quietly
+    // discarded by the push engine, which no user could see and no error reported.
+    if (isUnsupportedOperation(error)) return remote();
     // Domain refusal (oversell, overpayment): same answer online; never invent a document.
     if (isLocalRuleError(error)) throw error;
     if (isLocalWriteFailedError(error)) throw error;

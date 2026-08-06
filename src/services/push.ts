@@ -1,6 +1,8 @@
 import { PermissionsAndroid, Platform } from 'react-native';
 import { notificationsApi } from '@/api/endpoints';
 import { navigationRef } from '@/navigation/navigationRef';
+import { queryClient } from '@/query/queryClient';
+import { queryKeys } from '@/shared/query/queryKeys';
 
 // Firebase Messaging is a native module: absent on web and in Expo Go, so it is lazily
 // required and every entry point degrades to a no-op rather than throwing. Same pattern
@@ -12,6 +14,7 @@ type MessagingModule = {
   onTokenRefresh: (messaging: unknown, listener: (token: string) => void) => () => void;
   onNotificationOpenedApp: (messaging: unknown, listener: (message: RemoteMessageLike) => void) => () => void;
   getInitialNotification: (messaging: unknown) => Promise<RemoteMessageLike | null>;
+  onMessage: (messaging: unknown, listener: (message: RemoteMessageLike) => void) => () => void;
   requestPermission: (messaging: unknown) => Promise<number>;
 };
 
@@ -21,6 +24,13 @@ let modular: MessagingModule | null = null;
 let loadTried = false;
 // The token currently registered with the API, so logout knows what to unregister.
 let registeredToken: string | null = null;
+// Why push is not working, for the settings screen and for support. Every failure below used
+// to be swallowed into a bare `false`, which made a dead registration indistinguishable from
+// a working one.
+export type PushStatus = 'unknown' | 'registered' | 'denied' | 'unsupported' | 'failed';
+let status: PushStatus = 'unknown';
+
+export const getPushStatus = (): PushStatus => status;
 
 const loadMessaging = (): MessagingModule | null => {
   if (modular || loadTried) return modular;
@@ -66,17 +76,26 @@ const sendTokenToServer = async (token: string) => {
  */
 export const registerForPush = async (): Promise<boolean> => {
   const messaging = loadMessaging();
-  if (!messaging) return false;
+  if (!messaging) {
+    status = 'unsupported';
+    return false;
+  }
 
   try {
     const instance = messaging.getMessaging();
-    if (!(await ensurePermission(messaging, instance))) return false;
+    if (!(await ensurePermission(messaging, instance))) {
+      status = 'denied';
+      return false;
+    }
 
     const token = await messaging.getToken(instance);
     await sendTokenToServer(token);
+    status = 'registered';
     return true;
-  } catch {
+  } catch (error) {
     // No Google Play services, no network, permission race — push is a nice-to-have.
+    status = 'failed';
+    if (__DEV__) console.warn('[push] registration failed:', error);
     return false;
   }
 };
@@ -88,6 +107,7 @@ export const registerForPush = async (): Promise<boolean> => {
 export const unregisterFromPush = async (): Promise<void> => {
   const token = registeredToken;
   registeredToken = null;
+  status = 'unknown';
   if (!token) return;
 
   try {
@@ -136,6 +156,14 @@ export const attachPushListeners = (): (() => void) => {
     });
     const offOpened = messaging.onNotificationOpenedApp(instance, (message) => openFromRoute(message?.data?.to));
 
+    // Android never shows an FCM notification while the app is in the foreground, so without
+    // this a push that arrives with the app open is invisible AND leaves the bell stale. The
+    // in-app panel is the foreground surface: refresh it so the badge and list pick the
+    // notification up immediately.
+    const offForeground = messaging.onMessage(instance, () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+    });
+
     // Cold start from a notification tap.
     void messaging
       .getInitialNotification(instance)
@@ -145,6 +173,7 @@ export const attachPushListeners = (): (() => void) => {
     return () => {
       offRefresh();
       offOpened();
+      offForeground();
     };
   } catch {
     return () => {};

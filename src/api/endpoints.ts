@@ -50,6 +50,7 @@ import {
 // The header constants only, imported from the engine module rather than the sync barrel:
 // the barrel pulls in deviceSeries, which imports this file.
 import { SYNC_DEVICE_HEADER, SYNC_PROTOCOL_HEADER, SYNC_PROTOCOL_VERSION } from '../sync/pushEngine';
+import { withBillingAddress } from '@/shared/customers/customerPayload';
 import { api } from './client';
 import { localFirst, localWrite } from './localFirst';
 import {
@@ -99,6 +100,10 @@ import {
   NotificationPreferences,
   NotificationQuery,
   Page,
+  AppliedReferral,
+  ReferralReward,
+  ReferralStats,
+  ReferredUser,
   PageQuery,
   Payment,
   PendingReminderList,
@@ -157,7 +162,10 @@ const checkoutIdempotencyKey = (payload: { planId?: string; planKey?: string; in
   ].join('-');
 
 export const authApi = {
-  register: (payload: { name: string; email: string; password: string }) => api.post<AuthSession>('/auth/register', payload).then((res) => res.data),
+  // `referralCode` is optional and never fatal: a code that is wrong or already used still creates the
+  // account, and the server reports what happened in `session.referral`.
+  register: (payload: { name: string; email: string; password: string; referralCode?: string }) =>
+    api.post<AuthSession>('/auth/register', payload).then((res) => res.data),
   login: (payload: { email: string; password: string }) => api.post<LoginResult>('/auth/login', payload).then((res) => res.data),
   google: (idToken: string) => api.post<LoginResult>('/auth/google', { idToken }).then((res) => res.data),
   refresh: (refreshToken: string) => api.post<AuthSession>('/auth/refresh', { refreshToken }).then((res) => res.data),
@@ -169,6 +177,10 @@ export const authApi = {
   me: () => api.get<{ success: boolean; user: User }>('/auth/me').then((res) => res.data.user),
   businesses: () => api.get<{ businesses: BusinessSummary[] }>('/auth/businesses').then((res) => res.data.businesses),
   switchBusiness: (businessId: string) => api.post<{ success: boolean; user: User }>('/auth/business/switch', { businessId }).then((res) => res.data.user),
+  // Creating a workspace switches into it, so this returns the same user payload switchBusiness
+  // does and the client adopts both through one path.
+  createBusiness: (payload: { businessName: string; email?: string }) =>
+    api.post<{ success: boolean; user: User }>('/businesses', payload).then((res) => res.data.user),
   updateSettings: (payload: Partial<BusinessProfile>) => api.patch<{ success: boolean; user: User }>('/settings', payload).then((res) => res.data),
   invoiceTemplatePreview: (payload: Partial<InvoiceTemplate>) =>
     api.post<string>('/settings/invoice-template/preview', payload, { responseType: 'text', transformResponse: (data) => data }).then((res) => res.data)
@@ -211,6 +223,37 @@ export const teamApi = {
 
 // Billing mirrors backend/src/modules/billing/routes.js one to one. No new HTTP client and no new
 // interceptor stack — the 402 branch lives in client.ts with the rest.
+/**
+ * Referrals. Reads only, plus one write that is the ONLINE path — the offline path is an APPLY_REFERRAL
+ * outbox operation going through /sync/push to the same server handler (see db/referralWrites).
+ *
+ * Nothing here decides anything: the client sends a code string and reads back what the server decided.
+ */
+export const referralApi = {
+  me: () => api.get<{ code: string; stats: ReferralStats }>('/referrals/me').then((res) => res.data),
+  stats: () => api.get<{ stats: ReferralStats }>('/referrals/me/stats').then((res) => res.data.stats),
+  rewards: (params?: { page?: number; limit?: number }) =>
+    api.get<{ rewards: ReferralReward[] }>('/referrals/me/rewards', { params }).then((res) => res.data.rewards),
+  referrals: (params?: { page?: number; limit?: number }) =>
+    api.get<{ referrals: ReferredUser[] }>('/referrals/me/referrals', { params }).then((res) => res.data.referrals),
+  // There is no time limit on applying a code, so whether the entry point should be shown at all is a
+  // server answer, not something the app can work out from the signup date.
+  eligibility: () =>
+    api.get<{ eligible: boolean; reason: string | null; code: string }>('/referrals/me/eligibility').then((res) => res.data),
+  validate: (code: string) =>
+    api
+      .post<{ valid: boolean; code: string; referrerName?: string; reason?: string }>('/public/referrals/validate', { code })
+      .then((res) => res.data),
+  apply: (code: string, opId: string) =>
+    api
+      .post<{ referral: AppliedReferral; subscription: Subscription }>('/referrals/apply', { code }, {
+        // Same idempotency contract the offline push uses, keyed on the operation id so a retry replays
+        // the first answer instead of racing itself.
+        headers: { 'Idempotency-Key': opId }
+      })
+      .then((res) => res.data)
+};
+
 export const billingApi = {
   subscription: () => api.get<{ subscription: Subscription }>('/billing/subscription').then((res) => res.data.subscription),
   usage: () =>
@@ -340,13 +383,16 @@ export const customersApi = {
     ),
   // Writes are local-first, exactly as products are: the row and its queued push commit
   // together, so a customer added at the counter with no signal exists immediately.
-  create: (payload: CustomerFormValues | Partial<Customer>) =>
-    localWrite(
+  create: (input: CustomerFormValues | Partial<Customer>) => {
+    const payload = withBillingAddress(input);
+    return localWrite(
       async (businessId) => asCustomer(await createCustomerLocally(payload as CustomerDoc, { businessId })),
       () => api.post<{ customer: Customer }>('/customers', payload).then((res) => res.data.customer)
-    ),
-  update: (id: string, payload: CustomerFormValues | Partial<Customer>) =>
-    localWrite(async (businessId) => {
+    );
+  },
+  update: (id: string, input: CustomerFormValues | Partial<Customer>) => {
+    const payload = withBillingAddress(input);
+    return localWrite(async (businessId) => {
       const existing = await findCustomerByAnyId(id);
       // Nothing local under that id — it belongs to a collection this device has not synced.
       if (!existing) return api.patch<{ customer: Customer }>(`/customers/${id}`, payload).then((res) => res.data.customer);
@@ -354,7 +400,8 @@ export const customersApi = {
       const updated = await updateCustomerLocally(existing.localId, payload as Partial<CustomerDoc>, { businessId });
       if (!updated) throw new Error('That customer no longer exists on this device');
       return asCustomer(updated);
-    }, () => api.patch<{ customer: Customer }>(`/customers/${id}`, payload).then((res) => res.data.customer)),
+    }, () => api.patch<{ customer: Customer }>(`/customers/${id}`, payload).then((res) => res.data.customer));
+  },
   remove: (id: string) =>
     localWrite(async (businessId) => {
       const existing = await findCustomerByAnyId(id);

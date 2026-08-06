@@ -438,15 +438,19 @@ export function SettingsScreen() {
         />
       </SettingsGroup>
 
-      <SettingsGroup title="PLAN & BILLING">
-        <SettingsRow
-          icon="crown-outline"
-          title="Plan & billing"
-          subtitle={billingSubtitle}
-          tone={colors.violet}
-          onPress={() => navigation.navigate('Subscription')}
-        />
-      </SettingsGroup>
+      {/* Hidden rather than disabled for a member with no billing permission at all (staff): a
+          disabled row advertises a capability that will never exist for them. */}
+      {can(PERMISSION.billingView) ? (
+        <SettingsGroup title="PLAN & BILLING">
+          <SettingsRow
+            icon="crown-outline"
+            title="Plan & billing"
+            subtitle={billingSubtitle}
+            tone={colors.violet}
+            onPress={() => navigation.navigate('Subscription')}
+          />
+        </SettingsGroup>
+      ) : null}
 
       <SettingsGroup title="INVOICING">
         <SettingsRow icon="file-document-edit-outline" title="Invoice Template" subtitle={`Customize PDF · ${invoicePrefix || 'INV'}-0001`} tone={colors.primary} onPress={() => navigation.navigate('InvoiceTemplate')} />

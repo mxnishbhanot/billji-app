@@ -6,7 +6,13 @@ export type DatabaseErrorCode =
   /** A migration threw, or the schema is in a state the app cannot reconcile. */
   | 'DB_MIGRATION_FAILED'
   /** A statement or transaction failed at runtime. */
-  | 'DB_QUERY_FAILED';
+  | 'DB_QUERY_FAILED'
+  /**
+   * The queue refused an operation the sync protocol cannot express. Not a fault: the write
+   * simply has to go online, exactly like the modules that were never made offline-capable.
+   * Raised inside the write transaction, so no half-written row survives it.
+   */
+  | 'DB_UNSUPPORTED_OPERATION';
 
 /**
  * Every failure that leaves this module is a DatabaseError, so a caller can branch on
@@ -54,6 +60,10 @@ export const isLocalRuleError = (error: unknown): error is LocalRuleError => err
 /** True when the local store simply does not exist here — a fallback, not a fault. */
 export const isDatabaseUnavailable = (error: unknown) =>
   isDatabaseError(error) && error.code === 'DB_UNAVAILABLE';
+
+/** True when the queue cannot carry this write, so the caller should send it online instead. */
+export const isUnsupportedOperation = (error: unknown) =>
+  isDatabaseError(error) && error.code === 'DB_UNSUPPORTED_OPERATION';
 
 /**
  * Runs `task`, and rethrows anything it throws as a DatabaseError. A DatabaseError raised

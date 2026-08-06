@@ -190,6 +190,14 @@ export type Subscription = {
   snapshotVersion: number | null;
   subscriptionStatus: SubscriptionStatus;
   billingInterval: string | null;
+  /** Who to ask. One line of copy for the non-owner screen — nothing else about the owner. */
+  billingOwnerName: string | null;
+  /**
+   * The server's answer to "may this member spend", from the same list its requireBillingOwner
+   * guard uses. Gate every money control on this and never on a permission: an admin holds every
+   * billing permission and still must not be able to buy.
+   */
+  canManageBilling: boolean;
   renewalDate: string | null;
   expiryDate: string | null;
   gracePeriodEndsAt: string | null;
@@ -326,6 +334,63 @@ export type AuthSession = {
   user: User;
   // Present on the /2fa/verify response when the user asked to trust the device.
   trustedDeviceToken?: string;
+  /**
+   * What happened to the referral code sent with a signup. Null when none was sent.
+   *
+   * `applied: false` never means the signup failed — the account exists either way. `reason` says
+   * whether it is worth retrying through the outbox (a network-shaped failure) or not (a wrong code).
+   */
+  referral?: SignupReferralResult | null;
+};
+
+export type SignupReferralResult = {
+  applied: boolean;
+  code: string;
+  reason: string | null;
+  message?: string;
+};
+
+// -- Referrals ------------------------------------------------------------------------
+// Every field here is decided by the server. The app displays them and never computes one.
+
+export type ReferralStats = {
+  totalReferrals: number;
+  pending: number;
+  converted: number;
+  rewardsEarned: number;
+  freeDaysEarned: number;
+};
+
+export type ReferralReward = {
+  id: string;
+  rule: 'referral_signup' | 'referral_conversion' | 'coupon_time' | string;
+  type: string;
+  days: number;
+  planKey: string;
+  status: 'granted' | 'reversed';
+  grantedAt: string;
+  appliedPeriodEnd: string | null;
+  reversedAt: string | null;
+  reason?: string;
+};
+
+export type ReferredUser = {
+  id: string;
+  /** Masked by the server: a referrer sees that someone joined, not who. */
+  name: string;
+  status: 'pending' | 'converted' | 'void';
+  joinedAt: string;
+  convertedAt: string | null;
+};
+
+export type AppliedReferral = {
+  id: string;
+  code: string;
+  status: 'pending' | 'converted' | 'void';
+  appliedAt: string;
+  clientId: string | null;
+  version: number | null;
+  updatedAt: string;
 };
 
 export type TwoFactorMethod = 'none' | 'totp' | 'email';
@@ -944,6 +1009,11 @@ export type CustomerFormValues = {
   email?: string;
   address?: string;
   gstNumber?: string;
+  // Billing state drives the place of supply, and therefore CGST+SGST vs IGST. Flat on the
+  // form; customersApi folds these into `billingAddress` before the write.
+  state?: string;
+  city?: string;
+  pinCode?: string;
 };
 
 export type ProductFormValues = {

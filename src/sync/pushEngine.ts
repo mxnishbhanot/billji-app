@@ -11,6 +11,7 @@ import {
   type OperationResult,
   type QueueManagerConfig
 } from './queueManager';
+import { syncError, syncLog } from './syncLog';
 
 /**
  * Push: local intent out to the server, and nothing else. There is deliberately no pull
@@ -52,8 +53,25 @@ const WIRE_ENTITY: Record<string, string> = {
   expenses: 'expense',
   suppliers: 'vendor',
   purchases: 'purchase',
-  payments: 'payment'
+  payments: 'payment',
+  referrals: 'referral'
 };
+
+/**
+ * Server codes that mean "this will never succeed, stop asking".
+ *
+ * They arrive as a 409, which the push protocol reports as `conflict` — the shape meant for two
+ * writers disagreeing about a version. A referral code that is already used is not that: there is no
+ * local version to rebase and no choice for the user to make, so offering Keep Local / Keep Server on
+ * the Sync Issues screen would be nonsense. These are abandoned like any other permanent rejection.
+ */
+const PERMANENT_REJECTION_CODES = new Set([
+  'REFERRAL_ALREADY_APPLIED',
+  'REFERRAL_REWARD_ALREADY_RECEIVED',
+  'REFERRAL_NOT_ELIGIBLE_PAID',
+  'REFERRAL_CODE_INVALID',
+  'REFERRAL_SELF'
+]);
 
 export type WireOperation = {
   opId: string;
@@ -175,8 +193,14 @@ export const classifyResult = (result: PushResult): OperationResult => {
     // "Still processing" is the server saying this very operation is in flight — a duplicate
     // that overlapped its own retry, not two writers disagreeing. Sending a shopkeeper to the
     // Sync Issues screen for that would be wrong; it just needs asking again.
+    // Deferred, not retried: the operation is already being applied, so charging it an attempt
+    // would penalise it for having been sent successfully.
     if (result.code === 'IDEMPOTENCY_REQUEST_IN_PROGRESS') {
-      return { opId: result.opId, outcome: 'retry', error: result.message ?? 'Already being processed' };
+      return { opId: result.opId, outcome: 'defer', error: result.message ?? 'Already being processed' };
+    }
+    // A business rule that has already been decided, not a version conflict. Nothing to resolve.
+    if (result.code && PERMANENT_REJECTION_CODES.has(result.code)) {
+      return { opId: result.opId, outcome: 'dead', error: result.message ?? 'This is no longer possible' };
     }
     return { opId: result.opId, outcome: 'conflict', error: result.message ?? 'Version conflict' };
   }
@@ -206,8 +230,10 @@ export const createPushEngine = (config: PushEngineConfig) => {
   const handler: BatchHandler = async (batch: OperationBatch) => {
     if (abort) {
       // Everything left in this pass is deferred, not failed — the cause is the session or
-      // the client version, not these operations.
-      return batch.operations.map((operation) => ({ opId: operation.opId, outcome: 'retry' as const, error: abort! }));
+      // the client version, not these operations. 'defer' rather than 'retry' is the whole
+      // point: a retry would spend an attempt, and five expired-session passes used to be
+      // enough to move a perfectly good queue onto the Sync Issues screen.
+      return batch.operations.map((operation) => ({ opId: operation.opId, outcome: 'defer' as const, error: abort! }));
     }
 
     const results: OperationResult[] = [];
@@ -235,8 +261,24 @@ export const createPushEngine = (config: PushEngineConfig) => {
         // References to records this device created are rewritten to the ids those records
         // earned, now that their own creates have been accepted ahead of this one.
         const payload = await resolveReferences(operation, config.txn);
-        const targeted = body.targetId ? body : { ...body, targetId: await resolveTargetId(operation, config.txn) };
-        return payload === operation.payload ? targeted : { ...targeted, payload };
+
+        // Written as statements on purpose. The single-expression form of this —
+        //
+        //   const targeted = body.targetId ? body : { ...body, targetId: await resolveTargetId(...) };
+        //
+        // is miscompiled on the device: an `await` inside an object spread inside a conditional
+        // expression came out of the Metro/Hermes pipeline as the number 0, so every operation was
+        // sent to /sync/push as `ops: [0]` and rejected with 422 "Validation failed" on opId, entity
+        // and opType. It reproduces only in the app bundle — the Jest transform gets it right, which
+        // is why the whole push suite passed while no offline write could ever reach the server.
+        let targeted: WireOperation = body;
+        if (!body.targetId) {
+          const targetId = await resolveTargetId(operation, config.txn);
+          targeted = { ...body, targetId };
+        }
+
+        if (payload === operation.payload) return targeted;
+        return { ...targeted, payload };
       })
     );
 
@@ -255,17 +297,38 @@ export const createPushEngine = (config: PushEngineConfig) => {
         abort = 'This app version is too old to sync';
         config.onProtocolUnsupported?.();
       }
-      if (status === 413) {
-        // The batch itself was the problem. Halve it and let the retry send less.
+      // The batch itself was the problem, not the operations in it. Halve it and let the next claim
+      // send less; the queue manager reads batchSize through a getter, so this reaches the code that
+      // cuts batches. Deferred rather than retried for the same reason the size is what changed:
+      // shrinking 25 down to 1 takes four rejections, and charging each one an attempt would exhaust
+      // a five-attempt budget before the batch ever got small enough to be accepted.
+      const oversized = status === 413;
+      if (oversized) {
         batchSize = Math.max(MIN_BATCH_SIZE, Math.floor(batchSize / 2));
+        syncLog('batch_shrunk', { batchSize, ops: sendable.length });
       }
 
-      // A transport failure says nothing about individual operations: every one of them
-      // retries, none is abandoned on a guess.
-      return [
-        ...results,
-        ...sendable.map((operation) => ({ opId: operation.opId, outcome: 'retry' as const, error: message }))
-      ];
+      // The server's own explanation, not just axios's "Request failed with status code 422".
+      // Without this a rejected batch says only that it failed, which is useless in the field —
+      // the reason is in the response body. Field *paths* only, never the values the user typed.
+      const body = isAxiosError(error) ? (error.response?.data as Record<string, unknown> | undefined) : undefined;
+      const details = Array.isArray(body?.details) ? (body?.details as Record<string, unknown>[]) : [];
+      syncLog('batch_failed', {
+        entityType: batch.entityType,
+        ops: sendable.length,
+        statusCode: status ?? null,
+        error: message,
+        serverMessage: typeof body?.message === 'string' ? body.message : undefined,
+        serverCode: typeof body?.code === 'string' ? body.code : undefined,
+        fields: details.length ? details.map((detail) => String(detail.path ?? detail.param ?? '?')).join(',') : undefined
+      });
+
+      // A transport failure says nothing about individual operations: every one of them retries,
+      // none is abandoned on a guess. Auth, protocol and oversized-batch failures are the exception —
+      // the session, the client version and the batch size are not these operations' fault, so they
+      // defer instead of spending the batch's attempts.
+      const outcome = abort || oversized ? ('defer' as const) : ('retry' as const);
+      return [...results, ...sendable.map((operation) => ({ opId: operation.opId, outcome, error: abort ?? message }))];
     }
 
     const byId = new Map(response.results?.map((result) => [result.opId, result]) ?? []);
@@ -273,7 +336,8 @@ export const createPushEngine = (config: PushEngineConfig) => {
     for (const operation of sendable) {
       const result = byId.get(operation.opId);
       if (!result) {
-        results.push({ opId: operation.opId, outcome: 'retry', error: 'The server returned no result for this operation' });
+        // The server accepted the envelope and said nothing about this op. Unknown, not failed.
+        results.push({ opId: operation.opId, outcome: 'defer', error: 'The server returned no result for this operation' });
         continue;
       }
 
@@ -283,7 +347,7 @@ export const createPushEngine = (config: PushEngineConfig) => {
       try {
         await acknowledgePush(operation, result, { businessId: config.businessId, txn: config.txn });
       } catch (error) {
-        console.warn('[pushEngine] could not apply the server acknowledgement', error);
+        syncError('ack_failed', error, { opId: operation.opId, entityType: operation.entityType });
       }
 
       results.push(classifyResult(result));
@@ -292,7 +356,8 @@ export const createPushEngine = (config: PushEngineConfig) => {
     return results;
   };
 
-  const queue = createQueueManager({ ...config, handler, batchSize });
+  // A getter, not the number: 413 shrinks `batchSize` mid-pass and the queue has to see it.
+  const queue = createQueueManager({ ...config, handler, batchSize: () => batchSize });
 
   /**
    * Drains the queue until it is empty, the deadline passes, or something aborts the pass.
@@ -306,6 +371,7 @@ export const createPushEngine = (config: PushEngineConfig) => {
       batches: 0,
       done: 0,
       retried: 0,
+      deferred: 0,
       conflicts: 0,
       dead: 0,
       hasMore: false,
@@ -330,6 +396,7 @@ export const createPushEngine = (config: PushEngineConfig) => {
         total.batches += summary.batches;
         total.done += summary.done;
         total.retried += summary.retried;
+        total.deferred += summary.deferred;
         total.conflicts += summary.conflicts;
         total.dead += summary.dead;
         total.hasMore = summary.hasMore;
@@ -362,6 +429,8 @@ export const createPushEngine = (config: PushEngineConfig) => {
     currentBatchSize: () => batchSize,
     /** Released at launch: an inflight op is one nobody is holding any more. */
     recover: queue.recover,
+    /** Connectivity is back, so the waits it caused are void. Call before draining. */
+    clearBackoff: queue.clearBackoff,
     pendingCount: queue.pendingCount,
     deadLetters: queue.deadLetters,
     retry: queue.retry,

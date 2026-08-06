@@ -3,7 +3,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import { customersApi, documentsApi, invoicesApi, productsApi } from '@/api/endpoints';
 import { PaywallError, apiErrorMessage, isPaywallError } from '@/api/client';
 import { useDocumentDraft } from '@/shared/drafts/useDocumentDraft';
-import { resolvePlaceOfSupplyCode, stateCodeFromGstin, stateCodeFromName, supplyTypeFor } from '@/shared/gst/gstStates';
+import { useSupplyType } from '@/shared/gst/useSupplyType';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { useAuthStore } from '@/store/authStore';
@@ -95,19 +95,8 @@ export const useInvoiceBuilder = ({
     () => buildInvoiceDraftPayload({ selectedCustomerId, selectedCustomer: activeCustomer, items, taxRate, discountType, discountValue, notes }),
     [activeCustomer, discountType, discountValue, items, notes, selectedCustomerId, taxRate]
   );
-  // Mirror the server's place-of-supply resolution so the live preview shows the same
-  // CGST/SGST-vs-IGST split the created invoice will carry.
   const businessProfile = useAuthStore((state) => state.user?.businessProfile);
-  const supplyType = useMemo(() => {
-    const supplierStateCode =
-      businessProfile?.stateCode || stateCodeFromGstin(businessProfile?.gstNumber || '') || stateCodeFromName(businessProfile?.state || '');
-    const placeOfSupplyCode = resolvePlaceOfSupplyCode({
-      customerGstin: activeCustomer?.gstNumber || activeCustomer?.taxIdentifiers?.gstNumber,
-      customerState: activeCustomer?.billingAddress?.state,
-      supplierStateCode
-    });
-    return supplyTypeFor(supplierStateCode, placeOfSupplyCode);
-  }, [activeCustomer, businessProfile?.gstNumber, businessProfile?.state, businessProfile?.stateCode]);
+  const supplyType = useSupplyType(activeCustomer);
 
   const totals = useMemo(
     () =>

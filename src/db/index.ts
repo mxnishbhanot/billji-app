@@ -68,6 +68,7 @@ export {
   isDatabaseError,
   isDatabaseUnavailable,
   isLocalRuleError,
+  isUnsupportedOperation,
   type DatabaseErrorCode
 } from './errors';
 export {
@@ -149,9 +150,12 @@ export {
 export { latestVersion, migrations, readSchemaVersion, runMigrations, type Migration } from './migrations';
 export {
   OUTBOX_PRIORITY,
+  SENDABLE_ENTITY_TYPES,
   backoffDelayMs,
   claimOperations,
+  clearRetryBackoff,
   countOperations,
+  deferOperation,
   discardOperation,
   enqueueOperation,
   getOperation,
@@ -274,4 +278,10 @@ export {
   updateSupplierLocally,
   type SupplierWriteOptions
 } from './supplierWrites';
+export {
+  applyReferralLocally,
+  getLocalReferral,
+  type QueuedReferral,
+  type ReferralRowDoc
+} from './referralWrites';
 export { withTransaction } from './transaction';

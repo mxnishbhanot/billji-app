@@ -21,6 +21,11 @@ export const PERMISSION = {
   purchasesView: 'purchases.view',
   purchasesManage: 'purchases.manage',
   reportsView: 'reports.view',
+  billingView: 'billing.view',
+  billingInvoices: 'billing.invoices',
+  billingPaymentMethod: 'billing.payment_method',
+  billingSubscriptionChange: 'billing.subscription_change',
+  billingManage: 'billing.manage',
   settingsView: 'settings.view',
   settingsManage: 'settings.manage',
   settingsExport: 'settings.export',
@@ -44,10 +49,17 @@ export type PermissionKey = (typeof PERMISSION)[keyof typeof PERMISSION];
 export function usePermissions() {
   const permissions = useAuthStore((state) => state.user?.permissions);
   const roleKey = useAuthStore((state) => state.user?.roleKey);
+  // Not derived from roleKey or from any permission: the server computes this from the same
+  // BILLING_OWNER_ROLES list its requireBillingOwner guard uses, so the two cannot drift, and a
+  // Billing Admin role added later needs no change here. Absent = false, and the API refuses anyway.
+  const canManageBilling = useAuthStore((state) => state.user?.subscription?.canManageBilling ?? false);
+
   return useMemo(() => {
     const list = permissions ?? [];
     const isOwner = !roleKey || roleKey === 'owner';
     const can = (permission: string) => isOwner || list.includes(permission);
-    return { can, permissions: list };
-  }, [permissions, roleKey]);
+    // Money controls read canManageBilling and NEVER can(...): the owner fail-open above is right
+    // for hiding UI and wrong for authorising a charge.
+    return { can, canManageBilling, permissions: list };
+  }, [permissions, roleKey, canManageBilling]);
 }

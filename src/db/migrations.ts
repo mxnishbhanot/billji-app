@@ -2,6 +2,8 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { DatabaseError, wrapDatabaseError } from './errors';
 import { initialSchema } from './schema/001_initial';
 import { purchasesSchema } from './schema/002_purchases';
+import { referralsSchema } from './schema/003_referrals';
+import { runInTransaction } from './sqliteTransaction';
 
 export type Migration = {
   /** 1-based, contiguous, never reused or reordered once shipped. */
@@ -16,7 +18,7 @@ export type Migration = {
  * version it holds, so editing a shipped migration changes the schema on new installs and
  * leaves every existing one behind.
  */
-export const migrations: Migration[] = [initialSchema, purchasesSchema];
+export const migrations: Migration[] = [initialSchema, purchasesSchema, referralsSchema];
 
 export const latestVersion = (list: Migration[] = migrations) =>
   list.reduce((highest, migration) => Math.max(highest, migration.version), 0);
@@ -71,10 +73,11 @@ export const runMigrations = async (db: SQLiteDatabase, list: Migration[] = migr
 
   for (const migration of pending) {
     await wrapDatabaseError('DB_MIGRATION_FAILED', `Migration ${migration.version} (${migration.name}) failed`, () =>
-      // Exclusive, not the plain transaction helper: expo-sqlite's non-exclusive
-      // transaction sweeps in any query running elsewhere in the app, and a stray write
-      // landing inside a schema change is a corruption path.
-      db.withExclusiveTransactionAsync(async (txn) => {
+      // On this connection, never a new one: a migration runs before anything else touches the
+      // store, and the connection it is handed is the only one holding the SQLCipher key. Opening
+      // a second connection here is what made a fresh encrypted install fail its first migration
+      // with "file is not a database" — see sqliteTransaction.ts.
+      runInTransaction(db, async (txn) => {
         await migration.up(txn);
         // PRAGMA user_version is transactional, so the bump commits with the schema change
         // or not at all. Interpolated because SQLite does not bind parameters in PRAGMA;

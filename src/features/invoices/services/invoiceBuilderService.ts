@@ -7,7 +7,10 @@ export const customerDefaults: CustomerFormValues = {
   countryCode: '+91',
   email: '',
   address: '',
-  gstNumber: ''
+  gstNumber: '',
+  state: '',
+  city: '',
+  pinCode: ''
 };
 export const customItemDefaults: CustomItemFormValues = { name: '', price: '', quantity: '1', unit: DEFAULT_UNIT };
 

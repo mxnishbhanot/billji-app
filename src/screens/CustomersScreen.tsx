@@ -32,7 +32,7 @@ import { formatCurrency } from '@/utils/format';
 import { customerSchema } from '@/validation/schemas';
 
 const PAGE_SIZE = 10;
-const blankCustomer = { name: '', phone: '', countryCode: '+91', email: '', address: '', gstNumber: '' };
+const blankCustomer = { name: '', phone: '', countryCode: '+91', email: '', address: '', gstNumber: '', state: '', city: '', pinCode: '' };
 
 const toFormValues = (customer: Customer | null): CustomerFormValues =>
   customer
@@ -42,7 +42,10 @@ const toFormValues = (customer: Customer | null): CustomerFormValues =>
         countryCode: customer.countryCode || '+91',
         email: customer.email || '',
         address: customer.address || '',
-        gstNumber: customer.gstNumber || customer.taxIdentifiers?.gstNumber || ''
+        gstNumber: customer.gstNumber || customer.taxIdentifiers?.gstNumber || '',
+        state: customer.billingAddress?.state || '',
+        city: customer.billingAddress?.city || '',
+        pinCode: customer.billingAddress?.pinCode || ''
       }
     : blankCustomer;
 type CustomerFilters = CustomerFilterValues & { search: string };

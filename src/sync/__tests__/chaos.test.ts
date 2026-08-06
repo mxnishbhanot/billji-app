@@ -192,9 +192,14 @@ describe.each([1, 7, 42, 1337])('seed %i', (seed) => {
       const byId = new Map(operations.map((operation) => [operation.opId, operation]));
 
       for (const operation of inFlightOrWaiting(operations)) {
-        // 'nothing' would mean it was ready and simply never sent; 'missing' or 'done' would
-        // mean it waits on something that can never change. Both are wedges.
-        expect(['failed', 'conflict', 'dead']).toContain(blockedBy(operation, byId));
+        // 'missing' or 'done' would mean it waits on something that can never change — a wedge
+        // nobody can clear.
+        const reason = blockedBy(operation, byId);
+        // 'nothing' is not a wedge: the operation is sendable and the next pass will send it —
+        // either it has not been reached yet, or it was deferred, which keeps its attempts and its
+        // recorded reason on purpose so an expired session cannot convert good work into failures.
+        // A wedge is dependency-shaped, and those are the only states worth failing on.
+        expect(['nothing', 'failed', 'conflict', 'dead']).toContain(reason);
       }
 
       // And whatever it is waiting on says why, so the Failed Operations screen can show it.

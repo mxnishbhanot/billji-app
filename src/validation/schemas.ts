@@ -2,7 +2,19 @@ import { z } from 'zod';
 import { isValidGstin } from '@/utils/gstin';
 
 export const loginSchema = z.object({ email: z.email('Enter a valid email'), password: z.string().min(1, 'Password is required') });
-export const registerSchema = z.object({ name: z.string().trim().min(1, 'Name is required').max(80), email: z.email('Enter a valid email'), password: z.string().min(8, 'Use 8+ characters') });
+export const registerSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(80),
+  email: z.email('Enter a valid email'),
+  password: z.string().min(8, 'Use 8+ characters'),
+  // Optional, and only shape-checked here. Whether the code exists, whether it is the user's own and
+  // whether they are eligible are all server decisions — a wrong code never blocks the signup.
+  referralCode: z
+    .string()
+    .trim()
+    .transform((value) => value.toUpperCase())
+    .refine((value) => value === '' || /^[2-9A-HJ-KMNP-Z]{6,12}$/.test(value), 'Check the referral code')
+    .optional()
+});
 export const forgotPasswordSchema = z.object({ email: z.email('Enter a valid email') });
 export const resetPasswordSchema = z
   .object({
@@ -17,7 +29,10 @@ export const customerSchema = z.object({
   countryCode: z.string().default('+91'),
   email: z.union([z.literal(''), z.email('Enter a valid email')]).optional(),
   address: z.string().max(500).optional(),
-  gstNumber: z.union([z.literal(''), z.string().trim().refine(isValidGstin, 'Enter a valid 15-character GSTIN')]).optional()
+  gstNumber: z.union([z.literal(''), z.string().trim().refine(isValidGstin, 'Enter a valid 15-character GSTIN')]).optional(),
+  state: z.string().trim().max(80).optional(),
+  city: z.string().trim().max(80).optional(),
+  pinCode: z.union([z.literal(''), z.string().trim().regex(/^\d{6}$/, 'PIN must be 6 digits')]).optional()
 });
 const decimalAmount = (label: string) =>
   z.string().trim().min(1, `${label} is required`)

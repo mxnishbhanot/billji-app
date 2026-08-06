@@ -75,7 +75,10 @@ describe('runMigrations', () => {
 
     await expect(runMigrations(db, [migration(1)])).rejects.toBeInstanceOf(DatabaseError);
     expect(db.userVersion).toBe(0);
-    expect(db.statements).toHaveLength(0);
+    // Migrations now run on the connection they were handed rather than a private one — the only
+    // connection that can decrypt a SQLCipher file — so the statement log shows the attempt and
+    // the ROLLBACK that undid it.
+    expect(db.statements).toEqual(['BEGIN IMMEDIATE', 'CREATE TABLE t1 (id TEXT PRIMARY KEY)', 'ROLLBACK']);
   });
 
   it('refuses a database newer than the app', async () => {

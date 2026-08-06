@@ -22,6 +22,7 @@ import { queryClient } from '@/query/queryClient';
 import { queryPersistOptions } from '@/query/persistence';
 import { setupChangeBridge } from '@/query/changeBridge';
 import { setupNetworkBridge } from '@/query/networkBridge';
+import { startSync } from '@/sync/syncStatus';
 import { reportsApi } from '@/api/endpoints';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
@@ -91,6 +92,18 @@ function App() {
   }, []);
 
   const ready = hydrated && fontsLoaded && prefetched;
+
+  // Start the offline system once the session is known and the first screen is up.
+  //
+  // Deliberately after `ready`, not during the splash: a sync pass must never be on the critical
+  // path to first paint. Deliberately here rather than inside a badge component, which is where it
+  // used to happen by accident — a queue only drained if a screen carrying a sync badge mounted
+  // *and* the network or the app lifecycle then produced an edge. A phone that launches online and
+  // stays online produces no edge at all, so yesterday's unsent invoices simply waited.
+  useEffect(() => {
+    if (!ready) return;
+    void startSync();
+  }, [ready]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

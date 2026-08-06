@@ -132,6 +132,9 @@ export function TeamScreen() {
 
   const members = membersQuery.data ?? [];
   const invitations = invitationsQuery.data ?? [];
+  // Mirrors the backend's last-active-owner guard: the sole owner can't be removed or archived.
+  const activeOwners = members.filter((m) => m.roleKey === 'owner' && m.status === 'active').length;
+  const isLastOwner = (m: TeamMember) => m.roleKey === 'owner' && m.status === 'active' && activeOwners <= 1;
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.08);
 
   return (
@@ -199,12 +202,18 @@ export function TeamScreen() {
                     </Pressable>
                     <Pressable
                       onPress={() => changeStatus.mutate({ userId: member.userId, status: member.status === 'archived' ? 'active' : 'archived' })}
+                      disabled={isLastOwner(member)}
                       hitSlop={8}
-                      style={styles.iconAction}
+                      style={[styles.iconAction, isLastOwner(member) && styles.iconActionDisabled]}
                     >
                       <Feather name={member.status === 'archived' ? 'rotate-ccw' : 'archive'} size={16} color={theme.colors.onSurfaceVariant} />
                     </Pressable>
-                    <Pressable onPress={() => setRemoving(member)} hitSlop={8} style={styles.iconAction}>
+                    <Pressable
+                      onPress={() => setRemoving(member)}
+                      disabled={isLastOwner(member)}
+                      hitSlop={8}
+                      style={[styles.iconAction, isLastOwner(member) && styles.iconActionDisabled]}
+                    >
                       <Feather name="trash-2" size={16} color={theme.colors.error} />
                     </Pressable>
                   </View>
@@ -268,6 +277,7 @@ const styles = StyleSheet.create({
   card: { alignItems: 'center', borderRadius: radii.lg, borderWidth: 1, flexDirection: 'row', gap: 12, marginBottom: 10, padding: 14 },
   cardText: { flex: 1, minWidth: 0 },
   iconAction: { alignItems: 'center', borderRadius: radii.pill, height: 32, justifyContent: 'center', width: 32 },
+  iconActionDisabled: { opacity: 0.35 },
   meta: { ...typeScale.caption, marginTop: 1 },
   name: { ...fontStyles.semiBold, fontSize: 15 },
   roleChip: { borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 3 },

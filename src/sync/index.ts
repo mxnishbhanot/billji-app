@@ -76,15 +76,19 @@ export {
   listSyncIssues,
   refreshSyncCounts,
   reportLocalWriteFailure,
+  requestSync,
   resetSyncStatus,
   retrySync,
   retrySyncIssue,
+  startSync,
   subscribeToSync,
   syncNow,
   syncPhase,
   type SyncPhase,
-  type SyncSnapshot
+  type SyncSnapshot,
+  type SyncTrigger
 } from './syncStatus';
+export { syncError, syncLog, type SyncLogFields } from './syncLog';
 export {
   buildBatches,
   createQueueManager,

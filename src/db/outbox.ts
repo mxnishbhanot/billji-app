@@ -17,6 +17,11 @@ import { withTransaction } from './transaction';
  * Statuses:
  *   pending   ready to send, or waiting for next_attempt_at / a dependency
  *   inflight  claimed by a drain pass; reset to pending on the next launch after a crash
+ *
+ * A deferred operation is deliberately *not* a status of its own: it is `pending` with a short
+ * next_attempt_at and an untouched attempt count. Adding a seventh status would mean migrating
+ * the CHECK constraint on a table that holds unsynced user work, and a rolled-back build would
+ * then read rows it has no vocabulary for. See deferOperation.
  *   done      accepted by the server
  *   failed    out of retries, waiting for the user on the Failed Operations screen
  *   conflict  the server rejected the base version; needs a resolution decision
@@ -71,21 +76,49 @@ export type OutboxOptions = { txn?: SQLiteDatabase; now?: string };
  * chains only — sequence and dependency always win within one, so a payment cannot overtake
  * the invoice it belongs to.
  */
+/**
+ * Only entity types the push protocol can actually express appear here. `orders` and `business`
+ * used to be listed: nothing enqueued them, the wire had no name for `business`, and an op that
+ * reached the engine anyway was killed as `dead` — cascading to its dependents. A priority for an
+ * unsendable entity is a trap dressed as readiness, so the guard is the table itself plus
+ * SENDABLE_ENTITY_TYPES below.
+ */
 export const OUTBOX_PRIORITY: Record<string, number> = {
+  // Tier 1 with money: a referral code is what stands between the shopkeeper and the Pro features
+  // they were promised for entering it, so it goes out ahead of the catalogue and the masters.
+  referrals: 1,
   payments: 1,
   invoices: 2,
-  orders: 2,
   products: 3,
   customers: 3,
   suppliers: 3,
   expenses: 3,
-  business: 4
+  purchases: 3
 };
+
+/**
+ * What sync protocol 1 can carry. Enqueueing anything else used to be accepted locally and
+ * discarded at push time — a silent data loss with no error path the user could see. Refusing it
+ * here means the caller's `localWrite` falls through to the online endpoint instead, which is
+ * what the online-only modules already do.
+ */
+export const SENDABLE_ENTITY_TYPES = new Set([
+  'products',
+  'customers',
+  'invoices',
+  'expenses',
+  'suppliers',
+  'purchases',
+  'payments',
+  'referrals'
+]);
 
 const DEFAULT_PRIORITY = 3;
 const DEFAULT_MAX_ATTEMPTS = 5;
 const BASE_BACKOFF_MS = 30_000;
 const MAX_BACKOFF_MS = 60 * 60_000;
+/** How long a deferred op waits. Short: the cause is a session or a server, not this operation. */
+const DEFER_DELAY_MS = 15_000;
 
 const connect = async (txn?: SQLiteDatabase) => txn ?? (await openDatabase());
 
@@ -145,6 +178,15 @@ export const enqueueOperation = async (
 
       if (input.opType === 'action' && !input.actionName) {
         throw new DatabaseError('DB_QUERY_FAILED', 'An action operation needs an action name');
+      }
+
+      // Refused here rather than at push time: an op the wire cannot express is not a queued
+      // op, it is a lost write with a delay on it. The caller sends this one online instead.
+      if (input.opType === 'action') {
+        throw new DatabaseError('DB_UNSUPPORTED_OPERATION', `Sync cannot carry the action ${input.actionName}`);
+      }
+      if (!SENDABLE_ENTITY_TYPES.has(input.entityType)) {
+        throw new DatabaseError('DB_UNSUPPORTED_OPERATION', `Sync cannot carry ${input.entityType} operations`);
       }
 
       // Dependencies always point backwards, which is what makes cycles structurally
@@ -349,6 +391,61 @@ export const markOperationFailed = async (
       );
     }, options.txn)
   );
+
+/**
+ * Deferred, not failed.
+ *
+ * An expired session, a protocol the server will not speak, a batch the server never answered:
+ * none of these say anything about the operation itself, so charging it an attempt is simply
+ * wrong accounting. Five aborted passes used to be enough to move an entirely healthy queue onto
+ * the Sync Issues screen, where a shopkeeper was asked to resolve operations nothing was wrong
+ * with. This keeps `attempts` where it was and asks again shortly.
+ *
+ * There is no defer ceiling on purpose: a device that stays unauthorised should hold its work as
+ * `pending` indefinitely rather than convert it into a pile of failures. The queue counter keeps
+ * showing it, and `last_error` says why.
+ */
+export const deferOperation = async (
+  opId: string,
+  error: string,
+  options: OutboxOptions & { delayMs?: number } = {}
+): Promise<OutboxOperation | null> =>
+  wrapDatabaseError('DB_QUERY_FAILED', 'Could not defer an operation', async () => {
+    const now = options.now ?? new Date().toISOString();
+    return setStatus(
+      opId,
+      {
+        status: 'pending',
+        lastError: error,
+        nextAttemptAt: new Date(Date.parse(now) + (options.delayMs ?? DEFER_DELAY_MS)).toISOString()
+      },
+      { ...options, now }
+    );
+  });
+
+/**
+ * Drops the waiting period on pending operations, for the one event that invalidates it:
+ * connectivity coming back. The backoff exists to stop a device hammering a network that is not
+ * there — once it is there, making the user wait out the remaining fifty-nine minutes of an
+ * hour-long delay is punishing them for the outage.
+ *
+ * ponytail: every pending backoff is cleared, not only the network-caused ones. Telling them apart
+ * would need an error class on the row, i.e. a migration; the cost of getting it wrong is one early
+ * attempt against a server that is still unwell, which still increments `attempts` and so cannot
+ * loop. Add the column if that ever shows up in the retry metrics.
+ */
+export const clearRetryBackoff = async (businessId: string, options: OutboxOptions = {}): Promise<number> =>
+  wrapDatabaseError('DB_QUERY_FAILED', 'Could not clear the retry backoff', async () => {
+    const db = await connect(options.txn);
+    const result = await db.runAsync(
+      `UPDATE outbox SET next_attempt_at = NULL, updated_at = ?
+        WHERE business_id = ?
+          AND status = 'pending'
+          AND next_attempt_at IS NOT NULL`,
+      [options.now ?? new Date().toISOString(), businessId]
+    );
+    return result.changes;
+  });
 
 /** The server rejected the base version. Not retryable: a human decides what wins. */
 export const markOperationConflict = async (opId: string, error: string, options: OutboxOptions = {}) =>

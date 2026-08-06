@@ -58,20 +58,31 @@ const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ?
  * queue drains, so a screen never has to decide whether to render it.
  */
 export function OfflineBanner({ style }: { style?: StyleProp<ViewStyle> }) {
-  const { phase, pending, failed } = useSyncStatus();
+  const { phase, pending, failed, error } = useSyncStatus();
   const isDark = useTheme().dark;
   const colors = appColors(isDark);
   const tone = toneFor(phase, isDark);
 
-  if (phase !== 'offline' && phase !== 'failed') return null;
+  // 'pending' is shown too. It used to be silent, which meant a queue that had stopped draining
+  // looked exactly like a queue with nothing in it — the state most worth telling the user about
+  // was the one state with no indicator anywhere outside the Settings screen.
+  if (phase !== 'offline' && phase !== 'failed' && phase !== 'pending') return null;
 
   const offline = phase === 'offline';
-  const title = offline ? "You're offline" : `${plural(failed, 'change')} didn't sync`;
+  const title = offline
+    ? "You're offline"
+    : phase === 'pending'
+      ? `${plural(pending, 'change')} waiting to sync`
+      : `${plural(failed, 'change')} didn't sync`;
+  // The reason a pass stopped is rendered when there is one. It was already being recorded and
+  // never displayed, so every sync failure reached the user as silence.
   const subtitle = offline
     ? pending > 0
       ? `${plural(pending, 'change')} saved here, syncing when you're back`
       : 'Everything you do is saved on this device'
-    : 'Tap retry, or review them in the sync queue';
+    : phase === 'pending'
+      ? error ?? 'Saved on this device, syncing now'
+      : error ?? 'Tap retry, or review them in the sync queue';
 
   return (
     <Reanimated.View
@@ -102,16 +113,21 @@ export function OfflineBanner({ style }: { style?: StyleProp<ViewStyle> }) {
 export function SyncBadge({
   onPress,
   style,
-  showLabel = true
+  showLabel = true,
+  hideWhenSynced = false
 }: {
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
   showLabel?: boolean;
+  /** Headers: the "all good" state is the default, so saying it costs space and says nothing. */
+  hideWhenSynced?: boolean;
 }) {
   const { phase, pending, failed, syncing, online } = useSyncStatus();
   const isDark = useTheme().dark;
   const tone = toneFor(phase, isDark);
   const press = useCallback(() => (onPress ? onPress() : void syncNow()), [onPress]);
+
+  if (hideWhenSynced && phase === 'synced') return null;
 
   return (
     <Pressable

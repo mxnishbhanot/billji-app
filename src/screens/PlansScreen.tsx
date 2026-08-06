@@ -12,6 +12,7 @@ import { FEATURE_LABELS, formatPaise } from '@/constants/entitlements';
 import { RazorpayCheckoutSheet, type CheckoutResult } from '@/features/billing/components/RazorpayCheckoutSheet';
 import { usePlans, useStartCheckout, useStartTrial, useSubscription, useVerifyCheckout } from '@/features/billing/hooks/useBilling';
 import { track } from '@/services/analytics';
+import { usePermissions } from '@/shared/hooks/usePermissions';
 import { useAuthStore } from '@/store/authStore';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
 import type { PlansScreenProps as NavProps } from '@/navigation/types';
@@ -49,6 +50,9 @@ export function PlansScreen({ navigation }: NavProps) {
   const { showToast } = useAppToast();
   const user = useAuthStore((state) => state.user);
 
+  // Money controls read the server's answer, never a permission: an admin holds every billing
+  // permission and still must not be able to buy.
+  const { canManageBilling } = usePermissions();
   const plansQuery = usePlans();
   const subscriptionQuery = useSubscription();
   const startCheckout = useStartCheckout();
@@ -215,7 +219,7 @@ export function PlansScreen({ navigation }: NavProps) {
           <Pressable onPress={contactSales} style={({ pressed }) => [styles.secondaryBtn, { borderColor: theme.colors.primary, opacity: pressed ? 0.9 : 1 }]}>
             <Text style={[styles.secondaryLabel, { color: theme.colors.primary }]}>Contact sales</Text>
           </Pressable>
-        ) : isFree ? null : (
+        ) : isFree ? null : !canManageBilling ? null : (
           <>
             <Pressable
               disabled={busy}
@@ -225,6 +229,8 @@ export function PlansScreen({ navigation }: NavProps) {
               <Text style={[styles.primaryLabel, { color: theme.colors.onPrimary }]}>{busy ? 'Please wait…' : 'Choose this plan'}</Text>
             </Pressable>
             {trialAvailable ? (
+              // Owner-gated even though it costs nothing: a trial burns a one-shot latch for the
+              // whole business, and it is the start of a paid relationship.
               <Pressable disabled={busy} onPress={() => beginTrial(plan)} style={styles.textBtn}>
                 <Text style={[styles.textBtnLabel, { color: theme.colors.primary }]}>Start {plan.trial.days}-day free trial</Text>
               </Pressable>
@@ -237,6 +243,19 @@ export function PlansScreen({ navigation }: NavProps) {
 
   return (
     <Screen title="Plans">
+      {/* Prices are not secret and a manager may well be the one building the case for an upgrade,
+          so the list stays readable. What is removed is every control that would spend money —
+          replaced, not disabled: a button that can never become enabled reads as a bug. */}
+      {!canManageBilling ? (
+        <View style={[styles.currentNote, { borderColor: cardBorder, marginBottom: 12 }]}>
+          <Text style={[styles.currentNoteText, { color: theme.colors.onSurfaceVariant }]}>
+            {subscription?.billingOwnerName
+              ? `Only ${subscription.billingOwnerName} can change this plan. You can create your own business from Plan & billing.`
+              : 'Only the business owner can change this plan.'}
+          </Text>
+        </View>
+      ) : null}
+
       <View style={[styles.toggle, { backgroundColor: alpha(colors.primary, isDark ? 0.16 : 0.07) }]}>
         {(['month', 'year'] as Interval[]).map((option) => (
           <Pressable

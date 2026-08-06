@@ -74,6 +74,7 @@ export type SettingsStackParamList = {
   NotificationSettings: undefined;
   SyncSettings: undefined;
   SyncIssues: undefined;
+  SyncDebug: undefined;
   ActivityLog: undefined;
   Ledger: undefined;
   DataExport: undefined;
