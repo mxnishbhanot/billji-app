@@ -11,7 +11,7 @@ import { AppNavigation } from '@/navigation/types';
 import { connectSocket } from '@/services/socket';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
-import { alpha, appColors, radii } from '@/theme/theme';
+import { alpha, appColors, circleSizes, radii, shadow, spacing } from '@/theme/theme';
 import { NotificationItem } from '@/types';
 
 const PAGE_SIZE = 10;
@@ -115,7 +115,17 @@ export const NotificationButton = memo(function NotificationButton() {
   };
   return (
     <>
-      <View style={[styles.actionWrap, { backgroundColor: theme.dark ? alpha(colors.primary, 0.14) : 'transparent', borderColor: theme.dark ? alpha(colors.primary, 0.24) : 'transparent' }]}>
+      {/* Matches the search chip in Screen's header: same size, same rim, same contact shadow. */}
+      <View
+        style={[
+          styles.actionWrap,
+          shadow(theme.dark, 'xs'),
+          {
+            backgroundColor: theme.dark ? colors.surfaceContainerHigh : colors.card,
+            borderColor: theme.dark ? alpha('#FFFFFF', 0.08) : alpha(colors.primaryStrong, 0.1)
+          }
+        ]}
+      >
         <Appbar.Action icon={({ size, color }) => <Feather name="bell" size={size} color={color} />} onPress={openPanel} color={theme.colors.primary} style={styles.action} />
         {unreadCount > 0 ? <Badge style={[styles.badge, { backgroundColor: colors.destructive }]}>{unreadCount > 9 ? '9+' : unreadCount}</Badge> : null}
       </View>
@@ -140,13 +150,13 @@ export const NotificationButton = memo(function NotificationButton() {
 const styles = StyleSheet.create({
   action: { margin: 0 },
   actionWrap: {
-    borderRadius: radii.pill,
-    borderWidth: 1,
     alignItems: 'center',
-    height: 40,
+    borderRadius: radii.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    height: circleSizes.md,
     justifyContent: 'center',
-    marginLeft: 4,
-    width: 40
+    marginLeft: spacing.base,
+    width: circleSizes.md
   },
-  badge: { position: 'absolute', right: -2, top: -4 }
+  badge: { position: 'absolute', right: -1, top: -3 }
 });

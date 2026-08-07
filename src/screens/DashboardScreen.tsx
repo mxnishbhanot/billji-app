@@ -1,27 +1,40 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import Reanimated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Text, useTheme } from 'react-native-paper';
-import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
-import { CartesianChart, Line, Area } from 'victory-native';
-import { useFont, LinearGradient as SkiaLinearGradient, vec, Circle as SkiaCircle } from '@shopify/react-native-skia';
+import { Text, useTheme } from 'react-native-paper';
 import { reportsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
-import { EmptyState } from '@/components/EmptyState';
+import { ChartCard } from '@/components/ChartCard';
+import {
+  ActivityGroup,
+  ActivityRow,
+  DashboardEmpty,
+  DuesAlert,
+  HeroCard,
+  HeroCta,
+  KpiCard,
+  type KpiTone,
+  QuickTile,
+  RangeSegmented,
+  Reveal,
+  SectionHeading
+} from '@/components/DashboardParts';
 import { Screen } from '@/components/Screen';
-import { StatCard } from '@/components/StatCard';
 import { UsageMeter } from '@/components/UsageMeter';
 import { LIMIT } from '@/constants/entitlements';
 import { useEntitlements } from '@/shared/hooks/useEntitlements';
 import { DashboardScreenProps } from '@/navigation/types';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
+import { useAuthStore } from '@/store/authStore';
 import { TourAnchor, ANCHOR, useOnboardingOptional } from '@/features/onboarding';
-import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
+import { alpha, appColors, fontStyles, radii, shadow, spacing, typeScale } from '@/theme/theme';
 import { formatCurrency, formatDate } from '@/utils/format';
+import { tapLight, tapMedium } from '@/utils/haptics';
 
 const activityTime = (value?: string | Date | null) => {
   if (!value) return 'Just now';
@@ -49,176 +62,25 @@ const monthRange = () => {
   const start = new Date(today.getFullYear(), today.getMonth(), 1);
   return { from: formatISODate(start), to: formatISODate(today) };
 };
-
-function HeroPattern() {
-  return (
-    <Svg pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 360 210" preserveAspectRatio="xMidYMid slice">
-      <Defs>
-        <LinearGradient id="heroGrad" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#1C1A4A" />
-          <Stop offset="0.5" stopColor="#2D2A6B" />
-          <Stop offset="1" stopColor="#40388C" />
-        </LinearGradient>
-      </Defs>
-      <Rect x="0" y="0" width={360} height={210} fill="url(#heroGrad)" />
-      <G opacity="0.2" stroke="#FFFFFF" strokeWidth={1.2} fill="none" strokeLinecap="round">
-        <Path d="M -26 48 C 28 12, 84 12, 134 44 S 236 88, 392 24" />
-        <Path d="M -30 82 C 38 38, 96 42, 154 76 S 270 126, 392 72" opacity={0.72} />
-        <Path d="M -28 126 C 48 84, 116 96, 176 122 S 282 166, 390 116" opacity={0.58} />
-        <Path d="M 32 202 C 92 158, 148 170, 204 188 S 294 224, 388 174" opacity={0.42} />
-      </G>
-      <G opacity="0.18" stroke="#FFFFFF" strokeWidth={1.1} fill="none">
-        <Circle cx={272} cy={54} r={18} />
-        <Circle cx={302} cy={86} r={8} />
-        <Circle cx={70} cy={154} r={13} />
-        <Circle cx={110} cy={38} r={6} />
-      </G>
-      <G opacity="0.08" stroke="#A5B4FC" strokeWidth={18} fill="none">
-        <Path d="M 238 -18 C 284 16, 318 52, 386 48" />
-        <Path d="M -34 188 C 36 150, 86 166, 146 206" />
-      </G>
-    </Svg>
-  );
-}
-
-function FloatingHeroBubbles() {
-  const first = useMemo(() => new Animated.Value(0), []);
-  const second = useMemo(() => new Animated.Value(0), []);
-  const third = useMemo(() => new Animated.Value(0), []);
-  const fourth = useMemo(() => new Animated.Value(0), []);
-
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.parallel([
-        Animated.sequence([
-          Animated.timing(first, { toValue: 1, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(first, { toValue: 0, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
-        ]),
-        Animated.sequence([
-          Animated.timing(second, { toValue: 1, duration: 12000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(second, { toValue: 0, duration: 12000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
-        ]),
-        Animated.sequence([
-          Animated.timing(third, { toValue: 1, duration: 15000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(third, { toValue: 0, duration: 15000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
-        ]),
-        Animated.sequence([
-          Animated.timing(fourth, { toValue: 1, duration: 18000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(fourth, { toValue: 0, duration: 18000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
-        ])
-      ])
-    );
-
-    animation.start();
-    return () => animation.stop();
-  }, [first, fourth, second, third]);
-
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Animated.View
-        style={[
-          styles.heroBubbleLarge,
-          {
-            opacity: first.interpolate({ inputRange: [0, 1], outputRange: [0.16, 0.26] }),
-            transform: [
-              { translateX: first.interpolate({ inputRange: [0, 1], outputRange: [0, -20] }) },
-              { translateY: first.interpolate({ inputRange: [0, 1], outputRange: [0, 12] }) },
-              { scale: first.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.08] }) }
-            ]
-          }
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.heroBubbleSmall,
-          {
-            opacity: second.interpolate({ inputRange: [0, 1], outputRange: [0.1, 0.2] }),
-            transform: [
-              { translateX: second.interpolate({ inputRange: [0, 1], outputRange: [0, 18] }) },
-              { translateY: second.interpolate({ inputRange: [0, 1], outputRange: [0, -10] }) },
-              { scale: second.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1.1] }) }
-            ]
-          }
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.heroBubbleMedium,
-          {
-            opacity: third.interpolate({ inputRange: [0, 1], outputRange: [0.08, 0.18] }),
-            transform: [
-              { translateX: third.interpolate({ inputRange: [0, 1], outputRange: [0, 24] }) },
-              { translateY: third.interpolate({ inputRange: [0, 1], outputRange: [0, 18] }) },
-              { scale: third.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.12] }) }
-            ]
-          }
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.heroBubbleTiny,
-          {
-            opacity: fourth.interpolate({ inputRange: [0, 1], outputRange: [0.12, 0.22] }),
-            transform: [
-              { translateX: fourth.interpolate({ inputRange: [0, 1], outputRange: [0, -16] }) },
-              { translateY: fourth.interpolate({ inputRange: [0, 1], outputRange: [0, -18] }) },
-              { scale: fourth.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.14] }) }
-            ]
-          }
-        ]}
-      />
-    </View>
-  );
-}
-
-type TrendChartProps = {
-  currency: string;
-  data: { label: string; value: number }[];
-  accent: string;
-  gridColor: string;
-  axisLabelColor: string;
+const daysBackRange = (days: number) => {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (days - 1));
+  return { from: formatISODate(start), to: formatISODate(today) };
 };
+const greetingLabel = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning 👋';
+  if (hour < 17) return 'Good afternoon 👋';
+  return 'Good evening 👋';
+};
+const currentMonthLabel = () => new Date().toLocaleString('en-IN', { month: 'long' });
 
-const CHART_FONT = require('@expo-google-fonts/plus-jakarta-sans/500Medium/PlusJakartaSans_500Medium.ttf');
-
-function TrendChart({ currency, data, accent, gridColor, axisLabelColor }: TrendChartProps) {
-  const font = useFont(CHART_FONT, 10);
-  const chartHeight = 168;
-  const points = data.length ? data : [{ label: '-', value: 0 }];
-  const chartData = points.map((point, index) => ({ x: index, y: point.value }));
-
-  return (
-    <View style={{ height: chartHeight }}>
-      <CartesianChart
-        data={chartData}
-        xKey="x"
-        yKeys={['y']}
-        domainPadding={{ left: 16, right: 16, top: 24, bottom: 8 }}
-        axisOptions={{
-          font,
-          lineColor: gridColor,
-          labelColor: axisLabelColor,
-          tickCount: { x: points.length, y: 3 },
-          formatXLabel: (value) => points[value]?.label ?? '',
-          formatYLabel: (value) => (value >= 1000 ? `${currency}${Math.round(value / 100) / 10}k` : `${currency}${Math.round(value)}`)
-        }}
-      >
-        {({ points: pts, chartBounds }) => {
-          const last = pts.y[pts.y.length - 1];
-          return (
-            <>
-              <Area points={pts.y} y0={chartBounds.bottom} curveType="natural" animate={{ type: 'timing', duration: 500 }}>
-                <SkiaLinearGradient start={vec(0, chartBounds.top)} end={vec(0, chartBounds.bottom)} colors={[alpha(accent, 0.34), alpha(accent, 0)]} />
-              </Area>
-              <Line points={pts.y} color={accent} strokeWidth={3.5} curveType="natural" animate={{ type: 'timing', duration: 500 }} />
-              {last?.y != null ? <SkiaCircle cx={last.x} cy={last.y} r={5} color={accent} /> : null}
-            </>
-          );
-        }}
-      </CartesianChart>
-    </View>
-  );
-}
+const TREND_RANGES = [
+  { label: '7D', value: '7d' as const, days: 7, maxPoints: 7 },
+  { label: '30D', value: '30d' as const, days: 30, maxPoints: 30 },
+  { label: '90D', value: '90d' as const, days: 90, maxPoints: 90 }
+];
+type TrendRangeValue = (typeof TREND_RANGES)[number]['value'];
 
 export function DashboardScreen({ navigation }: DashboardScreenProps) {
   const theme = useTheme();
@@ -226,14 +88,16 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
   const { can } = usePermissions();
   const canCreateInvoice = can(PERMISSION.invoicesCreate);
   const isDark = theme.dark;
+  const isFocused = useIsFocused();
   const colors = useMemo(() => appColors(isDark), [isDark]);
+  const businessName = useAuthStore((state) => state.user?.businessProfile?.businessName)?.trim();
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler((event) => { scrollY.value = event.contentOffset.y; });
   const heroParallaxStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [0, 190], [1, 0.94], Extrapolation.CLAMP),
+    opacity: interpolate(scrollY.value, [0, 210], [1, 0.92], Extrapolation.CLAMP),
     transform: [
-      { translateY: interpolate(scrollY.value, [0, 190], [0, 26], Extrapolation.CLAMP) },
-      { scale: interpolate(scrollY.value, [0, 190], [1, 0.975], Extrapolation.CLAMP) }
+      { translateY: interpolate(scrollY.value, [0, 210], [0, 30], Extrapolation.CLAMP) },
+      { scale: interpolate(scrollY.value, [0, 210], [1, 0.968], Extrapolation.CLAMP) }
     ]
   }));
   const documentQuota = useEntitlements().usage(LIMIT.documentsPerMonth);
@@ -245,71 +109,101 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
 
   const report = query.data;
 
-  const stats: { label: string; value: string | number; hint: string; tone?: 'primary' | 'success' | 'warning' | 'danger'; icon: keyof typeof MaterialCommunityIcons.glyphMap; onPress?: () => void }[] = [
+  // Chart range. 7D is already in the summary payload, so it costs no request; the wider ranges use
+  // the same /reports/summary endpoint with the from/to params the Reports screen already passes.
+  const [trendRange, setTrendRange] = useState<TrendRangeValue>('7d');
+  const activeRange = TREND_RANGES.find((option) => option.value === trendRange) ?? TREND_RANGES[0];
+  const rangeParams = useMemo(() => daysBackRange(activeRange.days), [activeRange.days]);
+  const rangedQuery = useQuery({
+    queryKey: queryKeys.report.summary(rangeParams),
+    queryFn: () => reportsApi.summary(rangeParams),
+    enabled: trendRange !== '7d'
+  });
+
+  const salesTrend = useMemo(() => report?.salesTrend ?? [], [report?.salesTrend]);
+  const chartTrend = trendRange === '7d' ? salesTrend : rangedQuery.data?.salesTrend ?? salesTrend;
+
+  // Real per-day series, so the sparklines and deltas are data — never decoration.
+  const salesSpark = useMemo(() => salesTrend.map((point) => Number(point.sales || 0)), [salesTrend]);
+  const invoiceSpark = useMemo(() => salesTrend.map((point) => Number(point.invoices || 0)), [salesTrend]);
+  const dayOverDay = useMemo(() => {
+    if (salesSpark.length < 2) return null;
+    const last = salesSpark[salesSpark.length - 1];
+    const previous = salesSpark[salesSpark.length - 2];
+    if (previous === 0) return last === 0 ? 0 : 100;
+    return Math.round(((last - previous) / previous) * 100);
+  }, [salesSpark]);
+  const yesterdayValue = salesSpark.length >= 2 ? salesSpark[salesSpark.length - 2] : null;
+  const weekTotal = useMemo(() => salesSpark.reduce((sum, value) => sum + value, 0), [salesSpark]);
+  const totalInvoices = report?.totalInvoices || 0;
+  const pendingInvoices = report?.pendingInvoices || 0;
+  const pendingShare = totalInvoices ? pendingInvoices / totalInvoices : 0;
+
+  // Semantic accents: money is emerald, risk is amber, documents are cyan, the month stays brand
+  // indigo. Four accents, each earning its meaning — the surfaces themselves stay neutral.
+  const stats: { label: string; value: string | number; caption: string; tone?: KpiTone; icon: keyof typeof MaterialCommunityIcons.glyphMap; delta?: number | null; deltaCaption?: string; spark?: number[]; meterFraction?: number | null; onPress?: () => void }[] = useMemo(() => [
     {
-      label: 'TODAY',
+      label: 'Today',
       value: formatCurrency(report?.todaySales),
-      hint: 'Collected',
-      icon: 'credit-card',
+      caption: 'Collected today',
+      tone: 'revenue',
+      icon: 'credit-card-check-outline',
+      delta: dayOverDay,
+      deltaCaption: yesterdayValue != null ? `vs ${formatCurrency(yesterdayValue)} yesterday` : 'Collected today',
+      spark: salesSpark,
       onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList', params: { status: 'paid', ...todayRange(), sort: 'newest', fromReports: true } })
     },
     {
-      label: 'THIS MONTH',
+      label: 'This month',
       value: formatCurrency(report?.monthlySales),
-      hint: 'Collected',
-      icon: 'calendar-month',
+      caption: `${formatCurrency(weekTotal)} in the last 7 days`,
+      tone: 'reports',
+      icon: 'calendar-month-outline',
+      spark: salesSpark,
       onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList', params: { status: 'paid', ...monthRange(), sort: 'newest', fromReports: true } })
     },
     {
-      label: 'INVOICES',
-      value: report?.totalInvoices || 0,
-      hint: 'All time',
-      icon: 'file-document',
+      label: 'Invoices',
+      value: totalInvoices,
+      caption: 'Raised all time',
+      tone: 'inventory',
+      icon: 'file-document-outline',
+      spark: invoiceSpark,
       onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList' })
     },
     {
-      label: 'PENDING',
-      value: report?.pendingInvoices || 0,
-      hint: 'Need follow-up',
-      tone: 'warning',
-      icon: 'clock',
+      label: 'Pending',
+      value: pendingInvoices,
+      caption: pendingInvoices > 0 ? 'Waiting on payment' : 'Nothing to chase',
+      tone: pendingInvoices > 0 ? 'pending' : 'revenue',
+      icon: 'clock-alert-outline',
+      // No honest per-day series for open invoices, so the fourth slot carries their share of the
+      // total instead of a fabricated line — same visual weight, still a real number.
+      meterFraction: pendingShare,
       onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList', params: { status: 'pending' } })
     }
-  ];
+  ], [navigation, report?.todaySales, report?.monthlySales, totalInvoices, pendingInvoices, pendingShare, dayOverDay, yesterdayValue, salesSpark, invoiceSpark, weekTotal]);
 
-  // Dues are an all-time snapshot, not range-bound — the banner is the entry point to
+  // Dues are an all-time snapshot, not range-bound — the alert is the entry point to
   // the reminder flow, so it only appears when there is actually money to chase.
   const duesOutstanding = report?.dues?.totalOutstanding ?? 0;
   const duesCount = (report?.dues?.unpaidCount ?? 0) + (report?.dues?.partialCount ?? 0);
+  const topDebtor = report?.dues?.topDebtors?.[0];
 
-  const quickActions: { label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; onPress: () => void; anchorId?: string }[] = [
-    { label: 'Invoices', icon: 'file-document', onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList' }) },
+  const quickActions: { label: string; subtitle: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; tone: KpiTone; onPress: () => void; anchorId?: string }[] = useMemo(() => [
+    { label: 'Invoices', subtitle: 'Create & manage', icon: 'file-document-multiple-outline', tone: 'primary', onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList' }) },
     // Orders moved to a labelled tile on the Invoices screen, next to quotes and notes;
     // this slot now goes to money-out, which had no entry point at all.
-    { label: 'Expenses', icon: 'cash-minus', onPress: () => navigation.navigate('Expenses') },
-    { label: 'Products', icon: 'package-variant-closed', onPress: () => navigation.navigate('CatalogTab', { screen: 'Products' }) },
-    { label: 'Reports', icon: 'chart-box', onPress: () => navigation.navigate('Reports'), anchorId: ANCHOR.reportsButton }
-  ];
+    { label: 'Expenses', subtitle: 'Track spending', icon: 'cash-minus', tone: 'expenses', onPress: () => navigation.navigate('Expenses') },
+    { label: 'Products', subtitle: 'Manage stock', icon: 'package-variant-closed', tone: 'inventory', onPress: () => navigation.navigate('CatalogTab', { screen: 'Products' }) },
+    { label: 'Reports', subtitle: 'View insights', icon: 'chart-box-outline', tone: 'reports', onPress: () => navigation.navigate('Reports'), anchorId: ANCHOR.reportsButton }
+  ], [navigation]);
   const viewAllRecentActivity = () => {
     navigation.navigate('InvoicesTab', {
       screen: 'InvoiceList',
       params: { ...recentActivityRange(), sort: 'newest', fromReports: true }
     });
   };
-
-  const trendData = useMemo(() => (report?.salesTrend ?? []).slice(-5).map((point) => {
-    const date = new Date(point.date);
-    const label = Number.isNaN(date.getTime()) ? point.date.slice(5) : `${date.getDate()} ${date.toLocaleString('en-IN', { month: 'short' })}`;
-    return { label, value: Number(point.sales || 0) };
-  }), [report?.salesTrend]);
-
-  const trendChange = useMemo(() => {
-    if (trendData.length < 2) return null;
-    const last = trendData[trendData.length - 1].value;
-    const prev = trendData[trendData.length - 2].value;
-    if (prev === 0) return last === 0 ? 0 : 100;
-    return Math.round(((last - prev) / prev) * 100);
-  }, [trendData]);
 
   const recent = report?.recentInvoices ?? [];
   const onboarding = useOnboardingOptional();
@@ -330,231 +224,184 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
   }, [activeTour]);
 
   return (
-    <>
+    // Subtitle is the greeting only: it is one short line, and appending the business name
+    // ellipsized it mid-word — the hero already carries the name directly below.
     <Screen
       title="Dashboard"
+      subtitle={greetingLabel()}
       scrollRef={scrollRef}
       contentStyle={styles.screenContent}
       scrollViewProps={{
         scrollEventThrottle: 16,
-        onScroll: scrollHandler
+        onScroll: scrollHandler,
+        refreshControl: (
+          <RefreshControl
+            refreshing={query.isFetching && !query.isPending}
+            onRefresh={() => { tapLight(); void query.refetch(); }}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+            progressBackgroundColor={isDark ? colors.surfaceContainerHigh : colors.card}
+          />
+        )
       }}
     >
-      <Reanimated.View style={[styles.heroCard, { borderColor: alpha('#C3C0FF', 0.3) }, heroParallaxStyle]}>
-        <HeroPattern />
-        <FloatingHeroBubbles />
-        <View style={styles.heroInner}>
-          <View style={[styles.heroEyebrowBadge, { borderColor: alpha('#FFFFFF', 0.22), backgroundColor: alpha('#1C1A4A', 0.4) }]}>
-            <Text style={styles.heroEyebrow}>BILLJI COMMAND CENTER</Text>
-          </View>
-          <Text style={styles.heroTitle}>Today billing pulse</Text>
-          <Text style={styles.heroBody}>Track invoices, stock, and cash flow without digging through desktop screens.</Text>
-          <View style={styles.heroActions}>
-            {canCreateInvoice ? (
-              <TourAnchor anchorId={ANCHOR.createInvoice}>
-                <Button
-                  mode="contained"
-                  icon={({ size, color }) => <Feather name="plus" size={size} color={color} strokeWidth={3} />}
-                  buttonColor="#FFFFFF"
-                  textColor="#4338CA"
+      <Reanimated.View style={heroParallaxStyle}>
+        <HeroCard
+          businessName={businessName || 'Your business'}
+          headline={`Collected in ${currentMonthLabel()}`}
+          metricValue={formatCurrency(report?.monthlySales)}
+          metricCaption={
+            query.isPending
+              ? 'Loading the latest figures…'
+              : `${formatCurrency(report?.todaySales)} in today`
+          }
+          trendChange={dayOverDay}
+          statusLabel={duesOutstanding > 0 ? `${duesCount} to collect` : 'All settled'}
+          statusTone={duesOutstanding > 0 ? 'alert' : 'neutral'}
+          animate={isFocused}
+          cta={
+            canCreateInvoice ? (
+              <TourAnchor anchorId={ANCHOR.createInvoice} style={styles.heroCtaAnchor}>
+                <HeroCta
+                  label="Create invoice"
+                  haptic={tapMedium}
                   onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceCreate' })}
-                  contentStyle={styles.heroButtonContent}
-                  labelStyle={styles.heroButtonLabel}
-                  style={styles.heroButton}
-                >
-                  Create Invoice
-                </Button>
+                />
               </TourAnchor>
-            ) : <View />}
-            <Pressable
-              onPress={() => void query.refetch()}
-              style={({ pressed }) => [styles.heroGhostButton, { borderColor: alpha('#C3C0FF', 0.36), backgroundColor: alpha('#1C1A4A', pressed ? 0.55 : 0.36) }]}
-            >
-              <Feather name="refresh-cw" size={18} color="#FFFFFF" />
-            </Pressable>
-          </View>
-        </View>
+            ) : undefined
+          }
+        />
       </Reanimated.View>
 
       {/* Appears only once the month is 80% spent, so it is a nudge and not furniture. Tapping goes
           to the plan screen, which is where the number can actually be changed. */}
       {documentQuota && !documentQuota.unlimited && documentQuota.percentUsed >= 80 ? (
-        <Pressable
-          onPress={() => navigation.navigate('SettingsTab', { screen: 'Plans' })}
-          style={({ pressed }) => [
-            styles.quotaCard,
-            { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), opacity: pressed ? 0.95 : 1 }
-          ]}
-        >
-          <UsageMeter row={documentQuota} compact />
-          <Text style={[styles.quotaCta, { color: theme.colors.primary }]}>
-            {documentQuota.remaining === 0 ? 'Upgrade to keep billing →' : 'See plans →'}
-          </Text>
-        </Pressable>
+        <Reveal index={1}>
+          <Pressable
+            onPress={() => { tapLight(); navigation.navigate('SettingsTab', { screen: 'Plans' }); }}
+            accessibilityRole="button"
+            accessibilityLabel={`${documentQuota.label} usage. ${documentQuota.remaining === 0 ? 'Upgrade to keep billing' : 'See plans'}`}
+            style={({ pressed }) => [
+              styles.quotaCard,
+              shadow(isDark, 'xs'),
+              { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.08), opacity: pressed ? 0.95 : 1 }
+            ]}
+          >
+            <UsageMeter row={documentQuota} compact />
+            <Text style={[styles.quotaCta, { color: theme.colors.primary }]}>
+              {documentQuota.remaining === 0 ? 'Upgrade to keep billing →' : 'See plans →'}
+            </Text>
+          </Pressable>
+        </Reveal>
       ) : null}
-
-      <View style={styles.statRow}>{stats.slice(0, 2).map((item) => <StatCard key={item.label} {...item} />)}</View>
-      <View style={styles.statRow}>{stats.slice(2).map((item) => <StatCard key={item.label} {...item} />)}</View>
 
       {duesOutstanding > 0 ? (
-        <Pressable
-          onPress={() => navigation.navigate('PaymentReminders')}
-          accessibilityRole="button"
-          accessibilityLabel={`Send payment reminders for ${formatCurrency(duesOutstanding)} outstanding`}
-          style={({ pressed }) => [
-            styles.duesBanner,
-            {
-              backgroundColor: alpha(colors.destructive, isDark ? 0.16 : 0.07),
-              borderColor: alpha(colors.destructive, isDark ? 0.32 : 0.18),
-              opacity: pressed ? 0.92 : 1
-            }
-          ]}
-        >
-          <View style={[styles.duesIcon, { backgroundColor: alpha(colors.destructive, isDark ? 0.26 : 0.14) }]}>
-            <Feather name="alert-circle" size={18} color={colors.destructive} />
-          </View>
-          <View style={styles.duesText}>
-            <Text style={[styles.duesAmount, { color: colors.destructive }]}>{formatCurrency(duesOutstanding)} pending</Text>
-            <Text numberOfLines={1} style={[styles.duesHint, { color: theme.colors.onSurfaceVariant }]}>
-              {duesCount} customer{duesCount === 1 ? '' : 's'} to chase · tap to send WhatsApp reminders
-            </Text>
-          </View>
-          <Feather name="chevron-right" size={18} color={theme.colors.onSurfaceVariant} />
-        </Pressable>
+        <Reveal index={2}>
+          <DuesAlert
+            amount={formatCurrency(duesOutstanding)}
+            message={`${duesCount} customer${duesCount === 1 ? '' : 's'} owe you money. Nudge them on WhatsApp before it ages further.`}
+            supporting={topDebtor ? `Largest: ${topDebtor.name} · ${formatCurrency(topDebtor.balance)}` : 'Reminders go out with the invoice attached'}
+            actionLabel="Send reminders"
+            accessibilityLabel={`Send payment reminders for ${formatCurrency(duesOutstanding)} outstanding across ${duesCount} customers`}
+            onPress={() => { tapMedium(); navigation.navigate('PaymentReminders'); }}
+          />
+        </Reveal>
       ) : null}
 
-      <View style={styles.quickRail} onLayout={(e) => { quickRailY.current = e.nativeEvent.layout.y; }}>
-        {quickActions.map((item) => {
-          const action = (
-            <Pressable
-              onPress={item.onPress}
-              style={({ pressed }) => [
-                styles.quickAction,
-                {
-                  backgroundColor: pressed ? alpha(colors.primary, isDark ? 0.22 : 0.12) : alpha(colors.primary, isDark ? 0.14 : 0.06),
-                  borderColor: alpha(colors.primary, isDark ? 0.24 : 0.12)
-                }
-              ]}
-            >
-              <View style={[styles.quickIconTile, { backgroundColor: isDark ? colors.surfaceBright : colors.card, shadowColor: isDark ? '#000000' : colors.primaryStrong }]}>
-                <MaterialCommunityIcons name={item.icon} size={24} color={isDark ? colors.primary : colors.primaryStrong} />
-              </View>
-              <Text style={[styles.quickLabel, { color: theme.colors.onSurface }]}>{item.label}</Text>
-            </Pressable>
-          );
-          return item.anchorId
-            ? <TourAnchor key={item.label} anchorId={item.anchorId} style={styles.quickCell}>{action}</TourAnchor>
-            : <View key={item.label} style={styles.quickCell}>{action}</View>;
-        })}
-      </View>
-
-      <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) }]}>
-        <View style={styles.chartHeader}>
-          <View style={styles.flex1}>
-            <Text style={[styles.chartTitle, { color: theme.colors.onSurface }]}>Sales Trend</Text>
-            <Text style={[styles.chartSubtitle, { color: theme.colors.onSurfaceVariant }]}>Daily billing analytics</Text>
-          </View>
-          {trendChange != null ? (
-            <View style={[styles.changeChip, { backgroundColor: trendChange >= 0 ? alpha(colors.accent, isDark ? 0.2 : 0.12) : alpha(colors.destructive, isDark ? 0.2 : 0.12) }]}>
-              <Feather name={trendChange >= 0 ? 'trending-up' : 'trending-down'} size={13} color={trendChange >= 0 ? colors.accent : colors.destructive} />
-              <Text style={[styles.changeText, { color: trendChange >= 0 ? colors.accent : colors.destructive }]}>{trendChange >= 0 ? '+' : ''}{trendChange}%</Text>
-            </View>
-          ) : null}
+      <Reveal index={3}>
+        <View style={styles.kpiRow}>
+          {stats.slice(0, 2).map((item) => <KpiCard key={item.label} {...item} />)}
         </View>
-        <TrendChart
-          currency="₹"
-          data={trendData}
-          accent={isDark ? colors.primary : colors.primaryStrong}
-          gridColor={isDark ? alpha(colors.outline, 0.45) : '#E2E1EE'}
-          axisLabelColor={theme.colors.onSurfaceVariant}
-        />
-      </View>
+      </Reveal>
+      <Reveal index={4}>
+        <View style={[styles.kpiRow, styles.kpiRowLast]}>
+          {stats.slice(2).map((item) => <KpiCard key={item.label} {...item} />)}
+        </View>
+      </Reveal>
 
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Recent activity</Text>
-        <Pressable onPress={viewAllRecentActivity}>
-          <Text style={[styles.viewAll, { color: colors.primary }]}>View all</Text>
-        </Pressable>
-      </View>
-      {recent.length ? recent.slice(0, 5).map((invoice) => {
-        const isPaid = invoice.status === 'paid';
-        const tileColor = isPaid ? alpha(colors.accent, isDark ? 0.2 : 0.12) : alpha(colors.primary, isDark ? 0.2 : 0.1);
-        const iconColor = isPaid ? colors.accent : colors.primary;
-        return (
-          <Pressable
-            key={invoice._id}
-            onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceDetail', params: { id: invoice._id } })}
-            style={[styles.activityRow, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) }]}
-          >
-            <View style={[styles.activityIcon, { backgroundColor: tileColor }]}>
-              <MaterialCommunityIcons name={isPaid ? 'credit-card' : 'file-document'} size={16} color={iconColor} />
+      <Reveal index={5}>
+        <SectionHeading title="Quick actions" caption="Everything you reach for daily" />
+        <View style={styles.quickGrid} onLayout={(e) => { quickRailY.current = e.nativeEvent.layout.y; }}>
+          {quickActions.map((item) => {
+            const tile = <QuickTile label={item.label} subtitle={item.subtitle} icon={item.icon} tone={item.tone} onPress={item.onPress} />;
+            return item.anchorId
+              ? <TourAnchor key={item.label} anchorId={item.anchorId} style={styles.quickCell}>{tile}</TourAnchor>
+              : <View key={item.label} style={styles.quickCell}>{tile}</View>;
+          })}
+        </View>
+      </Reveal>
+
+      {/* No outer heading here: the chart card owns its own title, and two titles for one object is
+          what made the hierarchy read muddy. */}
+      <Reveal index={6} style={styles.chartBlock}>
+        <ChartCard
+          title="Sales trend"
+          data={chartTrend}
+          maxPoints={activeRange.maxPoints}
+          subtitle={rangedQuery.isFetching ? 'Loading range…' : 'Drag across the line to read any day'}
+          legendLabel={`Daily collections · last ${activeRange.days} days`}
+          showTrendChip={false}
+          headerAccessory={
+            <View style={styles.rangeControl}>
+              <RangeSegmented options={TREND_RANGES} value={trendRange} onChange={setTrendRange} />
             </View>
-            <View style={styles.flex1}>
-              <Text numberOfLines={1} style={[styles.activityTitle, { color: theme.colors.onSurface }]}>
-                {isPaid ? 'Payment received' : 'Invoice'} for {invoice.customerSnapshot.name} ({formatCurrency(invoice.total)})
-              </Text>
-              <Text style={[styles.activityTime, { color: theme.colors.onSurfaceVariant }]}>{activityTime(invoice.createdAt || invoice.date)}</Text>
-            </View>
-            <Feather name="chevron-right" size={16} color={theme.colors.onSurfaceVariant} />
-          </Pressable>
-        );
-      }) : (
-        <EmptyState
-          title="No invoices yet"
-          message="Create your first invoice to see recent activity here."
-          actionLabel={canCreateInvoice ? 'Create Invoice' : undefined}
-          onAction={canCreateInvoice ? () => navigation.navigate('InvoicesTab', { screen: 'InvoiceCreate' }) : undefined}
-          hint="Tip: add a customer first so the next invoice is faster."
+          }
         />
-      )}
+      </Reveal>
+
+      <Reveal index={7}>
+        <SectionHeading title="Recent activity" caption="Latest invoices and payments" actionLabel="View all" onAction={viewAllRecentActivity} />
+        {recent.length ? (
+          <ActivityGroup>
+            {recent.slice(0, 5).map((invoice, index) => {
+              const isPaid = invoice.status === 'paid';
+              return (
+                <ActivityRow
+                  key={invoice._id}
+                  first={index === 0}
+                  name={invoice.customerSnapshot.name}
+                  activity={isPaid ? 'Payment received' : 'Invoice raised'}
+                  time={activityTime(invoice.createdAt || invoice.date)}
+                  amount={formatCurrency(invoice.total)}
+                  statusLabel={isPaid ? 'PAID' : 'PENDING'}
+                  positive={isPaid}
+                  onPress={() => navigation.navigate('InvoicesTab', { screen: 'InvoiceDetail', params: { id: invoice._id } })}
+                />
+              );
+            })}
+          </ActivityGroup>
+        ) : (
+          <DashboardEmpty
+            canCreate={canCreateInvoice}
+            onCreate={() => { tapMedium(); navigation.navigate('InvoicesTab', { screen: 'InvoiceCreate' }); }}
+          />
+        )}
+      </Reveal>
     </Screen>
-    </>
   );
 }
 
+/**
+ * Vertical rhythm, stated once so it can be read at a glance:
+ *   inside a group (KPI row → KPI row)      spacing.xs           8
+ *   group → its next section                spacing.screenPadding 20
+ *   section → section (quick actions, chart) spacing.sectionGapLg 28
+ *   hero / dues / quota → next block        spacing.screenPadding 20  (set on the components)
+ *   section heading → its content           spacing.headingGap   12  (set in SectionHeading)
+ * Nothing on this screen uses a gap that is not one of those four.
+ */
 const styles = StyleSheet.create({
-  activityIcon: { alignItems: 'center', borderRadius: 12, height: 36, justifyContent: 'center', width: 36 },
-  activityRow: { alignItems: 'center', borderRadius: 18, borderWidth: 1, flexDirection: 'row', gap: 12, marginBottom: 12, paddingHorizontal: 14, paddingVertical: 12 },
-  activityTime: { ...typeScale.caption, fontSize: 11, marginTop: 2 },
-  activityTitle: { ...fontStyles.bold, fontSize: 13 },
-
-  changeChip: { alignItems: 'center', borderRadius: radii.pill, flexDirection: 'row', gap: 4, paddingHorizontal: 10, paddingVertical: 3 },
-  changeText: { ...fontStyles.bold, fontSize: 12 },
-  chartCard: { borderRadius: 22, borderWidth: 1, marginBottom: 18, paddingBottom: 6, paddingHorizontal: 18, paddingTop: 18 },
-  chartHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
-  chartSubtitle: { ...typeScale.caption, fontSize: 11, marginTop: 2 },
-  chartTitle: { ...fontStyles.bold, fontSize: 16 },
-  flex1: { flex: 1, minWidth: 0 },
-  heroActions: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },
-  heroBody: { color: 'rgba(255,255,255,0.78)', fontSize: 13, lineHeight: 20, marginTop: 6, maxWidth: 320 },
-  heroBubbleLarge: { backgroundColor: alpha('#FFFFFF', 0.18), borderColor: alpha('#FFFFFF', 0.34), borderRadius: 78, borderWidth: 1, height: 156, position: 'absolute', right: -44, top: 96, width: 156 },
-  heroBubbleMedium: { backgroundColor: alpha('#A5B4FC', 0.16), borderColor: alpha('#FFFFFF', 0.24), borderRadius: 60, borderWidth: 1, bottom: -28, height: 120, left: 30, position: 'absolute', width: 120 },
-  heroBubbleSmall: { backgroundColor: alpha('#FFFFFF', 0.14), borderColor: alpha('#FFFFFF', 0.28), borderRadius: 46, borderWidth: 1, height: 92, left: -26, position: 'absolute', top: -18, width: 92 },
-  heroBubbleTiny: { backgroundColor: alpha('#FFFFFF', 0.16), borderColor: alpha('#FFFFFF', 0.3), borderRadius: 26, borderWidth: 1, height: 52, position: 'absolute', right: 94, top: 40, width: 52 },
-  heroButton: { borderRadius: radii.pill, elevation: 4, shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 10 },
-  heroButtonContent: { height: 42, paddingHorizontal: 14 },
-  heroButtonLabel: { ...fontStyles.bold, fontSize: 14 },
-  heroCard: { borderRadius: 26, borderWidth: 1, marginBottom: 20, overflow: 'hidden' },
-  heroEyebrow: { ...fontStyles.bold, color: '#C7D2FE', fontSize: 10, letterSpacing: 1.4 },
-  heroEyebrowBadge: { alignSelf: 'flex-start', borderRadius: radii.pill, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 3 },
-  heroGhostButton: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, height: 38, justifyContent: 'center', width: 38 },
-  heroInner: { padding: 22 },
-  heroTitle: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 22, letterSpacing: -0.6, lineHeight: 30, marginTop: 10 },
-  quickAction: { alignItems: 'center', borderRadius: 18, borderWidth: 1, flex: 1, gap: 8, paddingHorizontal: 6, paddingVertical: 14 },
-  quickCell: { flex: 1 },
-  quickIconTile: { alignItems: 'center', borderRadius: 12, elevation: 3, height: 44, justifyContent: 'center', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, width: 44 },
-  quickLabel: { ...fontStyles.bold, fontSize: 12 },
-  quickRail: { flexDirection: 'row', gap: 10, marginBottom: 20, marginTop: 10 },
-  screenContent: { paddingTop: 8 },
-  sectionHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, marginTop: 4 },
-  sectionTitle: { ...fontStyles.bold, fontSize: 16 },
-  duesAmount: { ...fontStyles.bold, fontSize: 15 },
-  duesBanner: { alignItems: 'center', borderRadius: radii.lg, borderWidth: 1, flexDirection: 'row', gap: 12, marginTop: 12, padding: 14 },
-  duesHint: { ...typeScale.caption, fontSize: 12, marginTop: 2 },
-  duesIcon: { alignItems: 'center', borderRadius: radii.md, height: 36, justifyContent: 'center', width: 36 },
-  duesText: { flex: 1, minWidth: 0 },
-  quotaCard: { borderRadius: radii.card, borderWidth: StyleSheet.hairlineWidth, marginBottom: 12, paddingHorizontal: 14, paddingVertical: 12 },
-  quotaCta: { ...fontStyles.semiBold, fontSize: 12, marginTop: 8 },
-  statRow: { flexDirection: 'row', marginBottom: 2, marginHorizontal: -6 },
-  viewAll: { ...fontStyles.bold, fontSize: 12 }
+  chartBlock: { marginBottom: spacing.sectionGapLg - spacing.md },
+  heroCtaAnchor: { flex: 1 },
+  // kpiRow is not a wrapping row — its cells are flex:1, so `gap` is safe there.
+  kpiRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xs },
+  kpiRowLast: { marginBottom: spacing.screenPadding },
+  quickCell: { width: '48.5%' },
+  // No column `gap` here: 48.5% + 48.5% + a 12pt gap exceeds 100% of the content width, which wrapped
+  // the second tile onto its own row. space-between supplies the 3% gutter instead; rowGap only.
+  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: spacing.sectionGapLg, rowGap: spacing.sm },
+  quotaCard: { borderRadius: radii.card, borderWidth: StyleSheet.hairlineWidth, marginBottom: spacing.screenPadding, paddingHorizontal: spacing.sm + 2, paddingVertical: spacing.sm },
+  quotaCta: { ...typeScale.caption, ...fontStyles.semiBold, marginTop: spacing.xs },
+  rangeControl: { width: 128 },
+  screenContent: { paddingTop: spacing.xs }
 });

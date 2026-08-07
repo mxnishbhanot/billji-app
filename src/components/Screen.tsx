@@ -6,7 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Appbar, Text, useTheme } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { useAuthStore } from '@/store/authStore';
-import { alpha, appColors, radii, spacing, typeScale } from '@/theme/theme';
+import { alpha, appColors, circleSizes, iconSizes, radii, shadow, spacing, typeScale } from '@/theme/theme';
 import { AppNavigation } from '@/navigation/types';
 import { BrandMark } from './BrandMark';
 import { NotificationButton } from './NotificationButton';
@@ -25,8 +25,12 @@ type Props = {
   scrollRef?: RefObject<ScrollView | null>;
   /** Screens that already render their own OfflineBanner (Sync settings / issues). */
   hideOfflineBanner?: boolean;
+  /** Overrides the business-name eyebrow above the title (e.g. a greeting on the dashboard). */
+  subtitle?: string;
 };
-const CONTENT_BOTTOM_PADDING = 96;
+// Clears the full-bleed tab bar (TAB_BAR_HEIGHT 64 + insets.bottom, added at the call site) with a
+// 16pt breathing gap above it.
+const CONTENT_BOTTOM_PADDING = 80;
 
 export function Screen({
   title,
@@ -38,7 +42,8 @@ export function Screen({
   contentStyle,
   scrollViewProps,
   scrollRef,
-  hideOfflineBanner = false
+  hideOfflineBanner = false,
+  subtitle
 }: Props) {
   const theme = useTheme();
   const isDark = theme.dark;
@@ -80,13 +85,15 @@ export function Screen({
           )}
           <View style={styles.titleBlock}>
             {canGoBackInStack ? null : (
-              <Text numberOfLines={1} style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>{businessName || 'Billji Business'}</Text>
+              <Text numberOfLines={1} style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>{subtitle || businessName || 'Billji Business'}</Text>
             )}
             <View style={styles.titleRow}>
               <Text numberOfLines={1} variant="titleLarge" style={[styles.title, { color: theme.colors.onBackground }, canGoBackInStack ? styles.titleCompact : null]}>{title}</Text>
               {titleAccessory}
             </View>
           </View>
+          {/* Floating control: its own lit surface, hairline rim and contact shadow, so it reads as a
+              chip sitting on the screen rather than a tinted hole punched into the header. */}
           <Pressable
             onPress={() => setQuickOpen(true)}
             hitSlop={8}
@@ -94,10 +101,15 @@ export function Screen({
             accessibilityLabel="Search or create"
             style={({ pressed }) => [
               styles.quickBtn,
-              { backgroundColor: alpha(colors.primary, isDark ? (pressed ? 0.28 : 0.18) : pressed ? 0.16 : 0.08) }
+              shadow(isDark, pressed ? 'none' : 'xs'),
+              {
+                backgroundColor: isDark ? colors.surfaceContainerHigh : colors.card,
+                borderColor: isDark ? alpha('#FFFFFF', 0.08) : alpha(colors.primaryStrong, 0.1),
+                transform: [{ scale: pressed ? 0.94 : 1 }]
+              }
             ]}
           >
-            <Feather name="search" size={17} color={theme.colors.onSurface} />
+            <Feather name="search" size={iconSizes.md} color={theme.colors.onSurface} />
           </Pressable>
           {headerAction ?? (showNotifications ? <NotificationButton /> : null)}
         </View>
@@ -127,9 +139,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     elevation: 0,
     flexDirection: 'row',
+    gap: spacing.base,
     marginHorizontal: spacing.screenPadding,
-    marginTop: 12,
-    minHeight: 58,
+    marginTop: spacing.sm,
+    minHeight: 60,
     paddingLeft: 0,
     paddingRight: 0,
     shadowOffset: { width: 0, height: 0 },
@@ -139,14 +152,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radii.full,
     borderWidth: 1,
-    height: 40,
+    height: 42,
     justifyContent: 'center',
-    marginRight: 10,
-    width: 40
+    marginRight: spacing.sm - 2,
+    width: 42
   },
-  offlineBanner: { marginBottom: 10 },
-  quickBtn: { alignItems: 'center', borderRadius: radii.full, height: 40, justifyContent: 'center', width: 40 },
-  subtitle: { ...typeScale.bodyPrimaryMedium, fontSize: 13, lineHeight: 18 },
+  offlineBanner: { marginBottom: spacing.xs + 2 },
+  quickBtn: {
+    alignItems: 'center',
+    borderRadius: radii.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    height: circleSizes.md,
+    justifyContent: 'center',
+    width: circleSizes.md
+  },
+  subtitle: { ...typeScale.bodyPrimaryMedium, fontSize: 12.5, letterSpacing: 0.1, lineHeight: 16 },
   title: { ...typeScale.screenTitle, flexShrink: 1, fontSize: 26, lineHeight: 34, letterSpacing: -0.52 },
   titleCompact: { fontSize: 22, letterSpacing: -0.4, lineHeight: 28 },
   titleBlock: { flex: 1, minWidth: 0 },

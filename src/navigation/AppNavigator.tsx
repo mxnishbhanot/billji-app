@@ -3,8 +3,10 @@ import { NavigationContainer, RouteProp, StackActions } from '@react-navigation/
 import { BottomTabNavigationProp, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { PlatformPressable } from '@react-navigation/elements';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ActivityIndicator, useTheme } from 'react-native-paper';
+import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 import { AppState, BackHandler, Platform, StyleSheet, View } from 'react-native';
+import Reanimated, { interpolate, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
 import { authApi } from '@/api/endpoints';
 import { ReactNode, Suspense, lazy, useEffect, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -70,7 +72,7 @@ import { useAuthStore } from '@/store/authStore';
 import { FEATURE } from '@/constants/entitlements';
 import { withFeatureGate } from '@/components/FeatureGate';
 import { attachPushListeners, registerForPush } from '@/services/push';
-import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
+import { alpha, appColors, fontStyles, glass, radii, spacing, surfaceGradient, typeScale } from '@/theme/theme';
 import { CelebrationOverlay, OnboardingProvider, TourAnchor, TourHost, WelcomeSheet, ANCHOR, useOnboardingOptional } from '@/features/onboarding';
 import { navigationRef } from './navigationRef';
 import {
@@ -92,8 +94,27 @@ const CatalogStack = createNativeStackNavigator<CatalogStackParamList>();
 const CustomersStack = createNativeStackNavigator<CustomersStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 const Tabs = createBottomTabNavigator<TabParamList>();
-const TAB_BAR_HEIGHT = 72;
+/**
+ * Tab-bar vertical budget. Do not nudge one of these without re-doing the arithmetic — the label sits
+ * a fixed distance off the bar's bottom edge, and any drift clips its descenders.
+ *
+ * The bar is full-bleed (edge to edge, no floating plate), so its surface spans the whole container
+ * and nothing can crop the labels. Height and paddingBottom BOTH add insets.bottom, so every number
+ * below is inset-independent — identical with and without a home indicator:
+ *
+ * The label is rendered by TabIcon, not by the navigator, so nothing outside these numbers adds to
+ * the item's height:
+ *
+ *   surface      = the entire bar, 0..TAB_BAR_HEIGHT + insets.bottom
+ *   content top  = TAB_BAR_TOP_PADDING             = 10
+ *   content bot  = TAB_BAR_HEIGHT - BOTTOM_PADDING = 64 - 10 = 54
+ *   content box  = 54 - 10                         = 44
+ *   content need = iconSlot 28 + iconSlot marginBottom 2 + label lineHeight 14 = 44 ✓
+ *   clearance below the label = (64 + insets.bottom) - 54 = 10 + insets.bottom  (≥ the 2pt minimum)
+ */
+const TAB_BAR_HEIGHT = 64;
 const TAB_BAR_BOTTOM_PADDING = 10;
+const TAB_BAR_TOP_PADDING = 10;
 const tabIcons: Record<keyof TabParamList, { active: keyof typeof MaterialCommunityIcons.glyphMap; inactive: keyof typeof MaterialCommunityIcons.glyphMap }> = {
   DashboardTab: { active: 'home', inactive: 'home' },
   InvoicesTab: { active: 'file-document', inactive: 'file-document' },
@@ -101,6 +122,75 @@ const tabIcons: Record<keyof TabParamList, { active: keyof typeof MaterialCommun
   CustomersTab: { active: 'account-group', inactive: 'account-group' },
   SettingsTab: { active: 'cog', inactive: 'cog' }
 };
+const TAB_BAR_SIDE_PADDING = spacing.xs;
+/** Tab labels. Mirrors each screen's `title` — TabIcon renders these itself. */
+const tabTitles: Record<keyof TabParamList, string> = {
+  DashboardTab: 'Home',
+  InvoicesTab: 'Invoices',
+  CatalogTab: 'Inventory',
+  CustomersTab: 'Customers',
+  SettingsTab: 'Settings'
+};
+
+/**
+ * Tab-bar surface: full-bleed, edge to edge, the way a stock app bar sits — a two-stop gradient with a
+ * hairline top border and a top-edge highlight. Presentation only — it is handed to `tabBarBackground`,
+ * so routing, listeners and lazy loading are untouched by it.
+ */
+function TabBarBackground() {
+  const theme = useTheme();
+  const isDark = theme.dark;
+  const colors = appColors(isDark);
+  const fills = surfaceGradient(isDark);
+  const lighting = glass(isDark);
+  return (
+    <View style={[styles.tabSurface, { borderTopColor: isDark ? alpha('#FFFFFF', 0.08) : alpha(colors.primaryStrong, 0.09) }]}>
+      <Svg style={StyleSheet.absoluteFill}>
+        <Defs>
+          <SvgLinearGradient id="tabSurface" x1="0" y1="0" x2="0.2" y2="1">
+            <Stop offset="0" stopColor={fills.raised[0]} />
+            <Stop offset="1" stopColor={fills.raised[1]} />
+          </SvgLinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#tabSurface)" />
+      </Svg>
+      <View style={[styles.tabSurfaceHighlight, { backgroundColor: lighting.highlight }]} />
+    </View>
+  );
+}
+
+/**
+ * Icon + label, rendered as one unit. The label is ours rather than the navigator's on purpose: with
+ * `tabBarShowLabel` the library owns the label's box and margins, and its arithmetic against our
+ * custom height is what kept clipping the descenders. One View, one budget, nothing to fight.
+ */
+function TabIcon({ name, focused, color, label }: { name: keyof typeof MaterialCommunityIcons.glyphMap; focused: boolean; color: string; label: string }) {
+  const theme = useTheme();
+  const isDark = theme.dark;
+  const progress = useSharedValue(focused ? 1 : 0);
+  useEffect(() => {
+    progress.value = withSpring(focused ? 1 : 0, { damping: 15, stiffness: 190 });
+  }, [focused, progress]);
+  const pillStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ scaleX: interpolate(progress.value, [0, 1], [0.6, 1]) }, { scaleY: interpolate(progress.value, [0, 1], [0.7, 1]) }]
+  }));
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(progress.value, [0, 1], [1, 1.08]) }, { translateY: interpolate(progress.value, [0, 1], [0, -1]) }]
+  }));
+  return (
+    <View style={styles.tabItemContent}>
+      <View style={styles.iconSlot}>
+        <Reanimated.View style={[styles.iconPill, { backgroundColor: alpha(theme.colors.primary, isDark ? 0.22 : 0.13) }, pillStyle]} />
+        <Reanimated.View style={iconStyle}>
+          <MaterialCommunityIcons name={name} size={22} color={color} />
+        </Reanimated.View>
+      </View>
+      <Text numberOfLines={1} style={[styles.tabLabel, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
 // Anchored on the whole tab button, not the icon, so a coach mark highlights the label too.
 const tabAnchors: Partial<Record<keyof TabParamList, string>> = {
   InvoicesTab: ANCHOR.tabInvoices,
@@ -234,8 +324,6 @@ const popNestedStackOnBlur = ({
 
 function AppTabs() {
   const theme = useTheme();
-  const isDark = theme.dark;
-  const colors = appColors(isDark);
   const insets = useSafeAreaInsets();
 
   return (
@@ -246,30 +334,28 @@ function AppTabs() {
           tabBarActiveTintColor: theme.colors.primary,
           tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
           tabBarHideOnKeyboard: true,
-          tabBarLabelPosition: 'below-icon',
-          tabBarLabelStyle: styles.tabLabel,
+          // The label is drawn inside tabBarIcon (see TabIcon), so the navigator draws none.
+          tabBarShowLabel: false,
+          // Full-bleed bar, flush with the screen edges. The surface itself is drawn by
+          // tabBarBackground so the container can stay transparent.
           tabBarStyle: {
             height: TAB_BAR_HEIGHT + insets.bottom,
             paddingBottom: TAB_BAR_BOTTOM_PADDING + insets.bottom,
-            paddingTop: 10,
+            paddingTop: TAB_BAR_TOP_PADDING,
+            paddingHorizontal: TAB_BAR_SIDE_PADDING,
             position: 'absolute',
             bottom: 0,
             left: 0,
             right: 0,
             width: '100%',
-            backgroundColor: theme.colors.surface,
-            borderRadius: 0,
-            borderTopWidth: StyleSheet.hairlineWidth,
-            borderTopColor: isDark ? theme.colors.outlineVariant : alpha(colors.primaryStrong, 0.1),
+            backgroundColor: 'transparent',
+            borderTopWidth: 0,
             borderLeftWidth: 0,
             borderRightWidth: 0,
             borderBottomWidth: 0,
-            elevation: 14,
-            shadowColor: isDark ? '#000000' : colors.primaryStrong,
-            shadowOffset: { width: 0, height: -6 },
-            shadowOpacity: isDark ? 0.45 : 0.06,
-            shadowRadius: 14
+            elevation: 0
           },
+          tabBarBackground: () => <TabBarBackground />,
           tabBarItemStyle: styles.tabItem,
           tabBarButton: (props) => {
             const anchorId = tabAnchors[route.name as keyof TabParamList];
@@ -287,11 +373,7 @@ function AppTabs() {
           },
           tabBarIcon: ({ color, focused }) => {
             const icon = tabIcons[route.name as keyof TabParamList];
-            return (
-              <View style={[styles.iconPill, focused && { backgroundColor: alpha(theme.colors.primary, isDark ? 0.2 : 0.14) }]}>
-                <MaterialCommunityIcons name={focused ? icon.active : icon.inactive} size={focused ? 22 : 21} color={color} />
-              </View>
-            );
+            return <TabIcon name={focused ? icon.active : icon.inactive} focused={focused} color={color} label={tabTitles[route.name as keyof TabParamList]} />;
           }
         })}
       >
@@ -406,15 +488,20 @@ export function AppNavigator() {
 
 const styles = StyleSheet.create({
   iconPill: {
-    alignItems: 'center',
     borderRadius: radii.pill,
-    height: 30,
-    justifyContent: 'center',
-    marginBottom: 2,
-    width: 56
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0
   },
+  iconSlot: { alignItems: 'center', height: 28, justifyContent: 'center', marginBottom: 2, width: 54 },
   lazyFallback: { alignItems: 'center', flex: 1, justifyContent: 'center' },
   tabButtonAnchor: { flex: 1 },
   tabItem: { flex: 1, paddingTop: 0 },
-  tabLabel: { ...typeScale.smallCaption, ...fontStyles.medium, fontSize: 11, lineHeight: 14, marginTop: 2 }
+  tabItemContent: { alignItems: 'center', justifyContent: 'center' },
+  // lineHeight 14 (not 13) so 10.5pt descenders have room inside the 44pt budget above.
+  tabLabel: { ...typeScale.smallCaption, ...fontStyles.semiBold, fontSize: 10.5, letterSpacing: 0.1, lineHeight: 14, textAlign: 'center' },
+  tabSurface: { borderTopWidth: StyleSheet.hairlineWidth, bottom: 0, left: 0, overflow: 'hidden', position: 'absolute', right: 0, top: 0 },
+  tabSurfaceHighlight: { height: StyleSheet.hairlineWidth, left: 0, position: 'absolute', right: 0, top: 0 }
 });

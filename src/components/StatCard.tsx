@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Text, useTheme } from 'react-native-paper';
-import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
+import { alpha, appColors, fontStyles, iconSizes, radii, shadow, spacing, typeScale } from '@/theme/theme';
 import { AppCard } from './AppCard';
 
 type StatTone = 'primary' | 'success' | 'warning' | 'danger';
@@ -9,50 +9,55 @@ type Props = { label: string; value: string | number; hint?: string; tone?: Stat
 
 export function StatCard({ label, value, hint, tone = 'primary', icon, onPress }: Props) {
   const theme = useTheme();
-  const colors = appColors(theme.dark);
+  const isDark = theme.dark;
+  const colors = appColors(isDark);
   const accent =
     tone === 'success' ? colors.accent :
     tone === 'warning' ? colors.warning :
     tone === 'danger' ? colors.destructive :
     colors.primary;
-  const tileColor = theme.dark ? alpha(accent, 0.18) : alpha(accent, 0.1);
+  const tileColor = isDark ? alpha(accent, 0.2) : alpha(accent, 0.1);
   return (
-    <AppCard style={styles.card} onPress={onPress}>
+    <AppCard style={[styles.card, shadow(isDark, 'sm')]} onPress={onPress}>
       <View style={styles.shell}>
         <View style={styles.topRow}>
-          <Text style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>{label}</Text>
           {icon ? (
             <View style={[styles.iconTile, { backgroundColor: tileColor }]}>
-              <MaterialCommunityIcons name={icon} size={18} color={accent} />
+              <MaterialCommunityIcons name={icon} size={iconSizes.md} color={accent} />
             </View>
           ) : null}
+          <Text numberOfLines={1} style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>{label}</Text>
         </View>
-        <Text
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.7}
-          style={[styles.value, { color: theme.colors.onSurface }]}
-        >
-          {value}
-        </Text>
-        {hint ? <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>{hint}</Text> : null}
+        <View>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+            style={[styles.value, { color: theme.colors.onSurface }]}
+          >
+            {value}
+          </Text>
+          {hint ? <Text numberOfLines={1} style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>{hint}</Text> : null}
+        </View>
       </View>
     </AppCard>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { flex: 1, marginHorizontal: 6, minHeight: 100 },
-  hint: { ...typeScale.caption, fontSize: 11, marginTop: 6 },
+  // The icon leads the row now and the label sits beside it: two left-aligned rails
+  // (icon+label, then value+hint) scan faster than a label/icon split across the card.
+  card: { flex: 1, marginHorizontal: spacing.base + 2, minHeight: 112 },
+  hint: { ...typeScale.smallCaption, marginTop: spacing.base },
   iconTile: {
     alignItems: 'center',
     borderRadius: radii.md,
-    height: 32,
+    height: 30,
     justifyContent: 'center',
-    width: 32
+    width: 30
   },
-  label: { ...fontStyles.semiBold, flex: 1, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' as const },
-  shell: { flex: 1, justifyContent: 'space-between' },
-  topRow: { alignItems: 'flex-start', flexDirection: 'row', gap: 8, justifyContent: 'space-between' },
-  value: { ...fontStyles.bold, fontSize: 22, letterSpacing: -0.6, lineHeight: 24, marginTop: 10 }
+  label: { ...fontStyles.semiBold, flexShrink: 1, fontSize: 11, letterSpacing: 0.7, textTransform: 'uppercase' as const },
+  shell: { flex: 1, gap: spacing.sm, justifyContent: 'space-between' },
+  topRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs },
+  value: { ...typeScale.cardValue, fontSize: 24, letterSpacing: -0.7, lineHeight: 28 }
 });
