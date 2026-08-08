@@ -29,9 +29,9 @@ function AuthHeroPattern() {
     <Svg pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 360 260" preserveAspectRatio="xMidYMid slice">
       <Defs>
         <LinearGradient id="authRegisterHeroGrad" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#1C1A4A" />
-          <Stop offset="0.5" stopColor="#2D2A6B" />
-          <Stop offset="1" stopColor="#40388C" />
+          <Stop offset="0" stopColor="#9B4000" />
+          <Stop offset="0.5" stopColor="#C25300" />
+          <Stop offset="1" stopColor="#E4661F" />
         </LinearGradient>
       </Defs>
       <Rect x="0" y="0" width={360} height={260} fill="url(#authRegisterHeroGrad)" />
@@ -47,7 +47,7 @@ function AuthHeroPattern() {
         <Circle cx={70} cy={178} r={13} />
         <Circle cx={110} cy={48} r={6} />
       </G>
-      <G opacity="0.08" stroke="#A5B4FC" strokeWidth={18} fill="none">
+      <G opacity="0.08" stroke="#FFB692" strokeWidth={18} fill="none">
         <Path d="M 238 -18 C 284 16, 318 52, 386 48" />
         <Path d="M -34 232 C 36 194, 86 210, 146 250" />
       </G>
@@ -210,7 +210,7 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
         onScroll={scrollHandler}
       >
         <View style={styles.shell}>
-          <Reanimated.View style={[styles.heroPanel, { borderColor: alpha('#C3C0FF', 0.3) }, heroParallaxStyle]}>
+          <Reanimated.View style={[styles.heroPanel, { borderColor: alpha('#FFDBCB', 0.3) }, heroParallaxStyle]}>
             <AuthHeroPattern />
             <FloatingBubbles />
             <View style={styles.logoWrap}>
@@ -319,13 +319,13 @@ const styles = StyleSheet.create({
   },
   heroPanel: {
     alignItems: 'center',
-    backgroundColor: '#1C1A4A',
+    backgroundColor: '#9B4000',
     borderRadius: radii.xl,
     borderWidth: 1,
     overflow: 'hidden',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    shadowColor: '#4338CA',
+    shadowColor: '#D95F18',
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.08,
     shadowRadius: 28
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     width: 88
   },
   bubbleMedium: {
-    backgroundColor: alpha('#A5B4FC', 0.16),
+    backgroundColor: alpha('#FFB692', 0.16),
     borderColor: alpha('#FFFFFF', 0.24),
     borderRadius: 52,
     borderWidth: 1,

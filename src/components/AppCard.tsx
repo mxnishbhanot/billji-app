@@ -34,7 +34,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     elevation: 2,
     marginBottom: spacing.gridGap,
-    shadowColor: '#4338CA',
+    shadowColor: 'rgba(31, 27, 24, 0.08)',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 20

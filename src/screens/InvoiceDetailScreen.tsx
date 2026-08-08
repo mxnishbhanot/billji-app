@@ -54,9 +54,9 @@ function HeroPattern() {
     <Svg pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 360 220" preserveAspectRatio="xMidYMid slice">
       <Defs>
         <LinearGradient id="invHeroGrad" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#1C1A4A" />
-          <Stop offset="0.5" stopColor="#2D2A6B" />
-          <Stop offset="1" stopColor="#40388C" />
+          <Stop offset="0" stopColor="#9B4000" />
+          <Stop offset="0.5" stopColor="#C25300" />
+          <Stop offset="1" stopColor="#E4661F" />
         </LinearGradient>
       </Defs>
       <Rect x="0" y="0" width={360} height={220} fill="url(#invHeroGrad)" />
@@ -72,7 +72,7 @@ function HeroPattern() {
         <Circle cx={70} cy={164} r={13} />
         <Circle cx={110} cy={40} r={6} />
       </G>
-      <G opacity="0.08" stroke="#A5B4FC" strokeWidth={18} fill="none">
+      <G opacity="0.08" stroke="#FFB692" strokeWidth={18} fill="none">
         <Path d="M 238 -18 C 284 16, 318 52, 386 48" />
         <Path d="M -34 198 C 36 158, 86 174, 146 216" />
       </G>
@@ -396,11 +396,11 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
 
   return (
     <Screen title={documentNumberOf(invoice)}>
-      <View style={[styles.heroCard, { borderColor: alpha('#C3C0FF', 0.3) }]}>
+      <View style={[styles.heroCard, { borderColor: alpha('#FFDBCB', 0.3) }]}>
         <HeroPattern />
         <FloatingHeroBubbles />
         <View style={styles.heroInner}>
-          <View style={[styles.heroEyebrowBadge, { borderColor: alpha('#FFFFFF', 0.22), backgroundColor: alpha('#1C1A4A', 0.4) }]}>
+          <View style={[styles.heroEyebrowBadge, { borderColor: alpha('#FFFFFF', 0.22), backgroundColor: alpha('#9B4000', 0.4) }]}>
             <Text style={styles.heroEyebrow}>{invoice.invoiceNumber}</Text>
           </View>
           <Text style={styles.heroDate}>{formatDate(invoice.date)}</Text>
@@ -635,7 +635,7 @@ const styles = StyleSheet.create({
   footerActions: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   footerButton: { borderRadius: radii.input, flex: 1 },
   heroBubbleLarge: { backgroundColor: alpha('#FFFFFF', 0.18), borderColor: alpha('#FFFFFF', 0.34), borderRadius: 78, borderWidth: 1, height: 156, position: 'absolute', right: -44, top: 96, width: 156 },
-  heroBubbleMedium: { backgroundColor: alpha('#A5B4FC', 0.16), borderColor: alpha('#FFFFFF', 0.24), borderRadius: 60, borderWidth: 1, bottom: -28, height: 120, left: 30, position: 'absolute', width: 120 },
+  heroBubbleMedium: { backgroundColor: alpha('#FFB692', 0.16), borderColor: alpha('#FFFFFF', 0.24), borderRadius: 60, borderWidth: 1, bottom: -28, height: 120, left: 30, position: 'absolute', width: 120 },
   heroBubbleSmall: { backgroundColor: alpha('#FFFFFF', 0.14), borderColor: alpha('#FFFFFF', 0.28), borderRadius: 46, borderWidth: 1, height: 92, left: -26, position: 'absolute', top: -18, width: 92 },
   heroBubbleTiny: { backgroundColor: alpha('#FFFFFF', 0.16), borderColor: alpha('#FFFFFF', 0.3), borderRadius: 26, borderWidth: 1, height: 52, position: 'absolute', right: 94, top: 40, width: 52 },
   loader: { marginTop: 48 },

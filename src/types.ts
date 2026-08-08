@@ -908,7 +908,7 @@ export type StockShortage = {
 };
 
 export type ReportSummary = {
-  todaySales: number; weeklySales: number; monthlySales: number; totalInvoices: number; pendingInvoices: number; averageInvoiceValue: number;
+  todaySales: number; weeklySales: number; monthlySales: number; totalInvoices: number; pendingInvoices: number; totalCustomers: number; totalProducts: number; averageInvoiceValue: number;
   rangeSales: number; rangeLabel: string;
   invoiceCounts: Partial<Record<InvoiceStatus, number>>; topProducts: { name: string; quantity: number; sales: number }[];
   salesTrend: { date: string; sales: number; invoices: number }[]; recentInvoices: Invoice[];

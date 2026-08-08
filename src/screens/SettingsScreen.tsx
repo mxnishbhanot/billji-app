@@ -50,9 +50,9 @@ function SettingsHeroPattern() {
     <Svg pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 360 150" preserveAspectRatio="xMidYMid slice">
       <Defs>
         <LinearGradient id="settingsHeroGrad" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#1C1A4A" />
-          <Stop offset="0.5" stopColor="#2D2A6B" />
-          <Stop offset="1" stopColor="#40388C" />
+          <Stop offset="0" stopColor="#9B4000" />
+          <Stop offset="0.5" stopColor="#C25300" />
+          <Stop offset="1" stopColor="#E4661F" />
         </LinearGradient>
       </Defs>
       <Rect x="0" y="0" width={360} height={150} fill="url(#settingsHeroGrad)" />
@@ -68,7 +68,7 @@ function SettingsHeroPattern() {
         <Circle cx={70} cy={116} r={13} />
         <Circle cx={110} cy={28} r={6} />
       </G>
-      <G opacity="0.08" stroke="#A5B4FC" strokeWidth={18} fill="none">
+      <G opacity="0.08" stroke="#FFB692" strokeWidth={18} fill="none">
         <Path d="M 238 -18 C 284 16, 318 52, 386 48" />
         <Path d="M -34 144 C 36 106, 86 122, 146 162" />
       </G>
@@ -358,9 +358,9 @@ export function SettingsScreen() {
         enableRotationGesture: false,
         cropperRotateButtonsHidden: false,
         cropperToolbarTitle: 'Adjust logo',
-        cropperActiveWidgetColor: '#4338CA',
-        cropperStatusBarColor: '#1C1A4A',
-        cropperToolbarColor: '#1C1A4A',
+        cropperActiveWidgetColor: '#D95F18',
+        cropperStatusBarColor: '#9B4000',
+        cropperToolbarColor: '#9B4000',
         cropperToolbarWidgetColor: '#FFFFFF',
         compressImageQuality: 0.95,
         includeBase64: true
@@ -401,7 +401,7 @@ export function SettingsScreen() {
         onScroll: scrollHandler
       }}
     >
-      <Reanimated.View style={[styles.profileCard, { borderColor: alpha('#C3C0FF', 0.3) }, heroParallaxStyle]}>
+      <Reanimated.View style={[styles.profileCard, { borderColor: alpha('#FFDBCB', 0.3) }, heroParallaxStyle]}>
         <SettingsHeroPattern />
         <FloatingHeroBubbles />
         <View style={[styles.profileLogo, { backgroundColor: alpha('#FFFFFF', 0.16), borderColor: alpha('#FFFFFF', 0.24) }]}>
@@ -415,7 +415,7 @@ export function SettingsScreen() {
             <Text style={styles.planText}>{planLabel}</Text>
           </View>
         </View>
-        <Pressable onPress={() => setBrandSheetVisible(true)} style={({ pressed }) => [styles.profileEdit, { backgroundColor: alpha('#1C1A4A', pressed ? 0.55 : 0.36), borderColor: alpha('#C3C0FF', 0.36) }]} hitSlop={8}>
+        <Pressable onPress={() => setBrandSheetVisible(true)} style={({ pressed }) => [styles.profileEdit, { backgroundColor: alpha('#9B4000', pressed ? 0.55 : 0.36), borderColor: alpha('#FFDBCB', 0.36) }]} hitSlop={8}>
           <Feather name="edit-2" size={18} color="#FFFFFF" />
         </Pressable>
       </Reanimated.View>
@@ -615,13 +615,13 @@ const styles = StyleSheet.create({
   groupCard: { borderRadius: radii.lg, borderWidth: 1, overflow: 'hidden' },
   groupLabel: { ...fontStyles.bold, fontSize: 11, letterSpacing: 1.1, marginBottom: 8, marginLeft: 2 },
   planPill: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderRadius: radii.pill, flexDirection: 'row', gap: 4, marginTop: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  planText: { ...fontStyles.bold, color: '#4338CA', fontSize: 10 },
+  planText: { ...fontStyles.bold, color: '#D95F18', fontSize: 10 },
   profileCard: { alignItems: 'center', borderRadius: 26, borderWidth: 1, flexDirection: 'row', gap: 14, marginBottom: 20, minHeight: 120, overflow: 'hidden', padding: 18 },
   profileContent: { flex: 1, minWidth: 0 },
   profileEdit: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, height: 38, justifyContent: 'center', width: 38 },
   profileEmail: { ...typeScale.caption, color: 'rgba(255,255,255,0.82)', fontSize: 12, marginTop: 1 },
   heroBubbleLarge: { backgroundColor: alpha('#FFFFFF', 0.18), borderColor: alpha('#FFFFFF', 0.34), borderRadius: 70, borderWidth: 1, height: 140, position: 'absolute', right: -42, top: 54, width: 140 },
-  heroBubbleMedium: { backgroundColor: alpha('#A5B4FC', 0.16), borderColor: alpha('#FFFFFF', 0.24), borderRadius: 48, borderWidth: 1, bottom: -28, height: 96, left: 48, position: 'absolute', width: 96 },
+  heroBubbleMedium: { backgroundColor: alpha('#FFB692', 0.16), borderColor: alpha('#FFFFFF', 0.24), borderRadius: 48, borderWidth: 1, bottom: -28, height: 96, left: 48, position: 'absolute', width: 96 },
   heroBubbleSmall: { backgroundColor: alpha('#FFFFFF', 0.14), borderColor: alpha('#FFFFFF', 0.28), borderRadius: 38, borderWidth: 1, height: 76, left: -24, position: 'absolute', top: -22, width: 76 },
   heroBubbleTiny: { backgroundColor: alpha('#FFFFFF', 0.16), borderColor: alpha('#FFFFFF', 0.3), borderRadius: 23, borderWidth: 1, height: 46, position: 'absolute', right: 92, top: 24, width: 46 },
   profileLogo: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, height: 64, justifyContent: 'center', overflow: 'hidden', width: 64 },

@@ -25,8 +25,10 @@ type Props = {
   scrollRef?: RefObject<ScrollView | null>;
   /** Screens that already render their own OfflineBanner (Sync settings / issues). */
   hideOfflineBanner?: boolean;
+  /** When provided, replaces the default header shell (Dashboard Warm Ledger header). */
+  renderHeader?: () => ReactNode;
 };
-const CONTENT_BOTTOM_PADDING = 96;
+const CONTENT_BOTTOM_PADDING = 112;
 
 export function Screen({
   title,
@@ -38,7 +40,8 @@ export function Screen({
   contentStyle,
   scrollViewProps,
   scrollRef,
-  hideOfflineBanner = false
+  hideOfflineBanner = false,
+  renderHeader
 }: Props) {
   const theme = useTheme();
   const isDark = theme.dark;
@@ -61,6 +64,9 @@ export function Screen({
   );
   return (
       <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right']}>
+        {renderHeader ? (
+          <View style={styles.customHeader}>{renderHeader()}</View>
+        ) : (
         <View
           style={[
             styles.headerShell,
@@ -101,7 +107,8 @@ export function Screen({
           </Pressable>
           {headerAction ?? (showNotifications ? <NotificationButton /> : null)}
         </View>
-        <QuickActionsSheet visible={quickOpen} onClose={() => setQuickOpen(false)} />
+        )}
+        {renderHeader ? null : <QuickActionsSheet visible={quickOpen} onClose={() => setQuickOpen(false)} />}
         {scroll ? (
           <KeyboardAwareScrollView
             ref={scrollRef as never}
@@ -150,5 +157,6 @@ const styles = StyleSheet.create({
   title: { ...typeScale.screenTitle, flexShrink: 1, fontSize: 26, lineHeight: 34, letterSpacing: -0.52 },
   titleCompact: { fontSize: 22, letterSpacing: -0.4, lineHeight: 28 },
   titleBlock: { flex: 1, minWidth: 0 },
-  titleRow: { alignItems: 'center', flexDirection: 'row', gap: 8, minWidth: 0 }
+  titleRow: { alignItems: 'center', flexDirection: 'row', gap: 8, minWidth: 0 },
+  customHeader: { marginHorizontal: spacing.screenPadding, marginTop: 8 }
 });

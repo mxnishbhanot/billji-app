@@ -1,16 +1,14 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { NavigationContainer, RouteProp, StackActions } from '@react-navigation/native';
 import { BottomTabNavigationProp, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { PlatformPressable } from '@react-navigation/elements';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ActivityIndicator, useTheme } from 'react-native-paper';
+import { ActivityIndicator } from 'react-native-paper';
 import { AppState, BackHandler, Platform, StyleSheet, View } from 'react-native';
 import { authApi } from '@/api/endpoints';
 import { ReactNode, Suspense, lazy, useEffect, useRef } from 'react';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Dashboard and Login stay static — they are the first screens painted after splash.
 import { DashboardScreen } from '@/screens/DashboardScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
+import { BillJiTabBar } from '@/components/dashboard/BillJiTabBar';
 // Everything else lazy-loads on first navigation so the initial frame doesn't pay
 // the require() cost of all 20 screen modules (bottom-tabs lazy-mounts, but static
 // imports still execute every screen module as soon as the tab bar renders).
@@ -70,8 +68,7 @@ import { useAuthStore } from '@/store/authStore';
 import { FEATURE } from '@/constants/entitlements';
 import { withFeatureGate } from '@/components/FeatureGate';
 import { attachPushListeners, registerForPush } from '@/services/push';
-import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
-import { CelebrationOverlay, OnboardingProvider, TourAnchor, TourHost, WelcomeSheet, ANCHOR, useOnboardingOptional } from '@/features/onboarding';
+import { CelebrationOverlay, OnboardingProvider, TourHost, WelcomeSheet, useOnboardingOptional } from '@/features/onboarding';
 import { navigationRef } from './navigationRef';
 import {
   AuthStackParamList,
@@ -92,22 +89,6 @@ const CatalogStack = createNativeStackNavigator<CatalogStackParamList>();
 const CustomersStack = createNativeStackNavigator<CustomersStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 const Tabs = createBottomTabNavigator<TabParamList>();
-const TAB_BAR_HEIGHT = 72;
-const TAB_BAR_BOTTOM_PADDING = 10;
-const tabIcons: Record<keyof TabParamList, { active: keyof typeof MaterialCommunityIcons.glyphMap; inactive: keyof typeof MaterialCommunityIcons.glyphMap }> = {
-  DashboardTab: { active: 'home', inactive: 'home' },
-  InvoicesTab: { active: 'file-document', inactive: 'file-document' },
-  CatalogTab: { active: 'package-variant-closed', inactive: 'cube' },
-  CustomersTab: { active: 'account-group', inactive: 'account-group' },
-  SettingsTab: { active: 'cog', inactive: 'cog' }
-};
-// Anchored on the whole tab button, not the icon, so a coach mark highlights the label too.
-const tabAnchors: Partial<Record<keyof TabParamList, string>> = {
-  InvoicesTab: ANCHOR.tabInvoices,
-  CustomersTab: ANCHOR.tabCustomers,
-  CatalogTab: ANCHOR.tabCatalog,
-  SettingsTab: ANCHOR.tabSettings
-};
 
 // Suspense boundary for lazy screens — shows a spinner for the brief moment a
 // screen module loads on first navigation.
@@ -233,67 +214,14 @@ const popNestedStackOnBlur = ({
 });
 
 function AppTabs() {
-  const theme = useTheme();
-  const isDark = theme.dark;
-  const colors = appColors(isDark);
-  const insets = useSafeAreaInsets();
-
   return (
     <View style={{ flex: 1 }}>
       <Tabs.Navigator
-        screenOptions={({ route }) => ({
+        tabBar={(props) => <BillJiTabBar {...props} />}
+        screenOptions={{
           headerShown: false,
-          tabBarActiveTintColor: theme.colors.primary,
-          tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
-          tabBarHideOnKeyboard: true,
-          tabBarLabelPosition: 'below-icon',
-          tabBarLabelStyle: styles.tabLabel,
-          tabBarStyle: {
-            height: TAB_BAR_HEIGHT + insets.bottom,
-            paddingBottom: TAB_BAR_BOTTOM_PADDING + insets.bottom,
-            paddingTop: 10,
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            width: '100%',
-            backgroundColor: theme.colors.surface,
-            borderRadius: 0,
-            borderTopWidth: StyleSheet.hairlineWidth,
-            borderTopColor: isDark ? theme.colors.outlineVariant : alpha(colors.primaryStrong, 0.1),
-            borderLeftWidth: 0,
-            borderRightWidth: 0,
-            borderBottomWidth: 0,
-            elevation: 14,
-            shadowColor: isDark ? '#000000' : colors.primaryStrong,
-            shadowOffset: { width: 0, height: -6 },
-            shadowOpacity: isDark ? 0.45 : 0.06,
-            shadowRadius: 14
-          },
-          tabBarItemStyle: styles.tabItem,
-          tabBarButton: (props) => {
-            const anchorId = tabAnchors[route.name as keyof TabParamList];
-            // Must be PlatformPressable, not a plain Pressable: bottom-tabs passes an
-            // `href` to the tab button, react-native-web renders that as a real <a>, and
-            // only PlatformPressable preventDefault()s the click. A plain Pressable lets
-            // the browser follow the link, which full-page-reloads the web app.
-            const button = <PlatformPressable {...props} />;
-            if (!anchorId) return button;
-            return (
-              <TourAnchor anchorId={anchorId} style={styles.tabButtonAnchor}>
-                {button}
-              </TourAnchor>
-            );
-          },
-          tabBarIcon: ({ color, focused }) => {
-            const icon = tabIcons[route.name as keyof TabParamList];
-            return (
-              <View style={[styles.iconPill, focused && { backgroundColor: alpha(theme.colors.primary, isDark ? 0.2 : 0.14) }]}>
-                <MaterialCommunityIcons name={focused ? icon.active : icon.inactive} size={focused ? 22 : 21} color={color} />
-              </View>
-            );
-          }
-        })}
+          tabBarHideOnKeyboard: true
+        }}
       >
         <Tabs.Screen name="DashboardTab" component={DashboardNavigator} options={{ title: 'Home' }} />
         <Tabs.Screen
@@ -312,7 +240,7 @@ function AppTabs() {
         <Tabs.Screen
           name="SettingsTab"
           component={SettingsNavigator}
-          options={{ title: 'Settings', popToTopOnBlur: true }}
+          options={{ title: 'More', popToTopOnBlur: true }}
           listeners={popNestedStackOnBlur}
         />
       </Tabs.Navigator>
@@ -405,16 +333,5 @@ export function AppNavigator() {
 }
 
 const styles = StyleSheet.create({
-  iconPill: {
-    alignItems: 'center',
-    borderRadius: radii.pill,
-    height: 30,
-    justifyContent: 'center',
-    marginBottom: 2,
-    width: 56
-  },
-  lazyFallback: { alignItems: 'center', flex: 1, justifyContent: 'center' },
-  tabButtonAnchor: { flex: 1 },
-  tabItem: { flex: 1, paddingTop: 0 },
-  tabLabel: { ...typeScale.smallCaption, ...fontStyles.medium, fontSize: 11, lineHeight: 14, marginTop: 2 }
+  lazyFallback: { alignItems: 'center', flex: 1, justifyContent: 'center' }
 });

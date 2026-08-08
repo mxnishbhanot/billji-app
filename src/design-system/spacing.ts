@@ -1,0 +1,21 @@
+export const spacing = {
+  base: 4,
+  xs: 8,
+  sm: 12,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  container: 20,
+  gap: 12,
+  section: 24,
+  large: 32,
+  screenPadding: 20,
+  gridGap: 16,
+  cardPadding: 16,
+  cardPaddingCompact: 12,
+  heroPadding: 20,
+  sectionGap: 24,
+  marginMobile: 20,
+  marginDesktop: 48,
+  gutter: 16
+} as const;
