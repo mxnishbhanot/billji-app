@@ -64,10 +64,19 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
 
   const report = query.data;
 
-  const sparkFromTrend = useMemo(() => {
-    const values = (report?.salesTrend ?? []).map((point) => Number(point.sales || 0));
-    return values.length ? values.slice(-7) : [0, 0, 0, 0, 0, 0, 0];
-  }, [report?.salesTrend]);
+  // Each card gets its own daily series; older backends only send salesTrend, so fall back to it.
+  const sparks = useMemo(() => {
+    const legacy = (report?.salesTrend ?? []).map((point) => Number(point.sales || 0)).slice(-7);
+    const fallback = legacy.length > 1 ? legacy : [];
+    const pick = (series?: number[]) => (series && series.length > 1 ? series : fallback);
+    const trends = report?.metricTrends;
+    return {
+      today: pick(trends?.today),
+      month: pick(trends?.month),
+      invoices: pick(trends?.invoices),
+      pending: pick(trends?.pending)
+    };
+  }, [report?.metricTrends, report?.salesTrend]);
 
   const metrics = useMemo(
     () => [
@@ -78,7 +87,7 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
         hint: 'Collected today',
         icon: Wallet,
         accent: colors.categoryGreen,
-        sparkData: sparkFromTrend,
+        sparkData: sparks.today,
         onPress: () =>
           navigation.navigate('InvoicesTab', {
             screen: 'InvoiceList',
@@ -92,7 +101,7 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
         hint: 'Collected this month',
         icon: Calendar,
         accent: colors.categoryPurple,
-        sparkData: sparkFromTrend,
+        sparkData: sparks.month,
         onPress: () =>
           navigation.navigate('InvoicesTab', {
             screen: 'InvoiceList',
@@ -106,7 +115,7 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
         hint: 'All time',
         icon: FileText,
         accent: colors.categoryOrange,
-        sparkData: sparkFromTrend,
+        sparkData: sparks.invoices,
         onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList' })
       },
       {
@@ -116,11 +125,11 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
         hint: 'Need follow-up',
         icon: Clock,
         accent: colors.categoryBlue,
-        sparkData: sparkFromTrend,
+        sparkData: sparks.pending,
         onPress: () => navigation.navigate('InvoicesTab', { screen: 'InvoiceList', params: { status: 'pending' } })
       }
     ],
-    [colors, navigation, report, sparkFromTrend]
+    [colors, navigation, report, sparks]
   );
 
   const duesOutstanding = report?.dues?.totalOutstanding ?? 0;

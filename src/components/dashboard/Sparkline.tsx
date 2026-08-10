@@ -10,7 +10,9 @@ type Props = {
   width?: number;
 };
 
-export const Sparkline = memo(function Sparkline({ color, data = [2, 4, 3, 6, 5, 7, 6], height = 28, width = 120 }: Props) {
+export const Sparkline = memo(function Sparkline({ color, data, height = 28, width = 120 }: Props) {
+  // No invented shape: one point (or none) cannot draw a trend, so draw nothing.
+  if (!data || data.length < 2) return null;
   const max = Math.max(...data, 1);
   const min = Math.min(...data, 0);
   const range = Math.max(max - min, 1);

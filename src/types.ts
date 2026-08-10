@@ -912,6 +912,8 @@ export type ReportSummary = {
   rangeSales: number; rangeLabel: string;
   invoiceCounts: Partial<Record<InvoiceStatus, number>>; topProducts: { name: string; quantity: number; sales: number }[];
   salesTrend: { date: string; sales: number; invoices: number }[]; recentInvoices: Invoice[];
+  // One dense daily series per metric card (today/month collected, invoice + pending counts).
+  metricTrends?: { today: number[]; month: number[]; invoices: number[]; pending: number[] };
   // Q1 — how much did I sell? (invoiced/gross)
   sales: {
     today: number; week: number; month: number; range: number; rangeLabel: string; invoiceCount: number;
