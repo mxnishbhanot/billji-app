@@ -134,6 +134,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     elevation: 0,
     flexDirection: 'row',
+    // Keeps the search button off the notification button / header action (Save) beside it.
+    gap: 8,
     marginHorizontal: spacing.screenPadding,
     marginTop: 12,
     minHeight: 58,
@@ -148,7 +150,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 40,
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: 2,
     width: 40
   },
   offlineBanner: { marginBottom: 10 },
