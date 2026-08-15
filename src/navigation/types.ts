@@ -42,7 +42,9 @@ export type InvoiceStackParamList = {
   // Nothing is created until Generate — the source invoice stays immutable.
   InvoiceCreate: { documentType?: SalesDocumentKind; prefillFromInvoiceId?: string } | undefined;
   InvoicePreview: { payload: InvoiceCreatePayload };
-  InvoiceDetail: { id: string };
+  // `openRecordPayment` is a one-shot intent set only by "Generate & Receive" in the builder:
+  // the detail screen opens the existing Record payment sheet once and clears the flag.
+  InvoiceDetail: { id: string; openRecordPayment?: boolean };
   Documents: { documentType?: SalesDocumentKind } | undefined;
   Drafts: undefined;
   OrderList: undefined;

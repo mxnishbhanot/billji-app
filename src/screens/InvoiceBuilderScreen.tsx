@@ -26,6 +26,7 @@ import { Screen } from '@/components/Screen';
 import { UpgradeSheet } from '@/components/UpgradeSheet';
 import { LIMIT } from '@/constants/entitlements';
 import { useEntitlements } from '@/shared/hooks/useEntitlements';
+import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { InvoiceBuilderScreenProps } from '@/navigation/types';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
 import { CustomerFormValues, CustomItemFormValues, documentNumberOf } from '@/types';
@@ -51,6 +52,10 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
   const allowLeave = useRef(false);
   const customerForm = useForm<CustomerFormValues>({ defaultValues: customerDefaults, resolver: zodResolver(customerSchema) });
   const customForm = useForm<CustomItemFormValues>({ defaultValues: customItemDefaults, resolver: zodResolver(customItemSchema) });
+  // Which of the two generate actions was tapped. A ref, not state: it must survive the
+  // oversell-confirm detour (create fails with a shortage, user confirms, the same create
+  // runs again) and it is only read at the moment the invoice exists.
+  const receivePaymentOnCreate = useRef(false);
   const builder = useInvoiceBuilder({
     // Quotations and challans live under /documents — the invoice detail screen cannot load
     // them, so land on the Documents list for that kind instead.
@@ -60,7 +65,12 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
         navigation.replace('Documents', { documentType });
         return;
       }
-      navigation.replace('InvoiceDetail', { id: document._id });
+      // The intent rides on the params of the ONE invoice that was just created — the sheet
+      // cannot attach itself to a different bill, and a plain Generate never sets it.
+      navigation.replace('InvoiceDetail', {
+        id: document._id,
+        ...(receivePaymentOnCreate.current ? { openRecordPayment: true } : {})
+      });
     },
     showDialog,
     documentType,
@@ -68,6 +78,9 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
   });
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.08);
   const subSurface = isDark ? colors.surface : alpha(colors.primary, 0.04);
+  const { can } = usePermissions();
+  // Tax invoices only, and only for a user who may record money.
+  const canReceivePayment = !documentType && can(PERMISSION.paymentsRecord);
   const entitlements = useEntitlements();
   const documentQuota = entitlements.usage(LIMIT.documentsPerMonth);
   const quotaTone = documentQuota && documentQuota.remaining === 0 ? colors.destructive : colors.warning;
@@ -107,6 +120,17 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
   useEffect(() => {
     if (prefillFromInvoiceId && builder.recoveryDraft) builder.dismissRecoveryDraft();
   }, [builder, prefillFromInvoiceId]);
+
+  // Both actions run the same create. The only difference is the intent carried to the
+  // detail screen, so validation, payload, stock, GST and numbering have a single path.
+  const generate = () => {
+    receivePaymentOnCreate.current = false;
+    void builder.createInvoice();
+  };
+  const generateAndReceive = () => {
+    receivePaymentOnCreate.current = true;
+    void builder.createInvoice();
+  };
 
   const loadMoreProducts = () => {
     if (builder.productsQuery.hasNextPage && !builder.productsQuery.isFetchingNextPage) void builder.productsQuery.fetchNextPage();
@@ -222,7 +246,7 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
           mode="contained"
           loading={builder.isGenerating}
           disabled={builder.isGenerating}
-          onPress={builder.createInvoice}
+          onPress={generate}
           style={styles.generateButton}
           contentStyle={styles.generateButtonContent}
           labelStyle={styles.generateButtonLabel}
@@ -230,6 +254,24 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
           Generate {noun}
         </Button>
       </View>
+      {/* Opt-in shortcut for a counter sale: same invoice, then the same Record payment sheet
+          on the detail screen. Credit sales stay one tap on the primary action above.
+          Only for tax invoices — a quotation or challan is not payable. */}
+      {canReceivePayment ? (
+        <Button
+          mode="outlined"
+          testID="generate-and-receive"
+          icon={({ size, color }) => <Feather name="check-circle" size={size} color={color} />}
+          loading={builder.isGenerating}
+          disabled={builder.isGenerating}
+          onPress={generateAndReceive}
+          style={styles.receiveButton}
+          contentStyle={styles.generateButtonContent}
+          labelStyle={styles.generateButtonLabel}
+        >
+          Generate &amp; Receive
+        </Button>
+      ) : null}
       <InvoiceBuilderDialogs
         addCustomerLoading={builder.addCustomer.isPending}
         customerForm={customerForm}
@@ -306,7 +348,8 @@ const styles = StyleSheet.create({
   quotaHintText: { ...fontStyles.medium, flex: 1, fontSize: 12 },
   scanRow: { alignItems: 'center', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 10, paddingVertical: 12 },
   scanRowLabel: { ...fontStyles.semiBold, fontSize: 14 },
-  actionRow: { flexDirection: 'row', gap: 12, marginBottom: 18 },
+  actionRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  receiveButton: { borderRadius: radii.input, marginBottom: 18 },
   generateButton: { borderRadius: radii.input, flex: 1 },
   generateButtonContent: { paddingVertical: 6 },
   generateButtonLabel: { ...fontStyles.bold, fontSize: 14, letterSpacing: 0.2 },

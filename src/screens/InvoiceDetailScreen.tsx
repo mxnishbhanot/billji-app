@@ -18,13 +18,14 @@ import { InvoiceDetailScreenProps } from '@/navigation/types';
 import { openOrSharePdf } from '@/services/pdf';
 import { track } from '@/services/analytics';
 import { TourAnchor, ANCHOR, useOnboardingOptional } from '@/features/onboarding';
+import { hasWhatsAppPhone } from '@/shared/customers/customerPayload';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, statusTone, typeScale } from '@/theme/theme';
 import { documentNumberOf, Invoice, InvoicePaymentStatus, InvoiceStatus, RecordPaymentPayload } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/format';
 import { emailSchema } from '@/validation/schemas';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 /**
  * Tax heads to print, summed from the stored HSN summary. Returns [] for documents
@@ -322,6 +323,24 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
     }
   };
 
+  // "Generate & Receive" in the builder lands here with a one-shot intent: open the same
+  // Record payment sheet the button below opens, once the invoice has actually loaded.
+  // The ref makes it once-per-arrival — a refetch, a re-render, dismissing the sheet, or
+  // navigating back must not reopen it — and the param is cleared as it is consumed.
+  const openRecordPaymentIntent = route.params.openRecordPayment;
+  const paymentIntentConsumed = useRef(false);
+  useEffect(() => {
+    if (!openRecordPaymentIntent || paymentIntentConsumed.current) return;
+    if (!invoice) return;
+    paymentIntentConsumed.current = true;
+    navigation.setParams({ openRecordPayment: undefined });
+    const due = invoice.balanceDue ?? Math.max(invoice.total - (invoice.paidAmount ?? 0), 0);
+    // The navigation params are the external system being synchronised here, and the ref makes
+    // this fire at most once per arrival — so there is no cascading-render loop to avoid.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (canRecordPayment && invoice.status !== 'cancelled' && due > 0) setPaymentOpen(true);
+  }, [canRecordPayment, invoice, navigation, openRecordPaymentIntent]);
+
   if (query.isLoading) {
     return (
       <Screen title="Invoice">
@@ -391,7 +410,10 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
     ? []
     : [
         { label: 'PDF', icon: 'file-text', onPress: () => runShare('PDF') },
-        { label: 'WhatsApp', icon: 'send', onPress: () => runShare('WhatsApp') },
+        // Customerless / no-phone sale: the server refuses the wa.me link, so don't offer it.
+        ...(hasWhatsAppPhone(invoice.customerSnapshot)
+          ? [{ label: 'WhatsApp', icon: 'send' as const, onPress: () => runShare('WhatsApp') }]
+          : []),
         { label: 'Email', icon: 'mail', onPress: () => { emailForm.reset({ email: invoice.customerSnapshot.email || '' }); setEmailOpen(true); } }
       ];
 
