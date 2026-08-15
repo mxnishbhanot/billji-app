@@ -2,6 +2,7 @@ import {
   addProductToItems,
   buildInvoiceDraftPayload,
   buildInvoicePayload,
+  duplicateAddToastMessage,
   findStockShortages,
   hasInvoiceDraftContent,
   invoiceItemsToBuilderItems,
@@ -31,6 +32,17 @@ describe('invoiceBuilderService', () => {
 
     expect(first).toHaveLength(1);
     expect(second).toEqual([{ ...first[0], quantity: 2 }]);
+  });
+
+  it('announces only the increment when a product already on the bill is re-added', () => {
+    const first = addProductToItems([], product());
+
+    expect(duplicateAddToastMessage([], product())).toBeNull();
+    expect(duplicateAddToastMessage(first, product())).toBe('Notebook — qty 2');
+    expect(duplicateAddToastMessage(addProductToItems(first, product()), product())).toBe('Notebook — qty 3');
+    // A different product is a new row, and a custom item has no productId to match on.
+    expect(duplicateAddToastMessage(first, product({ _id: 'product-2', name: 'Pen' }))).toBeNull();
+    expect(duplicateAddToastMessage([{ name: 'Delivery', quantity: 1, price: 50 }], product())).toBeNull();
   });
 
   it('omits customerId entirely for a walk-in / cash sale', () => {

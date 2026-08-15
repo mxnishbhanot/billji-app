@@ -39,7 +39,18 @@ export const addProductToItems = (items: InvoiceItem[], product: Product) => {
   return [...items, productToInvoiceItem(product)];
 };
 
-export const updateItemQuantity = (items: InvoiceItem[], index: number, delta: number) =>
+/**
+ * Feedback line for re-adding a product that is already on the bill. The row it touches may
+ * be scrolled out of view and the row count does not change, so without this the user sees
+ * nothing happen. Null for a brand-new product (the new row is its own feedback) and for
+ * custom items (no productId to match on).
+ */
+export const duplicateAddToastMessage = (items: InvoiceItem[], product: Product) => {
+  const existing = items.find((item) => item.productId === product._id);
+  return existing ? `${existing.name} — qty ${existing.quantity + 1}` : null;
+};
+
+export const updateItemQuantity =(items: InvoiceItem[], index: number, delta: number) =>
   items.map((item, itemIndex) => (itemIndex === index ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item));
 
 export const setItemQuantity = (items: InvoiceItem[], index: number, quantity: number) =>

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { customersApi, documentsApi, invoicesApi, productsApi } from '@/api/endpoints';
+import { useAppToast } from '@/components/AppToast';
 import { PaywallError, apiErrorMessage, isPaywallError } from '@/api/client';
 import { useDocumentDraft } from '@/shared/drafts/useDocumentDraft';
 import { useSupplyType } from '@/shared/gst/useSupplyType';
@@ -15,6 +16,7 @@ import {
   addProductToItems,
   buildInvoiceDraftPayload,
   buildInvoicePayload,
+  duplicateAddToastMessage,
   hasInvoiceDraftContent,
   invoiceItemsToBuilderItems,
   removeInvoiceItem,
@@ -54,6 +56,7 @@ export const useInvoiceBuilder = ({
 }) => {
   const queryClient = useQueryClient();
   const onboarding = useOnboardingOptional();
+  const { showToast } = useAppToast();
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerPicker, setCustomerPicker] = useState(false);
@@ -209,7 +212,15 @@ export const useInvoiceBuilder = ({
     setCustomerPicker(false);
   };
 
-  const addProduct = useCallback((product: Product) => setItems((current) => addProductToItems(current, product)), []);
+  const addProduct = useCallback(
+    (product: Product) => {
+      // Same path for picker taps and barcode scans, so a repeat scan gets the same nudge.
+      const message = duplicateAddToastMessage(items, product);
+      setItems((current) => addProductToItems(current, product));
+      if (message) showToast(message, 'info');
+    },
+    [items, showToast]
+  );
 
   /**
    * Scan a label straight onto the bill. Looks the code up directly rather than pushing it
