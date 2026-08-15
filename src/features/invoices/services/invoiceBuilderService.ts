@@ -102,7 +102,9 @@ export const buildInvoicePayload = ({
   notes: string;
   allowOversell?: boolean;
 }): InvoiceCreatePayload => ({
-  customerId: selectedCustomerId,
+  // Omitted, never blank: a walk-in/cash sale has no customer, and the server reads a
+  // missing customerId as exactly that (customer stays null, no Customer row is created).
+  ...(selectedCustomerId ? { customerId: selectedCustomerId } : {}),
   items: items.map((item) => ({
     productId: item.productId,
     name: item.name,

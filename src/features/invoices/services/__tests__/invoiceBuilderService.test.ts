@@ -33,6 +33,21 @@ describe('invoiceBuilderService', () => {
     expect(second).toEqual([{ ...first[0], quantity: 2 }]);
   });
 
+  it('omits customerId entirely for a walk-in / cash sale', () => {
+    const payload = buildInvoicePayload({
+      selectedCustomerId: '',
+      items: [{ productId: 'product-1', name: 'Notebook', quantity: 1, price: 120 }],
+      taxRate: '18',
+      discountType: 'flat',
+      discountValue: '0',
+      notes: ''
+    });
+
+    // A blank string would be sent as an invalid customer id; the key must be absent.
+    expect('customerId' in payload).toBe(false);
+    expect(payload.items).toHaveLength(1);
+  });
+
   it('never decrements item quantity below one', () => {
     const updated = updateItemQuantity([{ name: 'Notebook', quantity: 1, price: 120 }], 0, -10);
 

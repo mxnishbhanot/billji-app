@@ -580,7 +580,8 @@ export const documentNumberOf = (document: { invoiceNumber?: string; documentNum
   document.invoiceNumber || document.documentNumber || '';
 
 export type DocumentCreatePayload = {
-  customerId: string;
+  /** Absent on a walk-in sale — the document is created with no customer at all. */
+  customerId?: string;
   items: InvoiceCreateItem[];
   taxRate: number;
   discountType: DiscountType;
@@ -622,7 +623,8 @@ export type Gstr3bReport = {
 export type InvoiceItem = { _id?: string; _uid?: string; product?: string | null; productId?: string; name: string; sku?: string; unit?: string; quantity: number; price: number; purchasePrice?: number; taxRate?: number; hsn?: string; taxableValue?: number; taxAmount?: number; cgst?: number; sgst?: number; igst?: number; total?: number; isCustom?: boolean };
 export type InvoiceCreateItem = Pick<InvoiceItem, 'productId' | 'name' | 'sku' | 'unit' | 'quantity' | 'price' | 'taxRate' | 'hsn' | 'isCustom'>;
 export type InvoiceCreatePayload = {
-  customerId: string;
+  /** Absent on a walk-in / cash sale — the document is created with no customer at all. */
+  customerId?: string;
   items: InvoiceCreateItem[];
   taxRate: number;
   discountType: DiscountType;

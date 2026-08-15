@@ -257,11 +257,8 @@ export const useInvoiceBuilder = ({
     // Re-entry guard: a second tap before isPending propagates would POST twice → duplicate invoice.
     if (createInvoiceMutation.isPending) return;
 
-    if (!selectedCustomerId) {
-      showDialog({ title: 'Select or add a customer', message: `Choose a saved customer or quick add a new one before generating the ${documentNoun}.`, tone: 'warning' });
-      return;
-    }
-
+    // No customer check: a counter/cash sale is billed without one (server records it as a
+    // customerless "Walk-in customer" document — no Customer row, no balance, no ledger).
     if (!items.length) {
       showDialog({ title: 'Add at least one item', message: `Pick a product or add a custom item before generating the ${documentNoun}.`, tone: 'warning' });
       return;

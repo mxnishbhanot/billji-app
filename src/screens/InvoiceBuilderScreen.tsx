@@ -153,6 +153,7 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
       <CustomerSelectorCard
         customer={builder.activeCustomer}
         cardBorder={cardBorder}
+        customerOptional
         colors={colors}
         isDark={isDark}
         onAdd={() => builder.setCustomerModal(true)}

@@ -88,6 +88,7 @@ export function DraftSyncIndicator({
 export function CustomerSelectorCard({
   customer,
   cardBorder,
+  customerOptional = false,
   colors,
   isDark,
   onAdd,
@@ -96,6 +97,8 @@ export function CustomerSelectorCard({
 }: {
   customer: Customer | null;
   cardBorder: string;
+  /** Invoices can be billed without a customer; orders still require one. */
+  customerOptional?: boolean;
   colors: ColorSet;
   isDark: boolean;
   onAdd: () => void;
@@ -132,6 +135,17 @@ export function CustomerSelectorCard({
           </View>
         </>
       ) : (
+        <>
+        {/* Customer is optional — say so, so the counter sale is not held up looking for one. */}
+        {customerOptional ? <View style={[styles.customerSelected, { backgroundColor: subSurface, borderColor: cardBorder }]}>
+          <View style={[styles.avatar, { backgroundColor: alpha(colors.primary, isDark ? 0.22 : 0.14) }]}>
+            <Feather name="user" size={16} color={colors.primary} />
+          </View>
+          <View style={styles.flexContent}>
+            <Text style={[styles.customerName, { color: theme.colors.onSurface }]}>Walk-in sale</Text>
+            <Text style={[styles.customerMeta, { color: theme.colors.onSurfaceVariant }]}>No customer needed — bill it as a cash sale</Text>
+          </View>
+        </View> : null}
         <View style={styles.customerActions}>
           <Pressable onPress={onChange} style={({ pressed }) => [styles.primaryPick, { backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary }]}>
             <Feather name="users" size={15} color="#FFFFFF" />
@@ -142,6 +156,7 @@ export function CustomerSelectorCard({
             <Text style={[styles.secondaryPickLabel, { color: theme.colors.primary }]}>Quick add</Text>
           </Pressable>
         </View>
+        </>
       )}
     </View>
   );

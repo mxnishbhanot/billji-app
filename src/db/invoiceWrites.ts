@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { WALK_IN_CUSTOMER_NAME } from '@/constants/customers';
 import { getCustomer, getCustomerByServerId } from './customerRepository';
 import { createEntityWrites, type LocalWriteOptions } from './entityWrites';
 import { DatabaseError, LocalRuleError } from './errors';
@@ -171,7 +172,9 @@ export const createInvoiceLocally = async (
     if (customer && !customer.serverId) referenced.push({ entityType: 'customers', localId: customer.localId });
 
     const snapshot = (input.customerSnapshot as MongoDoc) ?? {
-      ...(customer?.doc ?? {}),
+      // A walk-in/cash sale has no customer: label it the way the server does, so the
+      // offline document reads the same as the one the server would have written.
+      ...(customer ? customer.doc : { name: WALK_IN_CUSTOMER_NAME, phone: '' }),
       // The snapshot is a copy of the customer as they were at issue, not a reference.
       _id: undefined
     };
