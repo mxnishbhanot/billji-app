@@ -13,7 +13,6 @@ import {
   Receipt,
   Send,
   Trash2,
-  User,
   XCircle
 } from 'lucide-react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -30,6 +29,13 @@ import { PaymentHistorySheet } from '@/components/PaymentHistorySheet';
 import { RecordPaymentSheet } from '@/components/RecordPaymentSheet';
 import { Screen } from '@/components/Screen';
 import { shadows } from '@/design-system';
+import { CustomerMetaItem, DocumentCustomerSection } from '@/features/documents/components/DocumentCustomerSection';
+import { DocumentHeroCard, documentHeroActionStyles } from '@/features/documents/components/DocumentHeroCard';
+import { DocumentNotice } from '@/features/documents/components/DocumentNotice';
+import { DocumentItemRow, DocumentItemsSection } from '@/features/documents/components/DocumentItemsSection';
+import { DocumentSection as Section, DocumentDetailRow as DetailRow } from '@/features/documents/components/DocumentSection';
+import { DocumentShareActions, ShareAction } from '@/features/documents/components/DocumentShareActions';
+import { gstHeadsFor } from '@/features/documents/gstHeads';
 import { InvoiceDetailScreenProps } from '@/navigation/types';
 import { openOrSharePdf } from '@/services/pdf';
 import { track } from '@/services/analytics';
@@ -37,87 +43,20 @@ import { TourAnchor, ANCHOR, useOnboardingOptional } from '@/features/onboarding
 import { hasWhatsAppPhone } from '@/shared/customers/customerPayload';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
-import { alpha, appColors, fontStyles, radii, spacing, statusTone, typeScale } from '@/theme/theme';
+import { alpha, appColors, fontStyles, radii, spacing, statusTone } from '@/theme/theme';
 import { documentNumberOf, Invoice, InvoicePaymentStatus, InvoiceStatus, RecordPaymentPayload } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/format';
 import { emailSchema } from '@/validation/schemas';
-import { ComponentType, ReactNode, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-/**
- * Tax heads to print, summed from the stored HSN summary. Returns [] for documents
- * issued before the GST engine, which have no summary and fall back to a single merged
- * "Tax" row. Plain function rather than a memo: it walks a handful of rows, and the
- * invoice is only available after this screen's loading guards.
- */
-const gstHeadsFor = (invoice: Invoice) => {
-  const summary = invoice.taxSummary ?? [];
-  if (!summary.length) return [];
-
-  const sum = (key: 'cgst' | 'sgst' | 'igst') =>
-    Math.round(summary.reduce((total, row) => total + Number(row[key] || 0), 0) * 100) / 100;
-
-  return (
-    invoice.supplyType === 'inter'
-      ? [{ label: 'IGST', amount: sum('igst') }]
-      : [
-          { label: 'CGST', amount: sum('cgst') },
-          { label: 'SGST', amount: sum('sgst') }
-        ]
-  ).filter((head) => head.amount > 0);
-};
-
-type LucideGlyph = ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
-
-/** Declared at module scope: picking the glyph inside render would remount it every pass. */
-function StatusGlyph({ status, size, color }: { status: InvoiceStatus; size: number; color: string }) {
-  const Icon = status === 'paid' ? CheckCircle2 : status === 'cancelled' ? XCircle : Clock;
-  return <Icon size={size} color={color} strokeWidth={2.3} />;
-}
+/** Returns the glyph itself rather than an element: the hero renders it, and picking it
+ *  inside render would remount the icon every pass. */
+const statusGlyphFor = (status: InvoiceStatus) =>
+  status === 'paid' ? CheckCircle2 : status === 'cancelled' ? XCircle : Clock;
 
 function PaymentGlyph({ status, cancelled, size, color }: { status: InvoicePaymentStatus; cancelled: boolean; size: number; color: string }) {
   const Icon = cancelled ? Ban : status === 'paid' ? CheckCircle2 : status === 'refunded' ? Receipt : Clock;
   return <Icon size={size} color={color} strokeWidth={2.2} />;
-}
-
-/** Section eyebrow + card, matching the Settings/Dashboard label-over-card rhythm. */
-function Section({
-  title,
-  trailing,
-  children,
-  cardStyle
-}: {
-  title?: string;
-  trailing?: ReactNode;
-  children: ReactNode;
-  cardStyle?: object;
-}) {
-  const theme = useTheme();
-  const colors = appColors(theme.dark);
-  const border = theme.dark ? colors.border : alpha(colors.primaryStrong, 0.06);
-
-  return (
-    <View style={styles.section}>
-      {title ? (
-        <View style={styles.sectionLabelRow}>
-          <Text style={[styles.sectionLabel, { color: theme.colors.onSurfaceVariant }]}>{title}</Text>
-          {trailing}
-        </View>
-      ) : null}
-      <View style={[styles.card, theme.dark ? null : shadows.card, { backgroundColor: colors.card, borderColor: border }, cardStyle]}>
-        {children}
-      </View>
-    </View>
-  );
-}
-
-function DetailRow({ label, value, emphasise }: { label: string; value: string; emphasise?: string }) {
-  const theme = useTheme();
-  return (
-    <View style={styles.detailRow}>
-      <Text style={[styles.detailLabel, { color: theme.colors.onSurfaceVariant }]}>{label}</Text>
-      <Text style={[styles.detailValue, { color: emphasise ?? theme.colors.onSurface }]}>{value}</Text>
-    </View>
-  );
 }
 
 export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenProps) {
@@ -352,13 +291,13 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
 
   // Cancelled invoices are voided (stock + accounting reversed) and must not be
   // shareable/sendable by any channel — share sheet, WhatsApp, or email.
-  const actions: { label: string; icon: LucideGlyph; onPress: () => void }[] = isCancelled
+  const actions: ShareAction[] = isCancelled
     ? []
     : [
         { label: 'PDF', icon: FileText, onPress: () => runShare('PDF') },
         // Customerless / no-phone sale: the server refuses the wa.me link, so don't offer it.
         ...(hasWhatsAppPhone(invoice.customerSnapshot)
-          ? [{ label: 'WhatsApp', icon: Send as LucideGlyph, onPress: () => runShare('WhatsApp') }]
+          ? [{ label: 'WhatsApp', icon: Send, onPress: () => runShare('WhatsApp') }]
           : []),
         { label: 'Email', icon: Mail, onPress: () => { emailForm.reset({ email: invoice.customerSnapshot.email || '' }); setEmailOpen(true); } }
       ];
@@ -366,6 +305,20 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   const snapshot = invoice.customerSnapshot;
   // A walk-in / cash sale has no Customer row at all — the snapshot carries only the label.
   const isWalkIn = !invoice.customer;
+  const customerMetaItems: CustomerMetaItem[] = (
+    [
+      snapshot.phone ? { key: 'phone', icon: Phone, text: snapshot.phone } : null,
+      snapshot.email ? { key: 'email', icon: AtSign, text: snapshot.email, numberOfLines: 1 } : null,
+      snapshot.gstNumber ? { key: 'gst', icon: Receipt, text: snapshot.gstNumber } : null,
+      snapshot.address ? { key: 'address', icon: MapPin, text: snapshot.address } : null
+    ] as (CustomerMetaItem | null)[]
+  ).filter((item): item is CustomerMetaItem => item !== null);
+  const itemRows: DocumentItemRow[] = invoice.items.map((item, index) => ({
+    id: item._id || `${item.name}-${index}`,
+    name: item.name,
+    meta: `${item.quantity}${item.unit ? ` ${item.unit}` : ''} × ${formatCurrency(item.price)}`,
+    total: formatCurrency(item.total)
+  }));
   const showRecordPayment = canRecordPayment && !isCancelled && balanceDue > 0;
   const headlineLabel = isCancelled ? 'Invoice total' : balanceDue > 0 ? 'Amount due' : 'Paid in full';
   const headlineAmount = isCancelled || balanceDue <= 0 ? invoice.total : balanceDue;
@@ -380,163 +333,53 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   return (
     <Screen title={documentNumberOf(invoice)}>
       {/* Summary: what invoice, when, what state, and how much is outstanding — in one glance. */}
-      <Section>
-        <View style={styles.summaryHead}>
-          <View style={styles.summaryHeadText}>
-            <Text numberOfLines={1} style={[styles.docNumber, { color: theme.colors.onSurface }]}>{documentNumberOf(invoice)}</Text>
-            <Text style={[styles.docDate, { color: theme.colors.onSurfaceVariant }]}>{formatDate(invoice.date)}</Text>
-          </View>
-          <View style={[styles.statusPill, { backgroundColor: tone.background, borderColor: alpha(tone.foreground, isDark ? 0.42 : 0.3) }]}>
-            <StatusGlyph status={currentStatus} size={13} color={tone.foreground} />
-            <Text style={[styles.statusText, { color: tone.foreground }]}>{currentStatus}</Text>
-          </View>
-        </View>
-        <View style={[styles.summaryAmountBlock, { borderTopColor: cardBorder }]}>
-          <Text style={[styles.amountLabel, { color: theme.colors.onSurfaceVariant }]}>{headlineLabel}</Text>
-          <Text
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.6}
-            style={[styles.amountValue, { color: isCancelled ? theme.colors.onSurfaceVariant : theme.colors.onSurface }]}
-          >
-            {formatCurrency(headlineAmount)}
-          </Text>
-          <Text style={[styles.amountMeta, { color: theme.colors.onSurfaceVariant }]}>{headlineMeta}</Text>
-        </View>
-        {showRecordPayment ? (
-          <Button
-            mode="contained"
-            icon="cash-plus"
-            buttonColor={isDark ? colors.primaryFixed : colors.primary}
-            textColor="#FFFFFF"
-            onPress={() => setPaymentOpen(true)}
-            style={styles.primaryButton}
-            contentStyle={styles.primaryButtonContent}
-          >
-            Record payment
-          </Button>
-        ) : null}
-      </Section>
+      <DocumentHeroCard
+        title={documentNumberOf(invoice)}
+        subtitle={formatDate(invoice.date)}
+        status={currentStatus}
+        statusIcon={statusGlyphFor(currentStatus)}
+        amountLabel={headlineLabel}
+        amount={formatCurrency(headlineAmount)}
+        amountMeta={headlineMeta}
+        amountMuted={isCancelled}
+        primaryAction={
+          showRecordPayment ? (
+            <Button
+              mode="contained"
+              icon="cash-plus"
+              buttonColor={isDark ? colors.primaryFixed : colors.primary}
+              textColor="#FFFFFF"
+              onPress={() => setPaymentOpen(true)}
+              style={documentHeroActionStyles.button}
+              contentStyle={documentHeroActionStyles.content}
+            >
+              Record payment
+            </Button>
+          ) : null
+        }
+      />
 
       {/* Share row sits directly under the summary: the most common follow-up on a settled bill. */}
       {isCancelled ? null : (
         <TourAnchor anchorId={ANCHOR.shareInvoice}>
-          <View style={styles.actionRow}>
-            {actions.map((action) => {
-              const isBusy = busyAction === action.label;
-              const disabled = Boolean(busyAction) && !isBusy;
-              const Icon = action.icon;
-              return (
-                <Pressable
-                  key={action.label}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Share invoice by ${action.label}`}
-                  onPress={action.onPress}
-                  disabled={Boolean(busyAction)}
-                  style={({ pressed }) => [
-                    styles.actionTile,
-                    isDark ? null : shadows.card,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: cardBorder,
-                      opacity: pressed ? 0.85 : disabled ? 0.5 : 1
-                    }
-                  ]}
-                >
-                  <View style={[styles.actionIconWrap, { backgroundColor: alpha(colors.primary, isDark ? 0.26 : 0.12) }]}>
-                    {isBusy ? (
-                      <ActivityIndicator size={16} color={theme.colors.primary} />
-                    ) : (
-                      <Icon size={17} color={colors.primaryStrong} strokeWidth={2.2} />
-                    )}
-                  </View>
-                  <Text numberOfLines={1} style={[styles.actionLabel, { color: theme.colors.onSurface }]}>{isBusy ? 'Preparing…' : action.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <DocumentShareActions actions={actions} busyAction={busyAction} accessibilityLabelPrefix="Share invoice by" />
         </TourAnchor>
       )}
 
       {isCancelled ? (
         <Section>
-          <View style={styles.noticeRow}>
-            <View style={[styles.noticeIcon, { backgroundColor: tone.background }]}>
-              <Ban size={16} color={tone.foreground} strokeWidth={2.2} />
-            </View>
-            <Text style={[styles.noticeText, { color: theme.colors.onSurfaceVariant }]}>
-              This invoice is cancelled and can no longer be shared or sent.
-            </Text>
-          </View>
+          <DocumentNotice icon={Ban} tone={tone} text="This invoice is cancelled and can no longer be shared or sent." />
         </Section>
       ) : null}
 
-      <Section title="BILLED TO">
-        <View style={styles.customerRow}>
-          <View style={[styles.customerAvatar, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.12) }]}>
-            <User size={18} color={colors.primaryStrong} strokeWidth={2.2} />
-          </View>
-          <View style={styles.customerText}>
-            <Text numberOfLines={2} style={[styles.customerName, { color: theme.colors.onSurface }]}>{snapshot.name}</Text>
-            <Text style={[styles.customerHint, { color: theme.colors.onSurfaceVariant }]}>
-              {isWalkIn ? 'Walk-in sale · no customer account' : 'Customer'}
-            </Text>
-          </View>
-        </View>
-        {snapshot.phone || snapshot.email || snapshot.gstNumber || snapshot.address ? (
-          <View style={[styles.customerMeta, { borderTopColor: cardBorder }]}>
-            {snapshot.phone ? (
-              <View style={styles.metaRow}>
-                <Phone size={14} color={theme.colors.onSurfaceVariant} strokeWidth={2.2} />
-                <Text style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>{snapshot.phone}</Text>
-              </View>
-            ) : null}
-            {snapshot.email ? (
-              <View style={styles.metaRow}>
-                <AtSign size={14} color={theme.colors.onSurfaceVariant} strokeWidth={2.2} />
-                <Text numberOfLines={1} style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>{snapshot.email}</Text>
-              </View>
-            ) : null}
-            {snapshot.gstNumber ? (
-              <View style={styles.metaRow}>
-                <Receipt size={14} color={theme.colors.onSurfaceVariant} strokeWidth={2.2} />
-                <Text style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>{snapshot.gstNumber}</Text>
-              </View>
-            ) : null}
-            {snapshot.address ? (
-              <View style={styles.metaRow}>
-                <MapPin size={14} color={theme.colors.onSurfaceVariant} strokeWidth={2.2} />
-                <Text style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>{snapshot.address}</Text>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-      </Section>
+      <DocumentCustomerSection
+        title="BILLED TO"
+        name={snapshot.name}
+        hint={isWalkIn ? 'Walk-in sale · no customer account' : 'Customer'}
+        metaItems={customerMetaItems}
+      />
 
-      <Section
-        title="ITEMS"
-        trailing={
-          <View style={[styles.countBadge, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.12) }]}>
-            <Text style={[styles.countBadgeText, { color: colors.primaryStrong }]}>{invoice.items.length}</Text>
-          </View>
-        }
-        cardStyle={styles.listCard}
-      >
-        {invoice.items.map((item, index) => (
-          <View key={item._id || `${item.name}-${index}`} style={styles.itemRow}>
-            {index > 0 ? <View style={[styles.itemDivider, { backgroundColor: cardBorder }]} /> : null}
-            <View style={styles.itemInner}>
-              <View style={styles.itemContent}>
-                <Text style={[styles.itemName, { color: theme.colors.onSurface }]}>{item.name}</Text>
-                <Text style={[styles.itemMeta, { color: theme.colors.onSurfaceVariant }]}>
-                  {item.quantity}{item.unit ? ` ${item.unit}` : ''} × {formatCurrency(item.price)}
-                </Text>
-              </View>
-              <Text style={[styles.itemTotal, { color: theme.colors.onSurface }]}>{formatCurrency(item.total)}</Text>
-            </View>
-          </View>
-        ))}
-      </Section>
+      <DocumentItemsSection title="ITEMS" items={itemRows} />
 
       <Section title="BILL SUMMARY">
         <View style={styles.detailRows}>
@@ -676,31 +519,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
 }
 
 const styles = StyleSheet.create({
-  actionIconWrap: { alignItems: 'center', borderRadius: radii.pill, height: 34, justifyContent: 'center', width: 34 },
-  actionLabel: { ...fontStyles.semiBold, fontSize: 12 },
-  actionRow: { flexDirection: 'row', gap: 10, marginBottom: spacing.section },
-  actionTile: {
-    alignItems: 'center',
-    borderRadius: 18,
-    borderWidth: 1,
-    flex: 1,
-    gap: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 14
-  },
-  amountLabel: { ...fontStyles.semiBold, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase' },
-  amountMeta: { ...fontStyles.medium, fontSize: 12.5, marginTop: 4 },
-  amountValue: { ...fontStyles.bold, fontSize: 32, letterSpacing: -0.9, lineHeight: 40, marginTop: 2 },
   card: { borderRadius: 20, borderWidth: 1, padding: spacing.cardPadding },
-  countBadge: { alignItems: 'center', borderRadius: radii.pill, minWidth: 24, paddingHorizontal: 8, paddingVertical: 2 },
-  countBadgeText: { ...fontStyles.bold, fontSize: 11 },
-  customerAvatar: { alignItems: 'center', borderRadius: radii.pill, height: 40, justifyContent: 'center', width: 40 },
-  customerHint: { ...fontStyles.medium, fontSize: 11.5, marginTop: 2 },
-  customerMeta: { borderTopWidth: 1, gap: 8, marginTop: 12, paddingTop: 12 },
-  customerName: { ...fontStyles.bold, fontSize: 16, letterSpacing: -0.3, lineHeight: 22 },
-  customerRow: { alignItems: 'center', flexDirection: 'row', gap: 12 },
-  customerText: { flex: 1, minWidth: 0 },
-  detailLabel: { ...typeScale.bodyPrimary, flexShrink: 1, fontSize: 13.5 },
   detailRow: { alignItems: 'center', flexDirection: 'row', gap: 12, justifyContent: 'space-between' },
   detailRows: { gap: 10 },
   detailValue: { ...fontStyles.semiBold, fontSize: 13.5, textAlign: 'right' },
@@ -719,44 +538,11 @@ const styles = StyleSheet.create({
   grandTotalValue: { ...fontStyles.bold, fontSize: 22, letterSpacing: -0.5 },
   historyLink: { alignItems: 'center', alignSelf: 'flex-start', flexDirection: 'row', gap: 2, marginTop: 12 },
   historyLinkText: { ...fontStyles.semiBold, fontSize: 13 },
-  itemContent: { flex: 1, minWidth: 0 },
-  itemDivider: { height: StyleSheet.hairlineWidth, marginBottom: 12 },
-  itemInner: { alignItems: 'flex-start', flexDirection: 'row', gap: 12, justifyContent: 'space-between' },
-  itemMeta: { ...typeScale.caption, fontSize: 12, marginTop: 3 },
-  itemName: { ...fontStyles.semiBold, fontSize: 14, lineHeight: 20 },
-  itemRow: { paddingVertical: 8 },
-  itemTotal: { ...fontStyles.bold, fontSize: 14, lineHeight: 20 },
-  listCard: { paddingVertical: 6 },
-  metaRow: { alignItems: 'flex-start', flexDirection: 'row', gap: 8 },
-  metaText: { ...fontStyles.medium, flex: 1, fontSize: 12.5, lineHeight: 18 },
-  noticeIcon: { alignItems: 'center', borderRadius: radii.pill, height: 32, justifyContent: 'center', width: 32 },
-  noticeRow: { alignItems: 'center', flexDirection: 'row', gap: 12 },
-  noticeText: { ...fontStyles.medium, flex: 1, fontSize: 13, lineHeight: 19 },
-  docDate: { ...fontStyles.medium, fontSize: 12.5, marginTop: 3 },
-  docNumber: { ...fontStyles.bold, fontSize: 18, letterSpacing: -0.4 },
   paymentHead: { alignItems: 'center', flexDirection: 'row', gap: 10, marginBottom: 14 },
   paymentHeadText: { ...fontStyles.bold, fontSize: 15, letterSpacing: -0.2 },
   paymentHistory: { borderTopWidth: 1, gap: 8, marginTop: 14, paddingTop: 12 },
   paymentHistoryLabel: { ...fontStyles.semiBold, fontSize: 13, textTransform: 'capitalize' },
   paymentIcon: { alignItems: 'center', borderRadius: radii.pill, height: 32, justifyContent: 'center', width: 32 },
-  primaryButton: { borderRadius: radii.input, marginTop: 16 },
-  primaryButtonContent: { paddingVertical: 4 },
-  section: { marginBottom: spacing.section },
-  sectionLabel: { ...fontStyles.semiBold, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase' },
-  sectionLabelRow: { alignItems: 'center', flexDirection: 'row', gap: 8, marginBottom: 10, marginLeft: 4 },
   stateCard: { alignItems: 'center', gap: 12, paddingVertical: 32 },
-  stateText: { ...fontStyles.medium, fontSize: 13 },
-  statusPill: {
-    alignItems: 'center',
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 4
-  },
-  statusText: { ...fontStyles.bold, fontSize: 11, letterSpacing: 0.3, textTransform: 'capitalize' },
-  summaryAmountBlock: { borderTopWidth: 1, marginTop: 14, paddingTop: 14 },
-  summaryHead: { alignItems: 'flex-start', flexDirection: 'row', gap: 12, justifyContent: 'space-between' },
-  summaryHeadText: { flex: 1, minWidth: 0 }
+  stateText: { ...fontStyles.medium, fontSize: 13 }
 });

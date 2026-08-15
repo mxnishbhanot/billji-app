@@ -680,6 +680,13 @@ export type Invoice = {
   // present on invoices (a quotation deliberately has none).
   _id: string; invoiceNumber?: string; documentNumber?: string; documentType?: DocumentType;
   sourceInvoice?: string | null; sourceDocument?: string | null; validUntil?: string | null; reason?: string;
+  // Convertible documents (quotation, challan) only, and only from the detail endpoint: the
+  // invoice this document was converted into. The link itself lives on that invoice.
+  linkedInvoice?: { id: string; invoiceNumber: string; status?: InvoiceStatus } | null;
+  // Stock-moving documents (challan, credit note) only, and only from the detail endpoint:
+  // what this document actually did to stock, counted from the movements it wrote. Lines
+  // without a tracked product move nothing, so `products: 0` is a real answer.
+  stockEffect?: { products: number; quantity: number; reversed: boolean };
   date: string; dueDate?: string | null; customer?: string | null; customerSnapshot: Customer;
   items: InvoiceItem[]; subtotal: number; tax: { rate: number; amount: number }; discount: { type: DiscountType; value: number; amount: number };
   // GST fields. Absent on documents issued before the GST engine — a missing taxSummary

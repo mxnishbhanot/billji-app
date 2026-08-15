@@ -26,6 +26,9 @@ const InvoicePreviewScreen = lazy(() => import('@/screens/InvoicePreviewScreen')
 const InvoiceDetailScreen = lazy(() => import('@/screens/InvoiceDetailScreen').then((m) => ({ default: m.InvoiceDetailScreen })));
 const DraftsScreen = lazy(() => import('@/screens/DraftsScreen').then((m) => ({ default: m.DraftsScreen })));
 const DocumentsScreen = lazy(() => import('@/screens/DocumentsScreen').then((m) => ({ default: m.DocumentsScreen })));
+const CreditNoteDetailScreen = lazy(() => import('@/screens/CreditNoteDetailScreen').then((m) => ({ default: m.CreditNoteDetailScreen })));
+const QuotationDetailScreen = lazy(() => import('@/screens/QuotationDetailScreen').then((m) => ({ default: m.QuotationDetailScreen })));
+const ChallanDetailScreen = lazy(() => import('@/screens/ChallanDetailScreen').then((m) => ({ default: m.ChallanDetailScreen })));
 const OrdersScreen = lazy(() => import('@/screens/OrdersScreen').then((m) => ({ default: m.OrdersScreen })));
 const OrderBuilderScreen = lazy(() => import('@/screens/OrderBuilderScreen').then((m) => ({ default: m.OrderBuilderScreen })));
 const OrderDetailScreen = lazy(() => import('@/screens/OrderDetailScreen').then((m) => ({ default: m.OrderDetailScreen })));
@@ -145,6 +148,9 @@ function InvoiceNavigator() {
       <InvoiceStack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
       <InvoiceStack.Screen name="Drafts" component={DraftsScreen} />
       <InvoiceStack.Screen name="Documents" component={DocumentsScreen} />
+      <InvoiceStack.Screen name="CreditNoteDetail" component={CreditNoteDetailScreen} />
+      <InvoiceStack.Screen name="QuotationDetail" component={QuotationDetailScreen} />
+      <InvoiceStack.Screen name="ChallanDetail" component={ChallanDetailScreen} />
       <InvoiceStack.Screen name="OrderList" component={OrdersScreen} options={{ animation: 'none' }} />
       <InvoiceStack.Screen name="OrderCreate" component={OrderBuilderScreen} />
       <InvoiceStack.Screen name="OrderDetail" component={OrderDetailScreen} />

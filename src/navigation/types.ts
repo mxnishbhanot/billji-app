@@ -46,6 +46,9 @@ export type InvoiceStackParamList = {
   // the detail screen opens the existing Record payment sheet once and clears the flag.
   InvoiceDetail: { id: string; openRecordPayment?: boolean };
   Documents: { documentType?: SalesDocumentKind } | undefined;
+  CreditNoteDetail: { id: string };
+  QuotationDetail: { id: string };
+  ChallanDetail: { id: string };
   Drafts: undefined;
   OrderList: undefined;
   OrderCreate: undefined;
@@ -144,6 +147,9 @@ export type InvoicePreviewScreenProps = NativeStackScreenProps<InvoiceStackParam
 export type InvoiceDetailScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'InvoiceDetail'>;
 export type DraftsScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'Drafts'>;
 export type DocumentsScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'Documents'>;
+export type CreditNoteDetailScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'CreditNoteDetail'>;
+export type QuotationDetailScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'QuotationDetail'>;
+export type ChallanDetailScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'ChallanDetail'>;
 export type OrdersScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'OrderList'>;
 export type OrderBuilderScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'OrderCreate'>;
 export type OrderDetailScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'OrderDetail'>;
