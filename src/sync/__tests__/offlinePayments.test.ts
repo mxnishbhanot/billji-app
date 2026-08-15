@@ -74,6 +74,18 @@ const billedCustomer = async ({ quantity = 10, price = 380, sync = true } = {}) 
   return { customerLocalId: customer.localId, invoiceLocalId: record.localId, total: quantity * price };
 };
 
+/**
+ * The projection only keeps counting an accepted receipt for a week (paymentProjection's
+ * CATCH_UP_WINDOW_MS), measured against the wall clock. Every fixture here is stamped T0, so
+ * the wall clock is pinned to it too — otherwise the suite quietly starts failing a week
+ * after T0 for a reason that has nothing to do with the code under test.
+ */
+let realNow: jest.SpyInstance;
+beforeAll(() => {
+  realNow = jest.spyOn(Date, 'now').mockReturnValue(Date.parse(T0));
+});
+afterAll(() => realNow.mockRestore());
+
 beforeEach(async () => {
   ({ raw, txn } = await openTestDatabase());
   await saveDeviceSeries({ deviceId: 'dev-1', deviceIndex: 2, prefix: 'INV', documentType: 'invoice' }, options());
