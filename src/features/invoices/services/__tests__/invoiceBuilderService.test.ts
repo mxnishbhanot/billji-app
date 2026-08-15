@@ -4,6 +4,8 @@ import {
   buildInvoicePayload,
   findStockShortages,
   hasInvoiceDraftContent,
+  invoiceItemsToBuilderItems,
+  setItemPrice,
   setItemQuantity,
   updateItemQuantity
 } from '../invoiceBuilderService';
@@ -43,6 +45,39 @@ describe('invoiceBuilderService', () => {
     expect(setItemQuantity(items, 0, 25)[0].quantity).toBe(25);
     expect(setItemQuantity(items, 0, 0)[0].quantity).toBe(1);
     expect(setItemQuantity(items, 0, 3.7)[0].quantity).toBe(3);
+  });
+
+  it('overrides a single line price without touching quantity, identity or other rows', () => {
+    const items = [
+      { productId: 'product-1', name: 'Sugar 1kg', quantity: 2, price: 50, taxRate: 5, hsn: '1701' },
+      { productId: 'product-2', name: 'Notebook', quantity: 1, price: 120, taxRate: 18 }
+    ];
+    const updated = setItemPrice(items, 0, 48);
+
+    expect(updated[0]).toEqual({ productId: 'product-1', name: 'Sugar 1kg', quantity: 2, price: 48, taxRate: 5, hsn: '1701' });
+    expect(updated[1]).toBe(items[1]);
+    // Original array is untouched, so the catalog-sourced price is never mutated in place.
+    expect(items[0].price).toBe(50);
+  });
+
+  it('clamps a negative line price to zero', () => {
+    expect(setItemPrice([{ name: 'Sugar 1kg', quantity: 1, price: 50 }], 0, -10)[0].price).toBe(0);
+  });
+
+  it('maps saved invoice lines back into builder rows for duplicate & correct', () => {
+    const rows = invoiceItemsToBuilderItems([
+      // A saved line carries the product ref as `product` plus server-computed money.
+      { product: 'product-1', name: 'Sugar 1kg', quantity: 2, price: 50, unit: 'kg', sku: 'SG-1', hsn: '1701', taxRate: 5, taxableValue: 100, taxAmount: 5, cgst: 2.5, sgst: 2.5, total: 105 },
+      { name: 'Delivery', quantity: 1, price: 40, isCustom: true, taxableValue: 40, total: 40 }
+    ]);
+
+    expect(rows[0]).toEqual({ productId: 'product-1', name: 'Sugar 1kg', quantity: 2, price: 50, sku: 'SG-1', unit: 'kg', hsn: '1701', taxRate: 5 });
+    // Server-computed money is dropped; the builder and then the server recompute it.
+    expect(rows[0]).not.toHaveProperty('taxAmount');
+    expect(rows[0]).not.toHaveProperty('total');
+    // Custom lines keep their flag and get a fresh client-only key.
+    expect(rows[1]).toMatchObject({ name: 'Delivery', price: 40, isCustom: true });
+    expect(rows[1]._uid).toMatch(/^custom-\d+$/);
   });
 
   it('builds create payload with numeric form values and oversell flag', () => {

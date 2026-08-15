@@ -16,7 +16,9 @@ import {
   buildInvoiceDraftPayload,
   buildInvoicePayload,
   hasInvoiceDraftContent,
+  invoiceItemsToBuilderItems,
   removeInvoiceItem,
+  setItemPrice,
   setItemQuantity,
   updateItemQuantity
 } from '../services/invoiceBuilderService';
@@ -119,6 +121,22 @@ export const useInvoiceBuilder = ({
     setDiscountType(payload.discountType);
     setDiscountValue(payload.discountValue);
     setNotes(payload.notes);
+  }, []);
+
+  /**
+   * Seeds the builder from an existing invoice for "Duplicate & correct". This only fills the
+   * form — the source invoice is untouched and nothing is created until the user taps Generate,
+   * so there is exactly one create and one stock movement for the corrected bill.
+   */
+  const applyPrefillInvoice = useCallback((invoice: Invoice) => {
+    setSelectedCustomerId(invoice.customer || '');
+    setSelectedCustomer(invoice.customer ? { ...invoice.customerSnapshot, _id: invoice.customer } : null);
+    setItems(invoiceItemsToBuilderItems(invoice.items));
+    // Aggregate rate; per-line rates ride along on the items, matching the server's own duplicate.
+    setTaxRate(String(invoice.tax?.rate ?? 0));
+    setDiscountType(invoice.discount?.type ?? 'flat');
+    setDiscountValue(String(invoice.discount?.value ?? 0));
+    setNotes(invoice.notes || '');
   }, []);
 
   // A builder holding only the pre-filled default rate has no user content — don't autosave it.
@@ -226,6 +244,7 @@ export const useInvoiceBuilder = ({
   );
   const updateQuantity = useCallback((index: number, delta: number) => setItems((current) => updateItemQuantity(current, index, delta)), []);
   const setQuantity = useCallback((index: number, quantity: number) => setItems((current) => setItemQuantity(current, index, quantity)), []);
+  const setPrice = useCallback((index: number, price: number) => setItems((current) => setItemPrice(current, index, price)), []);
   const removeItem = useCallback((index: number) => setItems((current) => removeInvoiceItem(current, index)), []);
   const addCustomItem = useCallback((item: InvoiceItem) => setItems((current) => [...current, item]), []);
 
@@ -274,6 +293,7 @@ export const useInvoiceBuilder = ({
   return {
     activeCustomer,
     addCustomer,
+    applyPrefillInvoice,
     addCustomItem,
     addProduct,
     addScannedProduct,
@@ -313,6 +333,7 @@ export const useInvoiceBuilder = ({
     setDiscountType,
     setDiscountValue,
     setNotes,
+    setPrice,
     setProductSearch,
     setQuantity,
     setStockWarning,

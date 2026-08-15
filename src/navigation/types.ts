@@ -38,7 +38,9 @@ export type InvoiceStackParamList = {
     status?: InvoiceStatus;
   } | undefined;
   // documentType absent = a tax invoice. Quotations and challans reuse the same builder.
-  InvoiceCreate: { documentType?: SalesDocumentKind } | undefined;
+  // prefillFromInvoiceId seeds the builder from an existing invoice ("Duplicate & correct").
+  // Nothing is created until Generate — the source invoice stays immutable.
+  InvoiceCreate: { documentType?: SalesDocumentKind; prefillFromInvoiceId?: string } | undefined;
   InvoicePreview: { payload: InvoiceCreatePayload };
   InvoiceDetail: { id: string };
   Documents: { documentType?: SalesDocumentKind } | undefined;

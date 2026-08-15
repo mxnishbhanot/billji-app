@@ -45,7 +45,32 @@ export const updateItemQuantity = (items: InvoiceItem[], index: number, delta: n
 export const setItemQuantity = (items: InvoiceItem[], index: number, quantity: number) =>
   items.map((item, itemIndex) => (itemIndex === index ? { ...item, quantity: Math.max(1, Math.floor(quantity)) } : item));
 
+// Per-line selling price override. Only this invoice line moves — the catalog product,
+// its cost snapshot and the line's own taxRate/hsn are all left alone, and the server
+// recomputes tax from the price it is sent.
+export const setItemPrice = (items: InvoiceItem[], index: number, price: number) =>
+  items.map((item, itemIndex) => (itemIndex === index ? { ...item, price: Math.max(0, price) } : item));
+
 export const removeInvoiceItem = (items: InvoiceItem[], index: number) => items.filter((_, itemIndex) => itemIndex !== index);
+
+/**
+ * Maps a saved invoice's lines back into builder rows for "Duplicate & correct".
+ * Server-computed money (taxableValue/taxAmount/cgst/…/total) is dropped — the builder
+ * recalculates it, and the server recomputes it again on create. `product` becomes
+ * `productId` so duplicate-add matching and row keys behave like a freshly picked item.
+ */
+export const invoiceItemsToBuilderItems = (items: InvoiceItem[]): InvoiceItem[] =>
+  items.map((item) => ({
+    productId: item.productId ?? (typeof item.product === 'string' ? item.product : undefined),
+    name: item.name,
+    price: item.price,
+    quantity: item.quantity,
+    sku: item.sku,
+    unit: item.unit,
+    hsn: item.hsn,
+    taxRate: item.taxRate,
+    ...(item.isCustom ? { isCustom: true, _uid: `custom-${(customItemSeq += 1)}` } : {})
+  }));
 
 // Monotonic client-only id so custom-item rows keep a stable React key (and stepper
 // state) across reorders/removals — custom items have no productId to key on.

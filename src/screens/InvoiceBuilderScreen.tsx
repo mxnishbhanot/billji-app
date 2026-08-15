@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { NavigationAction } from '@react-navigation/native';
+import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { Feather } from '@expo/vector-icons';
 import { Button, Text, useTheme } from 'react-native-paper';
@@ -15,6 +16,8 @@ import {
 } from '@/features/invoices/components/InvoiceBuilderParts';
 import { useInvoiceBuilder } from '@/features/invoices/hooks/useInvoiceBuilder';
 import { customerDefaults, customItemDefaults } from '@/features/invoices/services/invoiceBuilderService';
+import { invoicesApi } from '@/api/endpoints';
+import { queryKeys } from '@/shared/query/queryKeys';
 import { useAppDialog } from '@/components/AppDialog';
 import { useAppToast } from '@/components/AppToast';
 import { BarcodeScannerSheet } from '@/components/BarcodeScannerSheet';
@@ -34,7 +37,9 @@ const NOUNS: Record<string, string> = { quotation: 'quotation', delivery_challan
 export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreenProps) {
   // Same builder for every sales document; the type only changes the title and the endpoint.
   const documentType = route.params?.documentType;
+  const prefillFromInvoiceId = route.params?.prefillFromInvoiceId;
   const noun = (documentType && NOUNS[documentType]) || 'invoice';
+  const prefillApplied = useRef(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const theme = useTheme();
   const isDark = theme.dark;
@@ -82,20 +87,38 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
     return unsubscribe;
   }, [builder.createInvoiceMutation.isPending, builder.hasDraftContent, builder.isDraftDirty, navigation]);
 
+  // "Duplicate & correct": load the source invoice and seed the form once. The recovery
+  // prompt is dismissed alongside it — the user asked for this invoice specifically, so an
+  // unrelated saved draft must not overwrite it or compete for the same screen.
+  const prefillQuery = useQuery({
+    queryKey: queryKeys.invoices.detail(prefillFromInvoiceId ?? ''),
+    queryFn: () => invoicesApi.get(prefillFromInvoiceId as string),
+    enabled: Boolean(prefillFromInvoiceId)
+  });
+
+  useEffect(() => {
+    if (prefillApplied.current || !prefillFromInvoiceId || !prefillQuery.data) return;
+    prefillApplied.current = true;
+    builder.applyPrefillInvoice(prefillQuery.data);
+  }, [builder, prefillFromInvoiceId, prefillQuery.data]);
+
+  // Draft hydration and the invoice fetch race each other, so dismiss on whichever order they
+  // land in — otherwise a late recovery prompt could offer to overwrite the invoice being corrected.
+  useEffect(() => {
+    if (prefillFromInvoiceId && builder.recoveryDraft) builder.dismissRecoveryDraft();
+  }, [builder, prefillFromInvoiceId]);
+
   const loadMoreProducts = () => {
     if (builder.productsQuery.hasNextPage && !builder.productsQuery.isFetchingNextPage) void builder.productsQuery.fetchNextPage();
   };
   const loadMoreCustomers = () => {
     if (builder.customersQuery.hasNextPage && !builder.customersQuery.isFetchingNextPage) void builder.customersQuery.fetchNextPage();
   };
-  const closeCustomerModal = () => {
-    builder.setCustomerModal(false);
-    customerForm.reset(customerDefaults);
-  };
-  const closeCustomModal = () => {
-    builder.setCustomModal(false);
-    customForm.reset(customItemDefaults);
-  };
+  // Dismissing a sheet keeps what was typed — a stray backdrop tap above the keyboard used to
+  // wipe a half-entered customer. Both forms are reset on successful submit instead, so
+  // reopening during the same invoice resumes where the user left off.
+  const closeCustomerModal = () => builder.setCustomerModal(false);
+  const closeCustomModal = () => builder.setCustomModal(false);
   const openPreview = () => {
     if (!builder.activeCustomer) {
       showDialog({ title: 'Select or add a customer', message: `Choose a saved customer or quick add a new one before previewing the ${noun}.`, tone: 'warning' });
@@ -170,6 +193,7 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
         isDark={isDark}
         items={builder.items}
         onRemove={builder.removeItem}
+        onSetPrice={builder.setPrice}
         onSetQuantity={builder.setQuantity}
         onUpdateQuantity={builder.updateQuantity}
         subSurface={subSurface}

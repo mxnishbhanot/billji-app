@@ -187,6 +187,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   const onboarding = useOnboardingOptional();
   const canRecordPayment = can(PERMISSION.paymentsRecord);
   const canUpdateInvoice = can(PERMISSION.invoicesUpdate);
+  const canCreateInvoice = can(PERMISSION.invoicesCreate);
   const canDeleteInvoice = can(PERMISSION.invoicesDelete);
   const [emailOpen, setEmailOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -557,6 +558,20 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
       )}
 
       <View style={styles.footerActions}>
+        {/* An issued invoice is immutable, so correcting one means reissuing it. This only
+            seeds the builder — the new invoice is created when the user taps Generate, so the
+            original's stock, ledger and payment records are left exactly as they are. Hidden
+            once money has been received: that case belongs to the credit-note workflow. */}
+        {canCreateInvoice && !hasPayments ? (
+          <Button
+            mode="outlined"
+            icon={({ size, color }) => <Feather name="copy" size={size} color={color} />}
+            onPress={() => navigation.navigate('InvoiceCreate', { prefillFromInvoiceId: id })}
+            style={styles.footerButton}
+          >
+            Duplicate & correct
+          </Button>
+        ) : null}
         {canUpdateInvoice && canCancel ? (
           <Button
             mode="outlined"
