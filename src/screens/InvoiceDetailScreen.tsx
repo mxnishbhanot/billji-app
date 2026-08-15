@@ -1,10 +1,25 @@
-import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Pressable, StyleSheet, View } from 'react-native';
+import {
+  AtSign,
+  Ban,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  Copy,
+  FileText,
+  Mail,
+  MapPin,
+  Phone,
+  Receipt,
+  Send,
+  Trash2,
+  User,
+  XCircle
+} from 'lucide-react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { ActivityIndicator, Button, Dialog, Portal, Text, useTheme } from 'react-native-paper';
-import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { EmptyState } from '@/components/EmptyState';
 import { invoicesApi, paymentsApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
@@ -14,6 +29,7 @@ import { FormTextInput } from '@/components/FormTextInput';
 import { PaymentHistorySheet } from '@/components/PaymentHistorySheet';
 import { RecordPaymentSheet } from '@/components/RecordPaymentSheet';
 import { Screen } from '@/components/Screen';
+import { shadows } from '@/design-system';
 import { InvoiceDetailScreenProps } from '@/navigation/types';
 import { openOrSharePdf } from '@/services/pdf';
 import { track } from '@/services/analytics';
@@ -21,11 +37,11 @@ import { TourAnchor, ANCHOR, useOnboardingOptional } from '@/features/onboarding
 import { hasWhatsAppPhone } from '@/shared/customers/customerPayload';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
-import { alpha, appColors, fontStyles, radii, statusTone, typeScale } from '@/theme/theme';
+import { alpha, appColors, fontStyles, radii, spacing, statusTone, typeScale } from '@/theme/theme';
 import { documentNumberOf, Invoice, InvoicePaymentStatus, InvoiceStatus, RecordPaymentPayload } from '@/types';
 import { formatCurrency, formatDate } from '@/utils/format';
 import { emailSchema } from '@/validation/schemas';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ComponentType, ReactNode, useEffect, useRef, useState } from 'react';
 
 /**
  * Tax heads to print, summed from the stored HSN summary. Returns [] for documents
@@ -50,132 +66,59 @@ const gstHeadsFor = (invoice: Invoice) => {
   ).filter((head) => head.amount > 0);
 };
 
-function HeroPattern() {
-  return (
-    <Svg pointerEvents="none" style={StyleSheet.absoluteFill} viewBox="0 0 360 220" preserveAspectRatio="xMidYMid slice">
-      <Defs>
-        <LinearGradient id="invHeroGrad" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#9B4000" />
-          <Stop offset="0.5" stopColor="#C25300" />
-          <Stop offset="1" stopColor="#E4661F" />
-        </LinearGradient>
-      </Defs>
-      <Rect x="0" y="0" width={360} height={220} fill="url(#invHeroGrad)" />
-      <G opacity="0.2" stroke="#FFFFFF" strokeWidth={1.2} fill="none" strokeLinecap="round">
-        <Path d="M -26 52 C 28 12, 84 12, 134 48 S 236 96, 392 26" />
-        <Path d="M -30 88 C 38 40, 96 44, 154 82 S 270 136, 392 78" opacity={0.72} />
-        <Path d="M -28 134 C 48 88, 116 102, 176 130 S 282 178, 390 122" opacity={0.58} />
-        <Path d="M 32 212 C 92 166, 148 180, 204 200 S 294 236, 388 184" opacity={0.42} />
-      </G>
-      <G opacity="0.18" stroke="#FFFFFF" strokeWidth={1.1} fill="none">
-        <Circle cx={272} cy={58} r={18} />
-        <Circle cx={302} cy={92} r={8} />
-        <Circle cx={70} cy={164} r={13} />
-        <Circle cx={110} cy={40} r={6} />
-      </G>
-      <G opacity="0.08" stroke="#FFB692" strokeWidth={18} fill="none">
-        <Path d="M 238 -18 C 284 16, 318 52, 386 48" />
-        <Path d="M -34 198 C 36 158, 86 174, 146 216" />
-      </G>
-    </Svg>
-  );
+type LucideGlyph = ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+
+/** Declared at module scope: picking the glyph inside render would remount it every pass. */
+function StatusGlyph({ status, size, color }: { status: InvoiceStatus; size: number; color: string }) {
+  const Icon = status === 'paid' ? CheckCircle2 : status === 'cancelled' ? XCircle : Clock;
+  return <Icon size={size} color={color} strokeWidth={2.3} />;
 }
 
-function FloatingHeroBubbles() {
-  const first = useMemo(() => new Animated.Value(0), []);
-  const second = useMemo(() => new Animated.Value(0), []);
-  const third = useMemo(() => new Animated.Value(0), []);
-  const fourth = useMemo(() => new Animated.Value(0), []);
+function PaymentGlyph({ status, cancelled, size, color }: { status: InvoicePaymentStatus; cancelled: boolean; size: number; color: string }) {
+  const Icon = cancelled ? Ban : status === 'paid' ? CheckCircle2 : status === 'refunded' ? Receipt : Clock;
+  return <Icon size={size} color={color} strokeWidth={2.2} />;
+}
 
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.parallel([
-        Animated.sequence([
-          Animated.timing(first, { toValue: 1, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(first, { toValue: 0, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
-        ]),
-        Animated.sequence([
-          Animated.timing(second, { toValue: 1, duration: 12000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(second, { toValue: 0, duration: 12000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
-        ]),
-        Animated.sequence([
-          Animated.timing(third, { toValue: 1, duration: 15000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(third, { toValue: 0, duration: 15000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
-        ]),
-        Animated.sequence([
-          Animated.timing(fourth, { toValue: 1, duration: 18000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(fourth, { toValue: 0, duration: 18000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
-        ])
-      ])
-    );
-
-    animation.start();
-    return () => animation.stop();
-  }, [first, fourth, second, third]);
+/** Section eyebrow + card, matching the Settings/Dashboard label-over-card rhythm. */
+function Section({
+  title,
+  trailing,
+  children,
+  cardStyle
+}: {
+  title?: string;
+  trailing?: ReactNode;
+  children: ReactNode;
+  cardStyle?: object;
+}) {
+  const theme = useTheme();
+  const colors = appColors(theme.dark);
+  const border = theme.dark ? colors.border : alpha(colors.primaryStrong, 0.06);
 
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Animated.View
-        style={[
-          styles.heroBubbleLarge,
-          {
-            opacity: first.interpolate({ inputRange: [0, 1], outputRange: [0.16, 0.26] }),
-            transform: [
-              { translateX: first.interpolate({ inputRange: [0, 1], outputRange: [0, -20] }) },
-              { translateY: first.interpolate({ inputRange: [0, 1], outputRange: [0, 12] }) },
-              { scale: first.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.08] }) }
-            ]
-          }
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.heroBubbleSmall,
-          {
-            opacity: second.interpolate({ inputRange: [0, 1], outputRange: [0.1, 0.2] }),
-            transform: [
-              { translateX: second.interpolate({ inputRange: [0, 1], outputRange: [0, 18] }) },
-              { translateY: second.interpolate({ inputRange: [0, 1], outputRange: [0, -10] }) },
-              { scale: second.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1.1] }) }
-            ]
-          }
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.heroBubbleMedium,
-          {
-            opacity: third.interpolate({ inputRange: [0, 1], outputRange: [0.08, 0.18] }),
-            transform: [
-              { translateX: third.interpolate({ inputRange: [0, 1], outputRange: [0, 24] }) },
-              { translateY: third.interpolate({ inputRange: [0, 1], outputRange: [0, 18] }) },
-              { scale: third.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.12] }) }
-            ]
-          }
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.heroBubbleTiny,
-          {
-            opacity: fourth.interpolate({ inputRange: [0, 1], outputRange: [0.12, 0.22] }),
-            transform: [
-              { translateX: fourth.interpolate({ inputRange: [0, 1], outputRange: [0, -16] }) },
-              { translateY: fourth.interpolate({ inputRange: [0, 1], outputRange: [0, -18] }) },
-              { scale: fourth.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.14] }) }
-            ]
-          }
-        ]}
-      />
+    <View style={styles.section}>
+      {title ? (
+        <View style={styles.sectionLabelRow}>
+          <Text style={[styles.sectionLabel, { color: theme.colors.onSurfaceVariant }]}>{title}</Text>
+          {trailing}
+        </View>
+      ) : null}
+      <View style={[styles.card, theme.dark ? null : shadows.card, { backgroundColor: colors.card, borderColor: border }, cardStyle]}>
+        {children}
+      </View>
     </View>
   );
 }
 
-const statusIconName = (status: InvoiceStatus): keyof typeof MaterialCommunityIcons.glyphMap =>
-  status === 'paid' ? 'check-decagram' : status === 'cancelled' ? 'close-circle' : 'clock-outline';
-
-const paymentStatusIconName = (status: InvoicePaymentStatus): keyof typeof MaterialCommunityIcons.glyphMap =>
-  status === 'paid' ? 'check-decagram' : status === 'partial' ? 'progress-clock' : status === 'refunded' ? 'cash-refund' : 'clock-outline';
+function DetailRow({ label, value, emphasise }: { label: string; value: string; emphasise?: string }) {
+  const theme = useTheme();
+  return (
+    <View style={styles.detailRow}>
+      <Text style={[styles.detailLabel, { color: theme.colors.onSurfaceVariant }]}>{label}</Text>
+      <Text style={[styles.detailValue, { color: emphasise ?? theme.colors.onSurface }]}>{value}</Text>
+    </View>
+  );
+}
 
 export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenProps) {
   const { id } = route.params;
@@ -344,7 +287,10 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   if (query.isLoading) {
     return (
       <Screen title="Invoice">
-        <ActivityIndicator color={theme.colors.primary} style={styles.loader} />
+        <View style={[styles.card, styles.stateCard, isDark ? null : shadows.card, { backgroundColor: colors.card, borderColor: isDark ? colors.border : alpha(colors.primaryStrong, 0.06) }]}>
+          <ActivityIndicator color={theme.colors.primary} />
+          <Text style={[styles.stateText, { color: theme.colors.onSurfaceVariant }]}>Loading invoice…</Text>
+        </View>
       </Screen>
     );
   }
@@ -367,7 +313,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   // Oldest-first: settle other unpaid invoices, then this one.
   const settleInvoiceIds = [...outstanding.invoices.map((item) => item.id).filter((invoiceId) => invoiceId !== id), id];
   const tone = statusTone(currentStatus, isDark);
-  const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.08);
+  const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.06);
   const isCancelled = currentStatus === 'cancelled';
   const gstHeads = gstHeadsFor(invoice);
   const hasPayments = invoice.eligibility?.hasPayments ?? (paidAmount > 0 || (paymentsQuery.data?.length ?? 0) > 0);
@@ -406,219 +352,294 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
 
   // Cancelled invoices are voided (stock + accounting reversed) and must not be
   // shareable/sendable by any channel — share sheet, WhatsApp, or email.
-  const actions: { label: string; icon: keyof typeof Feather.glyphMap; onPress: () => void }[] = isCancelled
+  const actions: { label: string; icon: LucideGlyph; onPress: () => void }[] = isCancelled
     ? []
     : [
-        { label: 'PDF', icon: 'file-text', onPress: () => runShare('PDF') },
+        { label: 'PDF', icon: FileText, onPress: () => runShare('PDF') },
         // Customerless / no-phone sale: the server refuses the wa.me link, so don't offer it.
         ...(hasWhatsAppPhone(invoice.customerSnapshot)
-          ? [{ label: 'WhatsApp', icon: 'send' as const, onPress: () => runShare('WhatsApp') }]
+          ? [{ label: 'WhatsApp', icon: Send as LucideGlyph, onPress: () => runShare('WhatsApp') }]
           : []),
-        { label: 'Email', icon: 'mail', onPress: () => { emailForm.reset({ email: invoice.customerSnapshot.email || '' }); setEmailOpen(true); } }
+        { label: 'Email', icon: Mail, onPress: () => { emailForm.reset({ email: invoice.customerSnapshot.email || '' }); setEmailOpen(true); } }
       ];
+
+  const snapshot = invoice.customerSnapshot;
+  // A walk-in / cash sale has no Customer row at all — the snapshot carries only the label.
+  const isWalkIn = !invoice.customer;
+  const showRecordPayment = canRecordPayment && !isCancelled && balanceDue > 0;
+  const headlineLabel = isCancelled ? 'Invoice total' : balanceDue > 0 ? 'Amount due' : 'Paid in full';
+  const headlineAmount = isCancelled || balanceDue <= 0 ? invoice.total : balanceDue;
+  const headlineMeta = isCancelled
+    ? 'Cancelled · stock and accounting reversed'
+    : balanceDue <= 0
+      ? `${formatCurrency(invoice.total)} received`
+      : paidAmount > 0
+        ? `${formatCurrency(paidAmount)} paid · ${formatCurrency(balanceDue)} due`
+        : `Invoice total ${formatCurrency(invoice.total)}`;
 
   return (
     <Screen title={documentNumberOf(invoice)}>
-      <View style={[styles.heroCard, { borderColor: alpha('#FFDBCB', 0.3) }]}>
-        <HeroPattern />
-        <FloatingHeroBubbles />
-        <View style={styles.heroInner}>
-          <View style={[styles.heroEyebrowBadge, { borderColor: alpha('#FFFFFF', 0.22), backgroundColor: alpha('#9B4000', 0.4) }]}>
-            <Text style={styles.heroEyebrow}>{invoice.invoiceNumber}</Text>
+      {/* Summary: what invoice, when, what state, and how much is outstanding — in one glance. */}
+      <Section>
+        <View style={styles.summaryHead}>
+          <View style={styles.summaryHeadText}>
+            <Text numberOfLines={1} style={[styles.docNumber, { color: theme.colors.onSurface }]}>{documentNumberOf(invoice)}</Text>
+            <Text style={[styles.docDate, { color: theme.colors.onSurfaceVariant }]}>{formatDate(invoice.date)}</Text>
           </View>
-          <Text style={styles.heroDate}>{formatDate(invoice.date)}</Text>
-          <Text numberOfLines={1} style={styles.heroCustomer}>{invoice.customerSnapshot.name}</Text>
-          <Text style={styles.heroAmount}>{formatCurrency(invoice.total)}</Text>
-          <View style={[styles.heroStatusPill, { backgroundColor: '#FFFFFF' }]}>
-            <MaterialCommunityIcons name={statusIconName(currentStatus)} size={14} color={colors.primaryStrong} />
-            <Text style={[styles.heroStatusText, { color: colors.primaryStrong }]}>{currentStatus}</Text>
+          <View style={[styles.statusPill, { backgroundColor: tone.background, borderColor: alpha(tone.foreground, isDark ? 0.42 : 0.3) }]}>
+            <StatusGlyph status={currentStatus} size={13} color={tone.foreground} />
+            <Text style={[styles.statusText, { color: tone.foreground }]}>{currentStatus}</Text>
           </View>
         </View>
-      </View>
-
-      <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
-        <View style={styles.sectionHead}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>Items</Text>
-          <View style={[styles.countBadge, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.12) }]}>
-            <Text style={[styles.countBadgeText, { color: theme.colors.primary }]}>{invoice.items.length}</Text>
-          </View>
+        <View style={[styles.summaryAmountBlock, { borderTopColor: cardBorder }]}>
+          <Text style={[styles.amountLabel, { color: theme.colors.onSurfaceVariant }]}>{headlineLabel}</Text>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.6}
+            style={[styles.amountValue, { color: isCancelled ? theme.colors.onSurfaceVariant : theme.colors.onSurface }]}
+          >
+            {formatCurrency(headlineAmount)}
+          </Text>
+          <Text style={[styles.amountMeta, { color: theme.colors.onSurfaceVariant }]}>{headlineMeta}</Text>
         </View>
-        {invoice.items.map((item, index) => (
-          <View key={item._id || `${item.name}-${index}`} style={[styles.itemRow, index < invoice.items.length - 1 && { borderBottomWidth: 1, borderColor: cardBorder }]}>
-            <View style={styles.itemContent}>
-              <Text style={[styles.itemName, { color: theme.colors.onSurface }]}>{item.name}</Text>
-              <Text style={[styles.itemMeta, { color: theme.colors.onSurfaceVariant }]}>{item.quantity}{item.unit ? ` ${item.unit}` : ''} × {formatCurrency(item.price)}</Text>
-            </View>
-            <Text style={[styles.itemTotal, { color: theme.colors.onSurface }]}>{formatCurrency(item.total)}</Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface, marginBottom: 12 }]}>Bill summary</Text>
-        <View style={styles.totalRows}>
-          <View style={styles.totalRow}>
-            <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>Subtotal</Text>
-            <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>{formatCurrency(invoice.subtotal)}</Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>Discount</Text>
-            <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>-{formatCurrency(invoice.discount.amount)}</Text>
-          </View>
-          {/* GST invoices show each tax head separately; documents issued before the GST
-              engine have no taxSummary and keep the single "Tax" row they were created with. */}
-          {gstHeads.length ? (
-            gstHeads.map((head) => (
-              <View key={head.label} style={styles.totalRow}>
-                <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>{head.label}</Text>
-                <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>{formatCurrency(head.amount)}</Text>
-              </View>
-            ))
-          ) : (
-            <View style={styles.totalRow}>
-              <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>Tax</Text>
-              <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>{formatCurrency(invoice.tax.amount)}</Text>
-            </View>
-          )}
-          {invoice.placeOfSupply?.state ? (
-            <View style={styles.totalRow}>
-              <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>Place of supply</Text>
-              <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>
-                {invoice.placeOfSupply.state}
-                {invoice.supplyType === 'inter' ? ' · inter-state' : ''}
-              </Text>
-            </View>
-          ) : null}
-          <View style={[styles.grandTotal, { borderColor: cardBorder }]}>
-            <Text style={[styles.grandTotalLabel, { color: theme.colors.onSurface }]}>Total</Text>
-            <Text style={[styles.grandTotalValue, { color: theme.colors.primary }]}>{formatCurrency(invoice.total)}</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.onSurface, marginBottom: 12 }]}>Payment status</Text>
-        <View style={[styles.statusPreview, { backgroundColor: tone.background, borderColor: tone.border }]}>
-          <MaterialCommunityIcons name={isCancelled ? 'close-circle' : paymentStatusIconName(paymentStatus)} size={16} color={tone.foreground} />
-          <Text style={[styles.statusPreviewText, { color: tone.foreground }]}>{isCancelled ? 'cancelled' : paymentStatus}</Text>
-        </View>
-        <View style={styles.paymentSummaryRows}>
-          <View style={styles.totalRow}>
-            <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>Paid</Text>
-            <Text style={[styles.totalValue, { color: theme.colors.onSurface }]}>{formatCurrency(paidAmount)}</Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={[styles.totalLabel, { color: theme.colors.onSurfaceVariant }]}>Balance due</Text>
-            <Text style={[styles.totalValue, { color: balanceDue > 0 ? colors.destructive : theme.colors.onSurface }]}>{formatCurrency(balanceDue)}</Text>
-          </View>
-        </View>
-        {canRecordPayment && !isCancelled && balanceDue > 0 ? (
-          <Button mode="contained" icon="cash-plus" onPress={() => setPaymentOpen(true)} style={styles.recordPaymentButton}>
+        {showRecordPayment ? (
+          <Button
+            mode="contained"
+            icon="cash-plus"
+            buttonColor={isDark ? colors.primaryFixed : colors.primary}
+            textColor="#FFFFFF"
+            onPress={() => setPaymentOpen(true)}
+            style={styles.primaryButton}
+            contentStyle={styles.primaryButtonContent}
+          >
             Record payment
           </Button>
         ) : null}
+      </Section>
+
+      {/* Share row sits directly under the summary: the most common follow-up on a settled bill. */}
+      {isCancelled ? null : (
+        <TourAnchor anchorId={ANCHOR.shareInvoice}>
+          <View style={styles.actionRow}>
+            {actions.map((action) => {
+              const isBusy = busyAction === action.label;
+              const disabled = Boolean(busyAction) && !isBusy;
+              const Icon = action.icon;
+              return (
+                <Pressable
+                  key={action.label}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Share invoice by ${action.label}`}
+                  onPress={action.onPress}
+                  disabled={Boolean(busyAction)}
+                  style={({ pressed }) => [
+                    styles.actionTile,
+                    isDark ? null : shadows.card,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: cardBorder,
+                      opacity: pressed ? 0.85 : disabled ? 0.5 : 1
+                    }
+                  ]}
+                >
+                  <View style={[styles.actionIconWrap, { backgroundColor: alpha(colors.primary, isDark ? 0.26 : 0.12) }]}>
+                    {isBusy ? (
+                      <ActivityIndicator size={16} color={theme.colors.primary} />
+                    ) : (
+                      <Icon size={17} color={colors.primaryStrong} strokeWidth={2.2} />
+                    )}
+                  </View>
+                  <Text numberOfLines={1} style={[styles.actionLabel, { color: theme.colors.onSurface }]}>{isBusy ? 'Preparing…' : action.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </TourAnchor>
+      )}
+
+      {isCancelled ? (
+        <Section>
+          <View style={styles.noticeRow}>
+            <View style={[styles.noticeIcon, { backgroundColor: tone.background }]}>
+              <Ban size={16} color={tone.foreground} strokeWidth={2.2} />
+            </View>
+            <Text style={[styles.noticeText, { color: theme.colors.onSurfaceVariant }]}>
+              This invoice is cancelled and can no longer be shared or sent.
+            </Text>
+          </View>
+        </Section>
+      ) : null}
+
+      <Section title="BILLED TO">
+        <View style={styles.customerRow}>
+          <View style={[styles.customerAvatar, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.12) }]}>
+            <User size={18} color={colors.primaryStrong} strokeWidth={2.2} />
+          </View>
+          <View style={styles.customerText}>
+            <Text numberOfLines={2} style={[styles.customerName, { color: theme.colors.onSurface }]}>{snapshot.name}</Text>
+            <Text style={[styles.customerHint, { color: theme.colors.onSurfaceVariant }]}>
+              {isWalkIn ? 'Walk-in sale · no customer account' : 'Customer'}
+            </Text>
+          </View>
+        </View>
+        {snapshot.phone || snapshot.email || snapshot.gstNumber || snapshot.address ? (
+          <View style={[styles.customerMeta, { borderTopColor: cardBorder }]}>
+            {snapshot.phone ? (
+              <View style={styles.metaRow}>
+                <Phone size={14} color={theme.colors.onSurfaceVariant} strokeWidth={2.2} />
+                <Text style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>{snapshot.phone}</Text>
+              </View>
+            ) : null}
+            {snapshot.email ? (
+              <View style={styles.metaRow}>
+                <AtSign size={14} color={theme.colors.onSurfaceVariant} strokeWidth={2.2} />
+                <Text numberOfLines={1} style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>{snapshot.email}</Text>
+              </View>
+            ) : null}
+            {snapshot.gstNumber ? (
+              <View style={styles.metaRow}>
+                <Receipt size={14} color={theme.colors.onSurfaceVariant} strokeWidth={2.2} />
+                <Text style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>{snapshot.gstNumber}</Text>
+              </View>
+            ) : null}
+            {snapshot.address ? (
+              <View style={styles.metaRow}>
+                <MapPin size={14} color={theme.colors.onSurfaceVariant} strokeWidth={2.2} />
+                <Text style={[styles.metaText, { color: theme.colors.onSurfaceVariant }]}>{snapshot.address}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+      </Section>
+
+      <Section
+        title="ITEMS"
+        trailing={
+          <View style={[styles.countBadge, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.12) }]}>
+            <Text style={[styles.countBadgeText, { color: colors.primaryStrong }]}>{invoice.items.length}</Text>
+          </View>
+        }
+        cardStyle={styles.listCard}
+      >
+        {invoice.items.map((item, index) => (
+          <View key={item._id || `${item.name}-${index}`} style={styles.itemRow}>
+            {index > 0 ? <View style={[styles.itemDivider, { backgroundColor: cardBorder }]} /> : null}
+            <View style={styles.itemInner}>
+              <View style={styles.itemContent}>
+                <Text style={[styles.itemName, { color: theme.colors.onSurface }]}>{item.name}</Text>
+                <Text style={[styles.itemMeta, { color: theme.colors.onSurfaceVariant }]}>
+                  {item.quantity}{item.unit ? ` ${item.unit}` : ''} × {formatCurrency(item.price)}
+                </Text>
+              </View>
+              <Text style={[styles.itemTotal, { color: theme.colors.onSurface }]}>{formatCurrency(item.total)}</Text>
+            </View>
+          </View>
+        ))}
+      </Section>
+
+      <Section title="BILL SUMMARY">
+        <View style={styles.detailRows}>
+          <DetailRow label="Subtotal" value={formatCurrency(invoice.subtotal)} />
+          {/* Zero-value rows are noise on a simple bill — only what actually applies is printed. */}
+          {invoice.discount.amount > 0 ? (
+            <DetailRow label="Discount" value={`-${formatCurrency(invoice.discount.amount)}`} />
+          ) : null}
+          {/* GST invoices show each tax head separately; documents issued before the GST
+              engine have no taxSummary and keep the single "Tax" row they were created with. */}
+          {gstHeads.length ? (
+            gstHeads.map((head) => <DetailRow key={head.label} label={head.label} value={formatCurrency(head.amount)} />)
+          ) : invoice.tax.amount > 0 ? (
+            <DetailRow label="Tax" value={formatCurrency(invoice.tax.amount)} />
+          ) : null}
+          {invoice.placeOfSupply?.state ? (
+            <DetailRow
+              label="Place of supply"
+              value={`${invoice.placeOfSupply.state}${invoice.supplyType === 'inter' ? ' · inter-state' : ''}`}
+            />
+          ) : null}
+        </View>
+        <View style={[styles.grandTotal, { borderTopColor: cardBorder }]}>
+          <Text style={[styles.grandTotalLabel, { color: theme.colors.onSurface }]}>Total</Text>
+          <Text style={[styles.grandTotalValue, { color: theme.colors.onSurface }]}>{formatCurrency(invoice.total)}</Text>
+        </View>
+      </Section>
+
+      <Section title="PAYMENT">
+        <View style={styles.paymentHead}>
+          <View style={[styles.paymentIcon, { backgroundColor: tone.background }]}>
+            <PaymentGlyph status={paymentStatus} cancelled={isCancelled} size={16} color={tone.foreground} />
+          </View>
+          <Text style={[styles.paymentHeadText, { color: theme.colors.onSurface }]}>
+            {isCancelled ? 'Cancelled' : balanceDue <= 0 ? 'Paid in full' : paidAmount > 0 ? 'Partially paid' : 'Unpaid'}
+          </Text>
+        </View>
+        <View style={styles.detailRows}>
+          <DetailRow label="Paid" value={formatCurrency(paidAmount)} />
+          <DetailRow label="Balance due" value={formatCurrency(balanceDue)} emphasise={balanceDue > 0 ? colors.destructive : undefined} />
+        </View>
         {paymentsQuery.data?.length ? (
           <>
-            <View style={[styles.paymentHistory, { borderColor: cardBorder }]}>
+            <View style={[styles.paymentHistory, { borderTopColor: cardBorder }]}>
               {paymentsQuery.data.slice(0, 3).map((payment) => (
-                <View key={payment._id} style={styles.paymentHistoryRow}>
+                <View key={payment._id} style={styles.detailRow}>
                   <Text style={[styles.paymentHistoryLabel, { color: theme.colors.onSurface }]}>{payment.method.replace('_', ' ')}</Text>
-                  <Text style={[styles.paymentHistoryValue, { color: theme.colors.onSurfaceVariant }]}>{formatCurrency(payment.amount)}</Text>
+                  <Text style={[styles.detailValue, { color: theme.colors.onSurfaceVariant }]}>{formatCurrency(payment.amount)}</Text>
                 </View>
               ))}
             </View>
-            <Pressable onPress={() => setHistoryOpen(true)} style={styles.historyLink} hitSlop={8}>
+            <Pressable onPress={() => setHistoryOpen(true)} style={styles.historyLink} hitSlop={8} accessibilityRole="button">
               <Text style={[styles.historyLinkText, { color: theme.colors.primary }]}>
                 {paymentsQuery.data.length > 3 ? `View all ${paymentsQuery.data.length} payments` : 'View payment history'}
               </Text>
-              <Feather name="chevron-right" size={14} color={theme.colors.primary} />
+              <ChevronRight size={15} color={theme.colors.primary} strokeWidth={2.4} />
             </Pressable>
           </>
         ) : null}
-      </View>
+      </Section>
 
-      {isCancelled ? (
-        <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
-          <View style={[styles.statusPreview, styles.cancelledNotice, { backgroundColor: tone.background, borderColor: tone.border }]}>
-            <MaterialCommunityIcons name="close-circle" size={16} color={tone.foreground} />
-            <Text style={[styles.statusPreviewText, styles.cancelledNoticeText, { color: tone.foreground }]}>This invoice is cancelled and can no longer be shared or sent.</Text>
-          </View>
-        </View>
-      ) : (
-      <TourAnchor anchorId={ANCHOR.shareInvoice}>
-      <View style={styles.actionRow}>
-        {actions.map((action) => {
-          const isBusy = busyAction === action.label;
-          const disabled = Boolean(busyAction) && !isBusy;
-          return (
-            <Pressable
-              key={action.label}
-              onPress={action.onPress}
-              disabled={Boolean(busyAction)}
-              style={({ pressed }) => [
-                styles.actionTile,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: cardBorder,
-                  opacity: pressed ? 0.85 : disabled ? 0.5 : 1
-                }
-              ]}
+      {/* Tertiary: correction and destructive actions, kept quiet at the end of the document. */}
+      {(canCreateInvoice && !hasPayments) || (canUpdateInvoice && canCancel) || (canDeleteInvoice && !isCancelled) ? (
+        <View style={styles.footerActions}>
+          {/* An issued invoice is immutable, so correcting one means reissuing it. This only
+              seeds the builder — the new invoice is created when the user taps Generate, so the
+              original's stock, ledger and payment records are left exactly as they are. Hidden
+              once money has been received: that case belongs to the credit-note workflow. */}
+          {canCreateInvoice && !hasPayments ? (
+            <Button
+              mode="outlined"
+              icon={({ size, color }) => <Copy size={size} color={color} strokeWidth={2.2} />}
+              onPress={() => navigation.navigate('InvoiceCreate', { prefillFromInvoiceId: id })}
+              style={styles.footerButton}
             >
-              <View style={[styles.actionIconWrap, { backgroundColor: alpha(colors.primary, isDark ? 0.2 : 0.12) }]}>
-                {isBusy ? (
-                  <ActivityIndicator size={16} color={theme.colors.primary} />
-                ) : (
-                  <Feather name={action.icon} size={16} color={theme.colors.primary} />
-                )}
-              </View>
-              <Text style={[styles.actionLabel, { color: theme.colors.onSurface }]}>{isBusy ? 'Preparing…' : action.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      </TourAnchor>
-      )}
-
-      <View style={styles.footerActions}>
-        {/* An issued invoice is immutable, so correcting one means reissuing it. This only
-            seeds the builder — the new invoice is created when the user taps Generate, so the
-            original's stock, ledger and payment records are left exactly as they are. Hidden
-            once money has been received: that case belongs to the credit-note workflow. */}
-        {canCreateInvoice && !hasPayments ? (
-          <Button
-            mode="outlined"
-            icon={({ size, color }) => <Feather name="copy" size={size} color={color} />}
-            onPress={() => navigation.navigate('InvoiceCreate', { prefillFromInvoiceId: id })}
-            style={styles.footerButton}
-          >
-            Duplicate & correct
-          </Button>
-        ) : null}
-        {canUpdateInvoice && canCancel ? (
-          <Button
-            mode="outlined"
-            textColor={theme.colors.error}
-            icon={({ size, color }) => <Feather name="slash" size={size} color={color} />}
-            onPress={requestCancel}
-            style={styles.footerButton}
-          >
-            Cancel
-          </Button>
-        ) : null}
-        {canDeleteInvoice && !isCancelled ? (
-          <Button
-            mode="contained"
-            buttonColor={theme.colors.error}
-            textColor={theme.colors.onError}
-            disabled={!canDelete}
-            icon={({ size, color }) => <Feather name="trash-2" size={size} color={color} />}
-            onPress={requestDelete}
-            style={styles.footerButton}
-          >
-            Delete
-          </Button>
-        ) : null}
-      </View>
+              Duplicate & correct
+            </Button>
+          ) : null}
+          {canUpdateInvoice && canCancel ? (
+            <Button
+              mode="outlined"
+              textColor={theme.colors.error}
+              icon={({ size, color }) => <Ban size={size} color={color} strokeWidth={2.2} />}
+              onPress={requestCancel}
+              style={[styles.footerButton, { borderColor: alpha(colors.destructive, isDark ? 0.55 : 0.38) }]}
+            >
+              Cancel
+            </Button>
+          ) : null}
+          {canDeleteInvoice && !isCancelled ? (
+            <Button
+              mode="outlined"
+              textColor={theme.colors.error}
+              disabled={!canDelete}
+              icon={({ size, color }) => <Trash2 size={size} color={color} strokeWidth={2.2} />}
+              onPress={requestDelete}
+              style={[styles.footerButton, { borderColor: alpha(colors.destructive, isDark ? 0.3 : 0.2) }]}
+            >
+              Delete
+            </Button>
+          ) : null}
+        </View>
+      ) : null}
 
       <Portal>
         <Dialog visible={emailOpen} onDismiss={() => setEmailOpen(false)}>
@@ -657,86 +678,85 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
 const styles = StyleSheet.create({
   actionIconWrap: { alignItems: 'center', borderRadius: radii.pill, height: 34, justifyContent: 'center', width: 34 },
   actionLabel: { ...fontStyles.semiBold, fontSize: 12 },
-  actionRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  actionRow: { flexDirection: 'row', gap: 10, marginBottom: spacing.section },
   actionTile: {
     alignItems: 'center',
-    borderRadius: radii.lg,
+    borderRadius: 18,
     borderWidth: 1,
     flex: 1,
     gap: 8,
     paddingHorizontal: 6,
     paddingVertical: 14
   },
+  amountLabel: { ...fontStyles.semiBold, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase' },
+  amountMeta: { ...fontStyles.medium, fontSize: 12.5, marginTop: 4 },
+  amountValue: { ...fontStyles.bold, fontSize: 32, letterSpacing: -0.9, lineHeight: 40, marginTop: 2 },
+  card: { borderRadius: 20, borderWidth: 1, padding: spacing.cardPadding },
   countBadge: { alignItems: 'center', borderRadius: radii.pill, minWidth: 24, paddingHorizontal: 8, paddingVertical: 2 },
   countBadgeText: { ...fontStyles.bold, fontSize: 11 },
-  footerActions: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  footerButton: { borderRadius: radii.input, flex: 1 },
-  heroBubbleLarge: { backgroundColor: alpha('#FFFFFF', 0.18), borderColor: alpha('#FFFFFF', 0.34), borderRadius: 78, borderWidth: 1, height: 156, position: 'absolute', right: -44, top: 96, width: 156 },
-  heroBubbleMedium: { backgroundColor: alpha('#FFB692', 0.16), borderColor: alpha('#FFFFFF', 0.24), borderRadius: 60, borderWidth: 1, bottom: -28, height: 120, left: 30, position: 'absolute', width: 120 },
-  heroBubbleSmall: { backgroundColor: alpha('#FFFFFF', 0.14), borderColor: alpha('#FFFFFF', 0.28), borderRadius: 46, borderWidth: 1, height: 92, left: -26, position: 'absolute', top: -18, width: 92 },
-  heroBubbleTiny: { backgroundColor: alpha('#FFFFFF', 0.16), borderColor: alpha('#FFFFFF', 0.3), borderRadius: 26, borderWidth: 1, height: 52, position: 'absolute', right: 94, top: 40, width: 52 },
-  loader: { marginTop: 48 },
+  customerAvatar: { alignItems: 'center', borderRadius: radii.pill, height: 40, justifyContent: 'center', width: 40 },
+  customerHint: { ...fontStyles.medium, fontSize: 11.5, marginTop: 2 },
+  customerMeta: { borderTopWidth: 1, gap: 8, marginTop: 12, paddingTop: 12 },
+  customerName: { ...fontStyles.bold, fontSize: 16, letterSpacing: -0.3, lineHeight: 22 },
+  customerRow: { alignItems: 'center', flexDirection: 'row', gap: 12 },
+  customerText: { flex: 1, minWidth: 0 },
+  detailLabel: { ...typeScale.bodyPrimary, flexShrink: 1, fontSize: 13.5 },
+  detailRow: { alignItems: 'center', flexDirection: 'row', gap: 12, justifyContent: 'space-between' },
+  detailRows: { gap: 10 },
+  detailValue: { ...fontStyles.semiBold, fontSize: 13.5, textAlign: 'right' },
+  footerActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: spacing.section },
+  footerButton: { borderRadius: radii.input, flexGrow: 1, flexShrink: 1 },
   grandTotal: {
     alignItems: 'center',
     borderTopWidth: 1,
     flexDirection: 'row',
+    gap: 12,
     justifyContent: 'space-between',
-    marginTop: 6,
+    marginTop: 12,
     paddingTop: 12
   },
-  grandTotalLabel: { ...fontStyles.bold, fontSize: 16 },
-  grandTotalValue: { ...fontStyles.bold, fontSize: 22, letterSpacing: -0.4 },
-  heroAmount: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 30, letterSpacing: -0.9, marginTop: 8 },
-  heroCard: { borderRadius: 26, borderWidth: 1, marginBottom: 16, overflow: 'hidden' },
-  heroCustomer: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 18, letterSpacing: -0.3, marginTop: 4 },
-  heroDate: { ...fontStyles.medium, color: 'rgba(255,255,255,0.78)', fontSize: 12, marginTop: 10 },
-  heroEyebrow: { ...fontStyles.bold, color: '#C7D2FE', fontSize: 10, letterSpacing: 1.4 },
-  heroEyebrowBadge: { alignSelf: 'flex-start', borderRadius: radii.pill, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 3 },
-  heroInner: { padding: 22 },
+  grandTotalLabel: { ...fontStyles.bold, fontSize: 15 },
+  grandTotalValue: { ...fontStyles.bold, fontSize: 22, letterSpacing: -0.5 },
   historyLink: { alignItems: 'center', alignSelf: 'flex-start', flexDirection: 'row', gap: 2, marginTop: 12 },
   historyLinkText: { ...fontStyles.semiBold, fontSize: 13 },
-  heroStatusPill: {
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    borderRadius: radii.pill,
-    flexDirection: 'row',
-    gap: 5,
-    marginTop: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 5
-  },
-  heroStatusText: { ...fontStyles.bold, fontSize: 11, letterSpacing: 0.4, textTransform: 'capitalize' },
   itemContent: { flex: 1, minWidth: 0 },
-  itemMeta: { ...typeScale.caption, fontSize: 12, marginTop: 2 },
-  itemName: { ...fontStyles.semiBold, fontSize: 14 },
-  itemRow: { alignItems: 'center', flexDirection: 'row', gap: 12, justifyContent: 'space-between', paddingVertical: 12 },
-  itemTotal: { ...fontStyles.bold, fontSize: 14 },
-  paymentHistory: { borderTopWidth: 1, gap: 8, marginBottom: 14, marginTop: 12, paddingTop: 12 },
+  itemDivider: { height: StyleSheet.hairlineWidth, marginBottom: 12 },
+  itemInner: { alignItems: 'flex-start', flexDirection: 'row', gap: 12, justifyContent: 'space-between' },
+  itemMeta: { ...typeScale.caption, fontSize: 12, marginTop: 3 },
+  itemName: { ...fontStyles.semiBold, fontSize: 14, lineHeight: 20 },
+  itemRow: { paddingVertical: 8 },
+  itemTotal: { ...fontStyles.bold, fontSize: 14, lineHeight: 20 },
+  listCard: { paddingVertical: 6 },
+  metaRow: { alignItems: 'flex-start', flexDirection: 'row', gap: 8 },
+  metaText: { ...fontStyles.medium, flex: 1, fontSize: 12.5, lineHeight: 18 },
+  noticeIcon: { alignItems: 'center', borderRadius: radii.pill, height: 32, justifyContent: 'center', width: 32 },
+  noticeRow: { alignItems: 'center', flexDirection: 'row', gap: 12 },
+  noticeText: { ...fontStyles.medium, flex: 1, fontSize: 13, lineHeight: 19 },
+  docDate: { ...fontStyles.medium, fontSize: 12.5, marginTop: 3 },
+  docNumber: { ...fontStyles.bold, fontSize: 18, letterSpacing: -0.4 },
+  paymentHead: { alignItems: 'center', flexDirection: 'row', gap: 10, marginBottom: 14 },
+  paymentHeadText: { ...fontStyles.bold, fontSize: 15, letterSpacing: -0.2 },
+  paymentHistory: { borderTopWidth: 1, gap: 8, marginTop: 14, paddingTop: 12 },
   paymentHistoryLabel: { ...fontStyles.semiBold, fontSize: 13, textTransform: 'capitalize' },
-  paymentHistoryRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  paymentHistoryValue: { ...fontStyles.semiBold, fontSize: 13 },
-  paymentSummaryRows: { gap: 8, marginBottom: 12 },
-  recordPaymentButton: { borderRadius: radii.input, marginBottom: 12 },
-  sectionCard: { borderRadius: radii.lg, borderWidth: 1, marginBottom: 16, padding: 16 },
-  sectionHead: { alignItems: 'center', flexDirection: 'row', gap: 10, justifyContent: 'space-between', marginBottom: 6 },
-  sectionTitle: { ...fontStyles.bold, fontSize: 16 },
-  statusPreview: {
+  paymentIcon: { alignItems: 'center', borderRadius: radii.pill, height: 32, justifyContent: 'center', width: 32 },
+  primaryButton: { borderRadius: radii.input, marginTop: 16 },
+  primaryButtonContent: { paddingVertical: 4 },
+  section: { marginBottom: spacing.section },
+  sectionLabel: { ...fontStyles.semiBold, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase' },
+  sectionLabelRow: { alignItems: 'center', flexDirection: 'row', gap: 8, marginBottom: 10, marginLeft: 4 },
+  stateCard: { alignItems: 'center', gap: 12, paddingVertical: 32 },
+  stateText: { ...fontStyles.medium, fontSize: 13 },
+  statusPill: {
     alignItems: 'center',
-    alignSelf: 'flex-start',
     borderRadius: radii.pill,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 5
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4
   },
-  statusPreviewText: { ...fontStyles.bold, fontSize: 11, letterSpacing: 0.4, textTransform: 'capitalize' },
-  // Long-sentence variant of the chip: stretch full width, top-align icon, wrap text inside the card.
-  cancelledNotice: { alignItems: 'flex-start', alignSelf: 'stretch', marginBottom: 0 },
-  cancelledNoticeText: { flex: 1, flexShrink: 1, textTransform: 'none' },
-  totalLabel: { ...typeScale.bodyPrimary, fontSize: 14 },
-  totalRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  totalRows: { gap: 10 },
-  totalValue: { ...fontStyles.semiBold, fontSize: 14 }
+  statusText: { ...fontStyles.bold, fontSize: 11, letterSpacing: 0.3, textTransform: 'capitalize' },
+  summaryAmountBlock: { borderTopWidth: 1, marginTop: 14, paddingTop: 14 },
+  summaryHead: { alignItems: 'flex-start', flexDirection: 'row', gap: 12, justifyContent: 'space-between' },
+  summaryHeadText: { flex: 1, minWidth: 0 }
 });

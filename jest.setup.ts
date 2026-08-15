@@ -41,3 +41,16 @@ jest.mock('react-native-reanimated', () => {
     withTiming: passthrough
   };
 });
+
+// Lucide ships untranspiled ESM (.mjs) and jest-expo does not transform it. Icons carry no
+// behaviour worth asserting, so every glyph resolves to a no-op component.
+jest.mock('lucide-react-native', () => {
+  const noop = () => null;
+  return new Proxy(
+    { __esModule: true },
+    {
+      get: (target: Record<string, unknown>, key) =>
+        key in target || typeof key === 'symbol' ? target[key as string] : noop
+    }
+  );
+});
