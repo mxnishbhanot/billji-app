@@ -5,12 +5,22 @@ import Reanimated, { Extrapolation, SharedValue, interpolate, useAnimatedStyle }
 import { useTheme } from 'react-native-paper';
 import { PrimaryButton } from '@/components/dashboard/PrimaryButton';
 import { HERO_RAIL_MIN_WIDTH, HeroStatRail } from '@/components/dashboard/HeroStatRail';
-import { HeroPaperDecor, TicketPerforation } from '@/components/dashboard/LedgerDecor';
+import { TicketPerforation } from '@/components/dashboard/LedgerDecor';
+import { FittedAmount } from '@/components/dashboard/FittedAmount';
 import { shadows } from '@/design-system';
 import { alpha, appColors, fontStyles, radii, spacing } from '@/theme/theme';
 
+/** Below this card width the stat rail moves under the receipt instead of beside it. */
+const STACK_BREAKPOINT = 340;
+/** Below this the full figure has shrunk past comfortable reading; swap to ₹1.2L form. */
+const COMPACT_BELOW_FONT_SIZE = 26;
+/** Horizontal padding inside the receipt once stacked; 18 wastes an SE's 320pt. */
+const NARROW_PADDING = 14;
+
 type Props = {
   collectionAmount: string;
+  /** Short form (₹1.25L) used when the full figure will not fit legibly. */
+  collectionAmountCompact?: string;
   todayInAmount: string;
   settled: boolean;
   canCreateInvoice: boolean;
@@ -29,6 +39,7 @@ type Props = {
 
 export const HeroCard = memo(function HeroCard({
   collectionAmount,
+  collectionAmountCompact,
   todayInAmount,
   settled,
   canCreateInvoice,
@@ -53,11 +64,20 @@ export const HeroCard = memo(function HeroCard({
   // The stub is sized to its content rather than a flex ratio: at phone widths a
   // proportional split starves the labels, and on wide screens it tracks the
   // reference's ~31% instead of leaving a stranded column.
+  const stacked = cardWidth < STACK_BREAKPOINT;
   const railStyle = useMemo(
-    () => ({ width: Math.round(Math.max(HERO_RAIL_MIN_WIDTH, Math.min(cardWidth * 0.31, 220))) }),
-    [cardWidth]
+    () =>
+      stacked
+        ? { width: '100%' as const }
+        : { width: Math.round(Math.max(HERO_RAIL_MIN_WIDTH, Math.min(cardWidth * 0.31, 220))) },
+    [cardWidth, stacked]
   );
-  const amountStyle = useMemo(() => ({ fontSize: cardWidth >= 420 ? 44 : 38 }), [cardWidth]);
+
+  const innerPadding = stacked ? NARROW_PADDING * 2 : 36;
+  const amountWidth = stacked
+    ? cardWidth - innerPadding // rail sits below, so the receipt gets the full card
+    : cardWidth - (railStyle.width as number) - 16 - innerPadding; // + perforation
+  const amountMax = cardWidth >= 420 ? 44 : 38;
 
   const parallaxStyle = useAnimatedStyle(() => {
     if (!scrollY) return {};
@@ -85,35 +105,43 @@ export const HeroCard = memo(function HeroCard({
 
   return (
     <Reanimated.View style={[styles.card, shadows.card, parallaxStyle]}>
-      <View style={styles.row}>
-        <View style={styles.main}>
-          <HeroPaperDecor cream={paperColor} lineColor={colors.outline} accent={colors.primaryStrong} />
-          <View style={styles.mainInner}>
+      <View style={stacked ? styles.column : styles.row}>
+        <View style={[styles.main, stacked ? styles.mainStacked : null, { backgroundColor: paperColor }]}>
+          <View style={[styles.mainInner, stacked ? styles.mainInnerNarrow : null]}>
             <Text style={[styles.eyebrow, { color: colors.primaryStrong }]}>Today&apos;s collection</Text>
-            <Text
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.55}
-              style={[styles.amount, amountStyle, { color: theme.colors.onSurface }]}
-            >
-              {collectionAmount}
-            </Text>
+            <FittedAmount
+              full={collectionAmount}
+              compact={collectionAmountCompact}
+              available={amountWidth}
+              maxFontSize={amountMax}
+              compactBelow={COMPACT_BELOW_FONT_SIZE}
+              style={styles.amount}
+              color={theme.colors.onSurface}
+            />
             <View style={styles.statusRow}>
-              <View style={[styles.dot, { backgroundColor: settled ? colors.accent : colors.warning }]} />
-              <Text style={[styles.statusStrong, { color: theme.colors.onSurface }]} numberOfLines={1}>
-                {settled ? 'All settled' : 'Follow up'}
-              </Text>
-              <View style={[styles.pipe, { backgroundColor: alpha(colors.outline, 0.6) }]} />
-              <Text style={[styles.statusMuted, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
-                {todayInAmount} in today
-              </Text>
+              <View style={styles.statusChunk}>
+                <View style={[styles.dot, { backgroundColor: settled ? colors.accent : colors.warning }]} />
+                <Text style={[styles.statusStrong, { color: theme.colors.onSurface }]} numberOfLines={1}>
+                  {settled ? 'All settled' : 'Follow up'}
+                </Text>
+              </View>
+              <View style={styles.statusChunk}>
+                <View style={[styles.pipe, { backgroundColor: alpha(colors.outline, 0.6) }]} />
+                <Text style={[styles.statusMuted, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
+                  {todayInAmount} in today
+                </Text>
+              </View>
             </View>
             <View style={[styles.dash, { borderColor: alpha(colors.primaryStrong, 0.22) }]} />
             {createInvoiceAnchor ? createInvoiceAnchor(cta) : cta}
           </View>
         </View>
 
-        <TicketPerforation left={paperColor} right={colors.card} background={colors.background} />
+        {stacked ? (
+          <View style={[styles.stackSeam, { backgroundColor: paperColor, borderColor: alpha(colors.outline, 0.5) }]} />
+        ) : (
+          <TicketPerforation left={paperColor} right={colors.card} background={colors.background} />
+        )}
 
         <View style={railStyle}>
           <HeroStatRail
@@ -133,7 +161,7 @@ export const HeroCard = memo(function HeroCard({
 });
 
 const styles = StyleSheet.create({
-  amount: { ...fontStyles.bold, letterSpacing: -1.4, lineHeight: 50, marginTop: 6 },
+  amount: { ...fontStyles.bold, letterSpacing: -1.4, marginTop: 6 },
   card: {
     borderRadius: radii.hero,
     marginBottom: spacing.section,
@@ -154,13 +182,19 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     marginTop: 16
   },
+  column: { flexDirection: 'column' },
   dot: { borderRadius: 999, height: 8, width: 8 },
   eyebrow: { ...fontStyles.bold, fontSize: 15, letterSpacing: -0.2 },
   main: { flex: 1, minWidth: 0, overflow: 'hidden' },
+  mainStacked: { flex: 0, width: '100%' },
   mainInner: { flex: 1, justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 20 },
+  mainInnerNarrow: { paddingHorizontal: NARROW_PADDING, paddingVertical: 16 },
   pipe: { height: 13, marginHorizontal: 2, width: 1 },
   row: { flexDirection: 'row', minHeight: 236 },
-  statusMuted: { ...fontStyles.medium, flexShrink: 1, fontSize: 13 },
-  statusRow: { alignItems: 'center', flexDirection: 'row', gap: 7, marginTop: 12 },
+  stackSeam: { borderStyle: 'dashed', borderTopWidth: 1, width: '100%' },
+  statusChunk: { alignItems: 'center', flexDirection: 'row', gap: 7 },
+  statusMuted: { ...fontStyles.medium, fontSize: 13 },
+  // Wrap instead of shrink: a truncated "₹1,20,000 in to…" is worse than a second line.
+  statusRow: { alignItems: 'center', columnGap: 7, flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, rowGap: 4 },
   statusStrong: { ...fontStyles.bold, fontSize: 13.5, letterSpacing: -0.2 }
 });

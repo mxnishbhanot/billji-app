@@ -24,7 +24,7 @@ import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { useEntitlements } from '@/shared/hooks/useEntitlements';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
-import { formatCurrency } from '@/utils/format';
+import { formatCurrency, formatCurrencyCompact } from '@/utils/format';
 
 const padDatePart = (value: number) => String(value).padStart(2, '0');
 const formatISODate = (date: Date) => `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
@@ -84,6 +84,7 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
         key: 'today',
         label: 'TODAY',
         value: formatCurrency(report?.todaySales),
+        valueCompact: formatCurrencyCompact(report?.todaySales),
         hint: 'Collected today',
         icon: Wallet,
         accent: colors.categoryGreen,
@@ -98,6 +99,7 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
         key: 'month',
         label: 'THIS MONTH',
         value: formatCurrency(report?.monthlySales),
+        valueCompact: formatCurrencyCompact(report?.monthlySales),
         hint: 'Collected this month',
         icon: Calendar,
         accent: colors.categoryPurple,
@@ -227,6 +229,7 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
     >
       <HeroCard
         collectionAmount={formatCurrency(report?.todaySales)}
+        collectionAmountCompact={formatCurrencyCompact(report?.todaySales)}
         todayInAmount={formatCurrency(report?.todaySales)}
         settled={settled}
         canCreateInvoice={canCreateInvoice}
@@ -268,6 +271,7 @@ export function DashboardScreen({ navigation }: DashboardScreenProps) {
             key={item.key}
             label={item.label}
             value={item.value}
+            valueCompact={'valueCompact' in item ? item.valueCompact : undefined}
             hint={item.hint}
             icon={item.icon}
             accent={item.accent}
