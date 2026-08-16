@@ -238,7 +238,11 @@ export function DocumentsScreen({ navigation, route }: DocumentsScreenProps) {
 
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.08);
   const createLabel = `New ${active.singular}`;
-  const headerAction = canCreate ? (
+  // A credit note starts from the invoice it credits, not from this list — the builder needs
+  // a source invoice, so there is nothing for a blank "+" to open. Matches the empty state,
+  // which has always been disabled for credit notes.
+  const canCreateHere = canCreate && kind !== 'credit_note';
+  const headerAction = canCreateHere ? (
     <Pressable
       onPress={() => navigation.navigate('InvoiceCreate', { documentType: kind })}
       hitSlop={8}
@@ -397,8 +401,8 @@ export function DocumentsScreen({ navigation, route }: DocumentsScreenProps) {
             <EmptyState
               title={`No ${active.label.toLowerCase()} yet`}
               message={active.emptyMessage}
-              actionLabel={canCreate && kind !== 'credit_note' ? createLabel : undefined}
-              onAction={canCreate && kind !== 'credit_note' ? () => navigation.navigate('InvoiceCreate', { documentType: kind }) : undefined}
+              actionLabel={canCreateHere ? createLabel : undefined}
+              onAction={canCreateHere ? () => navigation.navigate('InvoiceCreate', { documentType: kind }) : undefined}
             />
           )
         }

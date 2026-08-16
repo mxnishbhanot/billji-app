@@ -1,8 +1,11 @@
 import { StyleSheet, View } from 'react-native';
 import { BadgeCheck, Ban, FileText, PackageOpen, Undo2, XCircle } from 'lucide-react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Text, useTheme } from 'react-native-paper';
-import { invoicesApi } from '@/api/endpoints';
+import { useState } from 'react';
+import { apiErrorMessage } from '@/api/client';
+import { invoicesApi, paymentsApi } from '@/api/endpoints';
+import { useAppDialog } from '@/components/AppDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Screen } from '@/components/Screen';
 import { DocumentCustomerSection } from '@/features/documents/components/DocumentCustomerSection';
@@ -28,8 +31,10 @@ import { formatCurrency, formatDate } from '@/utils/format';
  * "how much was credited, against which invoice, for what, and is that credit still live",
  * and deliberately shows no payment, balance or due information at all.
  *
- * Two states exist server-side (documents/credit_note): issued and cancelled. There is no
- * partial application, no allocation and no refund workflow, so none is shown here.
+ * Issuing a note does not reduce what the customer owes: it creates credit they hold, which
+ * is spent explicitly against invoices. So this screen also answers "how much of it is left,
+ * and which invoices took the rest" — and a note with any of its credit spent cannot be
+ * cancelled until those applications are reversed.
  */
 export function CreditNoteDetailScreen({ route, navigation }: CreditNoteDetailScreenProps) {
   const { id } = route.params;
@@ -38,6 +43,11 @@ export function CreditNoteDetailScreen({ route, navigation }: CreditNoteDetailSc
   const colors = appColors(isDark);
   const { can } = usePermissions();
   const canCancel = can(PERMISSION.invoicesUpdate);
+
+  const canReverse = can(PERMISSION.paymentsRecord);
+  const queryClient = useQueryClient();
+  const { showDialog } = useAppDialog();
+  const [reversingId, setReversingId] = useState<string | null>(null);
 
   const detail = useDocumentDetail('credit_note', id);
   const { copy, isCancelled, cancel } = detail;
@@ -50,6 +60,24 @@ export function CreditNoteDetailScreen({ route, navigation }: CreditNoteDetailSc
     queryKey: queryKeys.invoices.detail(sourceInvoiceId ?? ''),
     queryFn: () => invoicesApi.get(sourceInvoiceId as string),
     enabled: Boolean(sourceInvoiceId)
+  });
+
+  // Reversing hands the credit back to the customer's pool and re-opens the invoice it had
+  // settled, so every surface that reads either figure has to be dropped.
+  const reverseApplication = useMutation({
+    mutationFn: (allocationId: string) => paymentsApi.reverseCreditApplication(allocationId),
+    onSuccess: () => {
+      setReversingId(null);
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
+    },
+    onError: (error) => {
+      setReversingId(null);
+      showDialog({ title: 'Could not reverse the credit', message: apiErrorMessage(error), tone: 'error' });
+    }
   });
 
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.06);
@@ -72,6 +100,11 @@ export function CreditNoteDetailScreen({ route, navigation }: CreditNoteDetailSc
     meta: `${item.quantity}${item.unit ? ` ${item.unit}` : ''} × ${formatCurrency(item.price)}`,
     total: formatCurrency(item.total)
   }));
+
+  const appliedAmount = creditNote.appliedAmount ?? 0;
+  const remaining = creditNote.remaining ?? Math.max(creditNote.total - appliedAmount, 0);
+  const applications = creditNote.applications ?? [];
+  const hasApplications = appliedAmount > 0;
 
   // What the number means: credit given back, not money owed. Once withdrawn, the figure is
   // history — so it is stated in the past tense and dimmed.
@@ -175,11 +208,49 @@ export function CreditNoteDetailScreen({ route, navigation }: CreditNoteDetailSc
             text={
               isWalkIn
                 ? 'The sale was reversed in your accounts and reported as a credit note in GST returns.'
-                : `${formatCurrency(creditNote.total)} was taken off what ${creditNote.customerSnapshot.name} owes you.`
+                : `${creditNote.customerSnapshot.name} now holds ${formatCurrency(creditNote.total)} of credit to spend on any invoice.`
             }
           />
           {restoredStock ? (
             <DocumentNotice icon={PackageOpen} tone={effectTone} text="Returned units went back into stock." style={styles.effectRowSpaced} />
+          ) : null}
+        </DocumentSection>
+      ) : null}
+
+      {/* Where the credit has gone. Only meaningful while the note stands. */}
+      {!isCancelled ? (
+        <DocumentSection title="CREDIT USED">
+          <View style={styles.detailRows}>
+            <DocumentDetailRow label="Credit issued" value={formatCurrency(creditNote.total)} />
+            <DocumentDetailRow label="Applied" value={formatCurrency(appliedAmount)} />
+            <DocumentDetailRow label="Remaining" value={formatCurrency(remaining)} emphasise={theme.colors.primary} />
+          </View>
+          {applications.length ? (
+            <View style={[styles.applications, { borderTopColor: cardBorder }]}>
+              {applications.map((application) => (
+                <View key={application.allocationId} style={styles.applicationRow}>
+                  <View style={styles.applicationText}>
+                    <Text style={[styles.applicationTitle, { color: theme.colors.onSurface }]}>{application.invoiceNumber}</Text>
+                    <Text style={[styles.bodyText, { color: theme.colors.onSurfaceVariant }]}>
+                      {formatDate(application.allocatedAt)} · {formatCurrency(application.amount)}
+                    </Text>
+                  </View>
+                  {canReverse ? (
+                    <Button
+                      compact
+                      mode="text"
+                      loading={reverseApplication.isPending && reversingId === application.allocationId}
+                      onPress={() => {
+                        setReversingId(application.allocationId);
+                        reverseApplication.mutate(application.allocationId);
+                      }}
+                    >
+                      Reverse
+                    </Button>
+                  ) : null}
+                </View>
+              ))}
+            </View>
           ) : null}
         </DocumentSection>
       ) : null}
@@ -204,11 +275,17 @@ export function CreditNoteDetailScreen({ route, navigation }: CreditNoteDetailSc
             textColor={theme.colors.error}
             icon={({ size, color }) => <Ban size={size} color={color} strokeWidth={2.2} />}
             loading={cancel.isPending}
+            disabled={hasApplications}
             onPress={() => detail.setCancelVisible(true)}
             style={[styles.footerButton, { borderColor: alpha(colors.destructive, isDark ? 0.55 : 0.38) }]}
           >
             {copy.cancelLabel}
           </Button>
+          {hasApplications ? (
+            <Text style={[styles.bodyText, { color: theme.colors.onSurfaceVariant }]}>
+              {formatCurrency(appliedAmount)} of this credit has been applied to invoices. Reverse those applications first.
+            </Text>
+          ) : null}
         </View>
       ) : null}
 
@@ -229,6 +306,10 @@ export function CreditNoteDetailScreen({ route, navigation }: CreditNoteDetailSc
 
 const styles = StyleSheet.create({
   bodyText: { ...fontStyles.medium, fontSize: 13, lineHeight: 19 },
+  applicationRow: { alignItems: 'center', flexDirection: 'row', gap: 12, justifyContent: 'space-between' },
+  applicationText: { flexShrink: 1, gap: 2 },
+  applicationTitle: { ...fontStyles.semiBold, fontSize: 13.5 },
+  applications: { borderTopWidth: 1, gap: 10, marginTop: 12, paddingTop: 12 },
   detailRows: { gap: 10 },
   effectRowSpaced: { marginTop: 12 },
   footerActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: spacing.section },

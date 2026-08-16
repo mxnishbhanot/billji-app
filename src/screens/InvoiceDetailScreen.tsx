@@ -13,6 +13,8 @@ import {
   Receipt,
   Send,
   Trash2,
+  Undo2,
+  Wallet,
   XCircle
 } from 'lucide-react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -25,6 +27,7 @@ import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { FormTextInput } from '@/components/FormTextInput';
+import { ApplyCreditSheet } from '@/components/ApplyCreditSheet';
 import { PaymentHistorySheet } from '@/components/PaymentHistorySheet';
 import { RecordPaymentSheet } from '@/components/RecordPaymentSheet';
 import { Screen } from '@/components/Screen';
@@ -35,6 +38,7 @@ import { DocumentNotice } from '@/features/documents/components/DocumentNotice';
 import { DocumentItemRow, DocumentItemsSection } from '@/features/documents/components/DocumentItemsSection';
 import { DocumentSection as Section, DocumentDetailRow as DetailRow } from '@/features/documents/components/DocumentSection';
 import { DocumentShareActions, ShareAction } from '@/features/documents/components/DocumentShareActions';
+import { creditableRemaining } from '@/features/documents/creditNoteBuilder';
 import { gstHeadsFor } from '@/features/documents/gstHeads';
 import { InvoiceDetailScreenProps } from '@/navigation/types';
 import { openOrSharePdf } from '@/services/pdf';
@@ -77,6 +81,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   const [cancelling, setCancelling] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [applyCreditOpen, setApplyCreditOpen] = useState(false);
   // Which share action is mid-flight (PDF download is a network call — on slow
   // connections the tap looks dead without a spinner). One at a time.
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -92,6 +97,14 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
     queryFn: () => paymentsApi.customerOutstanding(customerId),
     enabled: Boolean(customerId)
   });
+  // The customer's spendable credit. Online-only and never cached long: the pool is shared,
+  // so a stale figure would offer credit another till has already spent.
+  const creditsQuery = useQuery({
+    queryKey: queryKeys.payments.customerCredits(customerId),
+    queryFn: () => paymentsApi.customerCredits(customerId),
+    enabled: Boolean(customerId)
+  });
+  const availableCredit = creditsQuery.data?.availableCredit ?? 0;
   // Targeted invalidation sets per action — only the query families the action actually affects.
   // Delete is gated to unprocessed invoices (no payments/stock/ledger), so it only touches
   // invoices/products/customers/reports. Cancel can run on paid invoices: it restores stock,
@@ -114,6 +127,16 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
     queryClient.invalidateQueries({ queryKey: queryKeys.report.all });
     if (customerId) queryClient.invalidateQueries({ queryKey: queryKeys.payments.customerOutstanding(customerId) });
   };
+  const applyCredit = useMutation({
+    mutationFn: (amount: number) => paymentsApi.applyCredit(id, amount),
+    onSuccess: () => {
+      setApplyCreditOpen(false);
+      invalidatePayment();
+      if (customerId) queryClient.invalidateQueries({ queryKey: queryKeys.payments.customerCredits(customerId) });
+      query.refetch();
+    },
+    onError: (error) => showDialog({ title: 'Could not apply credit', message: apiErrorMessage(error), tone: 'error' })
+  });
   const cancelInvoice = useMutation({ mutationFn: () => invoicesApi.status(id, 'cancelled'), onSuccess: () => { setCancelling(false); invalidateCancel(); query.refetch(); paymentsQuery.refetch(); }, onError: (error) => { setCancelling(false); showDialog({ title: 'Could not cancel invoice', message: apiErrorMessage(error), tone: 'error' }); } });
   const remove = useMutation({ mutationFn: () => invoicesApi.remove(id), onSuccess: () => { setDeleting(false); invalidateStatusChange(); navigation.navigate('InvoiceList'); }, onError: (error) => { setDeleting(false); showDialog({ title: 'Could not delete invoice', message: apiErrorMessage(error), tone: 'error' }); } });
   const sendEmail = useMutation({
@@ -148,7 +171,7 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
       previous = queryClient.getQueryData<Invoice>(queryKeys.invoices.detail(id));
       if (previous) {
         const paid = (previous.paidAmount ?? 0) + payload.amount;
-        const balance = Math.max(previous.total - paid, 0);
+        const balance = Math.max(previous.total - paid - (previous.creditApplied ?? 0), 0);
         queryClient.setQueryData<Invoice>(queryKeys.invoices.detail(id), {
           ...previous,
           paidAmount: paid,
@@ -244,7 +267,9 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
 
   const currentStatus = invoice.status;
   const paidAmount = invoice.paidAmount ?? (invoice.paymentStatus === 'paid' ? invoice.total : 0);
-  const balanceDue = invoice.balanceDue ?? Math.max(invoice.total - paidAmount, 0);
+  // Credit is settlement, not money: it comes off the balance but never off "Paid".
+  const creditApplied = invoice.creditApplied ?? 0;
+  const balanceDue = invoice.balanceDue ?? Math.max(invoice.total - paidAmount - creditApplied, 0);
   const paymentStatus = invoice.paymentStatus ?? (currentStatus === 'paid' ? 'paid' : 'unpaid');
   // Previous dues = customer's total outstanding minus this invoice's own balance.
   const outstanding = outstandingQuery.data ?? { invoices: [], totalOutstanding: 0 };
@@ -261,6 +286,10 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
   // window before the detail query resolves. Delete is for draft/unprocessed
   // invoices only — never once payments, stock, or ledger entries exist.
   const canCancel = invoice.eligibility?.canCancel ?? !isCancelled;
+  // A live credit note against this invoice makes the server refuse cancellation, so the
+  // button stays visible but disabled with the reason — a silently missing action reads as
+  // a bug, and the fix is one the user can actually carry out.
+  const blockedByCreditNotes = Boolean(invoice.eligibility?.hasCreditNotes) && !isCancelled;
   const canDelete = invoice.eligibility?.canDelete ?? (!isCancelled && !hasPayments && !hasProductItems);
 
   // Cancel keeps the record, restores stock, and reverses the accounting entries
@@ -419,8 +448,21 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
         </View>
         <View style={styles.detailRows}>
           <DetailRow label="Paid" value={formatCurrency(paidAmount)} />
+          {creditApplied > 0 ? <DetailRow label="Credit applied" value={formatCurrency(creditApplied)} /> : null}
           <DetailRow label="Balance due" value={formatCurrency(balanceDue)} emphasise={balanceDue > 0 ? colors.destructive : undefined} />
         </View>
+        {/* Spending credit is settlement, not a receipt, so it sits with the payment figures
+            rather than in the share row. Hidden entirely when there is no credit to spend. */}
+        {canRecordPayment && !isCancelled && balanceDue > 0 && availableCredit > 0 ? (
+          <Button
+            mode="outlined"
+            icon={({ size, color }) => <Wallet size={size} color={color} strokeWidth={2.2} />}
+            onPress={() => setApplyCreditOpen(true)}
+            style={styles.applyCreditBtn}
+          >
+            Apply credit · {formatCurrency(availableCredit)} available
+          </Button>
+        ) : null}
         {paymentsQuery.data?.length ? (
           <>
             <View style={[styles.paymentHistory, { borderTopColor: cardBorder }]}>
@@ -442,7 +484,10 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
       </Section>
 
       {/* Tertiary: correction and destructive actions, kept quiet at the end of the document. */}
-      {(canCreateInvoice && !hasPayments) || (canUpdateInvoice && canCancel) || (canDeleteInvoice && !isCancelled) ? (
+      {(canCreateInvoice && !hasPayments) ||
+      (canCreateInvoice && !isCancelled && creditableRemaining(invoice) > 0) ||
+      (canUpdateInvoice && (canCancel || blockedByCreditNotes)) ||
+      (canDeleteInvoice && !isCancelled) ? (
         <View style={styles.footerActions}>
           {/* An issued invoice is immutable, so correcting one means reissuing it. This only
               seeds the builder — the new invoice is created when the user taps Generate, so the
@@ -458,16 +503,35 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
               Duplicate & correct
             </Button>
           ) : null}
-          {canUpdateInvoice && canCancel ? (
+          {/* Once money has been received a correction is a credit note, not a reissue —
+              which is why this sits beside "Duplicate & correct" rather than replacing it.
+              Hidden when the invoice has already been credited in full. */}
+          {canCreateInvoice && !isCancelled && creditableRemaining(invoice) > 0 ? (
+            <Button
+              mode="outlined"
+              icon={({ size, color }) => <Undo2 size={size} color={color} strokeWidth={2.2} />}
+              onPress={() => navigation.navigate('CreditNoteCreate', { sourceInvoiceId: id })}
+              style={styles.footerButton}
+            >
+              Issue credit note
+            </Button>
+          ) : null}
+          {canUpdateInvoice && (canCancel || blockedByCreditNotes) ? (
             <Button
               mode="outlined"
               textColor={theme.colors.error}
+              disabled={!canCancel}
               icon={({ size, color }) => <Ban size={size} color={color} strokeWidth={2.2} />}
               onPress={requestCancel}
               style={[styles.footerButton, { borderColor: alpha(colors.destructive, isDark ? 0.55 : 0.38) }]}
             >
               Cancel
             </Button>
+          ) : null}
+          {blockedByCreditNotes ? (
+            <Text style={[styles.footerNote, { color: theme.colors.onSurfaceVariant }]}>
+              Cancel the credit notes raised against this invoice first.
+            </Text>
           ) : null}
           {canDeleteInvoice && !isCancelled ? (
             <Button
@@ -503,6 +567,14 @@ export function InvoiceDetailScreen({ route, navigation }: InvoiceDetailScreenPr
         onClose={() => setPaymentOpen(false)}
         onSubmit={(payload, settlePreviousDues) => recordPayment.mutate({ payload, settlePreviousDues, invoiceIds: settleInvoiceIds })}
       />
+      <ApplyCreditSheet
+        visible={applyCreditOpen}
+        balanceDue={balanceDue}
+        availableCredit={availableCredit}
+        loading={applyCredit.isPending}
+        onClose={() => setApplyCreditOpen(false)}
+        onSubmit={(amount) => applyCredit.mutate(amount)}
+      />
       <PaymentHistorySheet
         visible={historyOpen}
         payments={paymentsQuery.data ?? []}
@@ -524,7 +596,9 @@ const styles = StyleSheet.create({
   detailRows: { gap: 10 },
   detailValue: { ...fontStyles.semiBold, fontSize: 13.5, textAlign: 'right' },
   footerActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: spacing.section },
+  applyCreditBtn: { borderRadius: radii.input, marginTop: 12 },
   footerButton: { borderRadius: radii.input, flexGrow: 1, flexShrink: 1 },
+  footerNote: { ...fontStyles.medium, fontSize: 12, width: '100%' },
   grandTotal: {
     alignItems: 'center',
     borderTopWidth: 1,

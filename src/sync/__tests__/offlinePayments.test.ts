@@ -321,7 +321,7 @@ describe('one receipt across several bills', () => {
     ).rejects.toMatchObject({ code: 'DUPLICATE_INVOICE_IDS' });
   });
 
-  it('parks the remainder as credit when credit is allowed', async () => {
+  it('records the remainder on the receipt, and leaves the credit figure to the server', async () => {
     await twoBills();
 
     const { record, unapplied } = await recordCustomerPaymentLocally(
@@ -332,8 +332,13 @@ describe('one receipt across several bills', () => {
 
     expect(unapplied).toBe(400);
     expect(record.doc?.unappliedAmount).toBe(400);
+    // Available credit is a server-computed pool (credit notes + unapplied receipts) and can
+    // only be spent online, so this device does not project a queued overpayment into it —
+    // offering credit the server has not granted is worse than showing it a sync later.
     const customer = (await localCustomerPage(BIZ, {}, txn)).customers[0];
-    expect(customer.creditBalance).toBe(400);
+    expect(customer.availableCredit ?? 0).toBe(0);
+    // The dues it did settle still come off immediately.
+    expect(customer.outstandingDues).toBe(0);
   });
 });
 

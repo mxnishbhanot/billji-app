@@ -47,7 +47,8 @@ export const queryKeys = {
     all: ['payments'] as const,
     invoice: (id: string) => ['payments', 'invoice', id] as const,
     customer: (id: string) => ['payments', 'customer', id] as const,
-    customerOutstanding: (id: string) => ['payments', 'customer', id, 'outstanding'] as const
+    customerOutstanding: (id: string) => ['payments', 'customer', id, 'outstanding'] as const,
+    customerCredits: (id: string) => ['payments', 'customer', id, 'credits'] as const
   },
   expenses: {
     all: ['expenses'] as const,

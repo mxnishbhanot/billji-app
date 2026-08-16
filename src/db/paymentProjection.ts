@@ -176,15 +176,19 @@ export const projectInvoicePayment = <T extends MongoDoc>(doc: T, allocated: num
   if (!allocated) return doc;
 
   const total = money(Number(doc.total) || 0);
-  const paidAmount = money(Math.min((Number(doc.paidAmount) || 0) + allocated, total));
-  const balanceDue = money(Math.max(total - paidAmount, 0));
+  // Credit already applied to this invoice settles it just as money does, so the queued
+  // receipt can only fill what is left after it. Ignoring it would re-open a bill the
+  // customer's credit has already paid.
+  const creditApplied = money(Number(doc.creditApplied) || 0);
+  const paidAmount = money(Math.min((Number(doc.paidAmount) || 0) + allocated, Math.max(total - creditApplied, 0)));
+  const balanceDue = money(Math.max(total - paidAmount - creditApplied, 0));
   const cancelled = doc.documentStatus === 'cancelled' || doc.documentStatus === 'void';
 
   return {
     ...doc,
     paidAmount,
     balanceDue,
-    paymentStatus: paidAmount <= 0 ? 'unpaid' : balanceDue <= 0 ? 'paid' : 'partial',
+    paymentStatus: paidAmount + creditApplied <= 0 ? 'unpaid' : balanceDue <= 0 ? 'paid' : 'partial',
     // The legacy three-state field the list chips read. A cancelled document stays cancelled.
     status: cancelled ? doc.status : balanceDue <= 0 ? 'paid' : doc.status
   };
@@ -193,6 +197,6 @@ export const projectInvoicePayment = <T extends MongoDoc>(doc: T, allocated: num
 /** What is still owed on one invoice, with the queued receipts counted. */
 export const projectedBalanceDue = (doc: MongoDoc, allocated: number): number => {
   const total = money(Number(doc.total) || 0);
-  const paid = money((Number(doc.paidAmount) || 0) + allocated);
+  const paid = money((Number(doc.paidAmount) || 0) + allocated + (Number(doc.creditApplied) || 0));
   return money(Math.max(total - paid, 0));
 };

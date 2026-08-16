@@ -63,6 +63,8 @@ import {
   CouponQuote,
   Customer,
   CustomerFormValues,
+  ApplyCreditResponse,
+  CustomerCredits,
   CustomerOutstanding,
   CustomerPaymentPayload,
   CustomerPaymentResponse,
@@ -640,6 +642,25 @@ export const paymentsApi = {
       (businessId) => localCustomerOutstanding(businessId, customerId),
       () => api.get<CustomerOutstanding>(`/payments/customers/${customerId}/outstanding`).then((res) => res.data)
     ),
+  /**
+   * The customer's credit pool, itemised. Online-only, like applying it: the pool is a
+   * shared resource two devices can both claim, so a stale local copy would be worse than
+   * no answer at all.
+   */
+  customerCredits: (customerId: string) =>
+    api.get<CustomerCredits>(`/payments/customers/${customerId}/credits`).then((res) => res.data),
+  applyCredit: (invoiceId: string, amount: number) =>
+    api
+      .post<ApplyCreditResponse>(`/payments/invoices/${invoiceId}/apply-credit`, { amount }, {
+        headers: { 'Idempotency-Key': idempotencyKey(`apply-credit-${invoiceId}`) }
+      })
+      .then((res) => res.data),
+  reverseCreditApplication: (allocationId: string, reason?: string) =>
+    api
+      .post<ApplyCreditResponse>(`/payments/allocations/${allocationId}/reverse`, { reason }, {
+        headers: { 'Idempotency-Key': idempotencyKey(`reverse-allocation-${allocationId}`) }
+      })
+      .then((res) => res.data),
   markRefundProcessed: (invoiceId: string) =>
     api
       .post<{ payments: Payment[] }>(`/payments/invoices/${invoiceId}/refund-processed`, {}, {

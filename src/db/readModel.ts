@@ -262,16 +262,18 @@ export const localCustomerPage = async (
     txn,
     pending.length
       ? (doc, row) => {
-          const { allocated, unapplied } = collectedFrom(
+          const { allocated } = collectedFrom(
             pending,
             [row.server_id == null ? null : String(row.server_id), String(row.local_id)],
             row.server_updated_at == null ? null : String(row.server_updated_at)
           );
-          if (!allocated && !unapplied) return doc;
+          if (!allocated) return doc;
+          // Dues only. `availableCredit` is a server-computed pool over credit notes and
+          // unapplied receipts, and credit can only be spent online — projecting a queued
+          // overpayment into it would offer credit the server has not granted yet.
           return {
             ...doc,
-            outstandingDues: Math.max(Math.round(((Number(doc.outstandingDues) || 0) - allocated) * 100) / 100, 0),
-            creditBalance: Math.round(((Number(doc.creditBalance) || 0) + unapplied) * 100) / 100
+            outstandingDues: Math.max(Math.round(((Number(doc.outstandingDues) || 0) - allocated) * 100) / 100, 0)
           };
         }
       : undefined

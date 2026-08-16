@@ -80,7 +80,8 @@ describe('CreditNoteDetailScreen', () => {
 
   it('headlines the credit issued rather than an amount due', async () => {
     renderDetail();
-    expect(await screen.findByText('Credit issued')).toBeTruthy();
+    // Two now: the hero headline and the "credit used" breakdown row below it.
+    expect((await screen.findAllByText('Credit issued')).length).toBeGreaterThan(0);
     expect(screen.getAllByText('₹525.00').length).toBeGreaterThan(0);
     expect(screen.queryByText('Amount due')).toBeNull();
     expect(screen.queryByText('Balance due')).toBeNull();
@@ -120,7 +121,9 @@ describe('CreditNoteDetailScreen', () => {
   it('explains the credit and offers sharing while it is live', async () => {
     renderDetail();
     expect(await screen.findByText('EFFECT')).toBeTruthy();
-    expect(screen.getByText('₹525.00 was taken off what Anita Traders owes you.')).toBeTruthy();
+    // No auto-apply: issuing the note gives the customer credit to spend, it does not
+    // reduce what they owe.
+    expect(screen.getByText('Anita Traders now holds ₹525.00 of credit to spend on any invoice.')).toBeTruthy();
     expect(screen.getByText('Returned units went back into stock.')).toBeTruthy();
     expect(screen.getByText('REASON FOR CREDIT')).toBeTruthy();
     expect(screen.getByText('Two bags arrived torn')).toBeTruthy();

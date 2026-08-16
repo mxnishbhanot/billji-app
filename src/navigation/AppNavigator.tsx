@@ -19,6 +19,7 @@ const TwoFactorChallengeScreen = lazy(() => import('@/screens/TwoFactorChallenge
 const TwoFactorSetupScreen = lazy(() => import('@/screens/TwoFactorSetupScreen').then((m) => ({ default: m.TwoFactorSetupScreen })));
 const ProductsScreen = lazy(() => import('@/screens/ProductsScreen').then((m) => ({ default: m.ProductsScreen })));
 const CustomersScreen = lazy(() => import('@/screens/CustomersScreen').then((m) => ({ default: m.CustomersScreen })));
+const CustomerCreditsScreen = lazy(() => import('@/screens/CustomerCreditsScreen').then((m) => ({ default: m.CustomerCreditsScreen })));
 const CustomerDetailScreen = lazy(() => import('@/screens/CustomerDetailScreen').then((m) => ({ default: m.CustomerDetailScreen })));
 const InvoicesScreen = lazy(() => import('@/screens/InvoicesScreen').then((m) => ({ default: m.InvoicesScreen })));
 const InvoiceBuilderScreen = lazy(() => import('@/screens/InvoiceBuilderScreen').then((m) => ({ default: m.InvoiceBuilderScreen })));
@@ -26,6 +27,7 @@ const InvoicePreviewScreen = lazy(() => import('@/screens/InvoicePreviewScreen')
 const InvoiceDetailScreen = lazy(() => import('@/screens/InvoiceDetailScreen').then((m) => ({ default: m.InvoiceDetailScreen })));
 const DraftsScreen = lazy(() => import('@/screens/DraftsScreen').then((m) => ({ default: m.DraftsScreen })));
 const DocumentsScreen = lazy(() => import('@/screens/DocumentsScreen').then((m) => ({ default: m.DocumentsScreen })));
+const CreditNoteBuilderScreen = lazy(() => import('@/screens/CreditNoteBuilderScreen').then((m) => ({ default: m.CreditNoteBuilderScreen })));
 const CreditNoteDetailScreen = lazy(() => import('@/screens/CreditNoteDetailScreen').then((m) => ({ default: m.CreditNoteDetailScreen })));
 const QuotationDetailScreen = lazy(() => import('@/screens/QuotationDetailScreen').then((m) => ({ default: m.QuotationDetailScreen })));
 const ChallanDetailScreen = lazy(() => import('@/screens/ChallanDetailScreen').then((m) => ({ default: m.ChallanDetailScreen })));
@@ -148,6 +150,7 @@ function InvoiceNavigator() {
       <InvoiceStack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
       <InvoiceStack.Screen name="Drafts" component={DraftsScreen} />
       <InvoiceStack.Screen name="Documents" component={DocumentsScreen} />
+      <InvoiceStack.Screen name="CreditNoteCreate" component={CreditNoteBuilderScreen} />
       <InvoiceStack.Screen name="CreditNoteDetail" component={CreditNoteDetailScreen} />
       <InvoiceStack.Screen name="QuotationDetail" component={QuotationDetailScreen} />
       <InvoiceStack.Screen name="ChallanDetail" component={ChallanDetailScreen} />
@@ -171,6 +174,7 @@ function CustomersNavigator() {
     <CustomersStack.Navigator screenOptions={{ headerShown: false }} screenLayout={renderWithSuspense}>
       <CustomersStack.Screen name="Customers" component={CustomersScreen} />
       <CustomersStack.Screen name="CustomerDetail" component={CustomerDetailScreen} />
+      <CustomersStack.Screen name="CustomerCredits" component={CustomerCreditsScreen} />
     </CustomersStack.Navigator>
   );
 }

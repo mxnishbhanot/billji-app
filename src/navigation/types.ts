@@ -46,6 +46,9 @@ export type InvoiceStackParamList = {
   // the detail screen opens the existing Record payment sheet once and clears the flag.
   InvoiceDetail: { id: string; openRecordPayment?: boolean };
   Documents: { documentType?: SalesDocumentKind } | undefined;
+  // A credit note is always raised against an invoice, so the source is required — there
+  // is no blank credit-note flow.
+  CreditNoteCreate: { sourceInvoiceId: string };
   CreditNoteDetail: { id: string };
   QuotationDetail: { id: string };
   ChallanDetail: { id: string };
@@ -71,6 +74,9 @@ export type CatalogStackParamList = {
 export type CustomersStackParamList = {
   Customers: { openCreate?: boolean } | undefined;
   CustomerDetail: { customer: Customer };
+  // The credit list needs a name for its header; the id alone would make the screen
+  // fetch a customer it was already handed.
+  CustomerCredits: { customerId: string; customerName: string };
 };
 
 export type SettingsStackParamList = {
@@ -147,6 +153,7 @@ export type InvoicePreviewScreenProps = NativeStackScreenProps<InvoiceStackParam
 export type InvoiceDetailScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'InvoiceDetail'>;
 export type DraftsScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'Drafts'>;
 export type DocumentsScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'Documents'>;
+export type CreditNoteBuilderScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'CreditNoteCreate'>;
 export type CreditNoteDetailScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'CreditNoteDetail'>;
 export type QuotationDetailScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'QuotationDetail'>;
 export type ChallanDetailScreenProps = NativeStackScreenProps<InvoiceStackParamList, 'ChallanDetail'>;
@@ -156,6 +163,7 @@ export type OrderDetailScreenProps = NativeStackScreenProps<InvoiceStackParamLis
 export type ProductsScreenProps = NativeStackScreenProps<CatalogStackParamList, 'Products'>;
 export type CustomersScreenProps = NativeStackScreenProps<CustomersStackParamList, 'Customers'>;
 export type CustomerDetailScreenProps = NativeStackScreenProps<CustomersStackParamList, 'CustomerDetail'>;
+export type CustomerCreditsScreenProps = NativeStackScreenProps<CustomersStackParamList, 'CustomerCredits'>;
 export type SettingsScreenProps = NativeStackScreenProps<SettingsStackParamList, 'SettingsHome'>;
 export type BusinessProfileScreenProps = NativeStackScreenProps<SettingsStackParamList, 'BusinessProfile'>;
 export type TaxSettingsScreenProps = NativeStackScreenProps<SettingsStackParamList, 'TaxSettings'>;

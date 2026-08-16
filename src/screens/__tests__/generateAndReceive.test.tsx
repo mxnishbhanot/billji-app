@@ -38,6 +38,8 @@ jest.mock('@/features/onboarding', () => ({
   useOnboardingOptional: () => null
 }));
 jest.mock('@/components/PaymentHistorySheet', () => ({ PaymentHistorySheet: () => null }));
+// Same reason as the payment sheet below: it pulls in the native keyboard controller.
+jest.mock('@/components/ApplyCreditSheet', () => ({ ApplyCreditSheet: () => null }));
 jest.mock('@/components/RecordPaymentSheet', () => {
   const { Text: RNText } = require('react-native');
   return {

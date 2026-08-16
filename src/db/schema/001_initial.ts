@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS customers (
   gst_number TEXT,
   -- Server-derived, never pushed. Mirrored for display and labelled as of the last sync.
   outstanding_dues REAL NOT NULL DEFAULT 0,
-  credit_balance REAL NOT NULL DEFAULT 0,
+  available_credit REAL NOT NULL DEFAULT 0,
   is_active INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_customers_name ON customers (business_id, name);

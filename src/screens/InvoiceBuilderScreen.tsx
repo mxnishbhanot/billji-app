@@ -32,8 +32,11 @@ import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
 import { CustomerFormValues, CustomItemFormValues, documentNumberOf } from '@/types';
 import { customItemSchema, customerSchema } from '@/validation/schemas';
 
-const TITLES: Record<string, string> = { quotation: 'New Quotation', delivery_challan: 'New Challan', credit_note: 'New Credit Note' };
-const NOUNS: Record<string, string> = { quotation: 'quotation', delivery_challan: 'challan', credit_note: 'credit note' };
+// Credit notes are deliberately absent: they are raised against a specific invoice with
+// per-line return quantities, which CreditNoteBuilderScreen owns. This builder could never
+// produce a valid one.
+const TITLES: Record<string, string> = { quotation: 'New Quotation', delivery_challan: 'New Challan' };
+const NOUNS: Record<string, string> = { quotation: 'quotation', delivery_challan: 'challan' };
 
 export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreenProps) {
   // Same builder for every sales document; the type only changes the title and the endpoint.

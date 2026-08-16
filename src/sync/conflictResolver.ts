@@ -56,7 +56,7 @@ export type Resolution = {
  */
 export const SERVER_OWNED: Partial<Record<EntityType, string[]>> = {
   products: ['stockQuantity', 'isLowStock'],
-  customers: ['creditBalance', 'outstandingDues'],
+  customers: ['availableCredit', 'outstandingDues'],
   suppliers: ['outstandingPayable'],
   // A bill's numbering, GST split and settlement are computed server-side from the items,
   // the place of supply and the payments against it. The device's provisional sum is for

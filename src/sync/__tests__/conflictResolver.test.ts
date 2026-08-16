@@ -124,7 +124,7 @@ describe('policy', () => {
 
   it('declares the fields no client may write', () => {
     expect(SERVER_OWNED.products).toContain('stockQuantity');
-    expect(SERVER_OWNED.customers).toEqual(expect.arrayContaining(['creditBalance', 'outstandingDues']));
+    expect(SERVER_OWNED.customers).toEqual(expect.arrayContaining(['availableCredit', 'outstandingDues']));
   });
 });
 
