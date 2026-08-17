@@ -1,6 +1,6 @@
 import { useAuthStore } from '@/store/authStore';
 import { api } from '../client';
-import { paymentsApi } from '../endpoints';
+import { documentsApi, paymentsApi } from '../endpoints';
 
 /**
  * The online payment retry path: a retry of the same payment must carry the same
@@ -97,5 +97,95 @@ describe('online payment idempotency', () => {
     await paymentsApi.recordCustomerPayment('cust-1', payload);
 
     expect(keyOf(0)).toBe(keyOf(1));
+  });
+});
+
+/**
+ * Applying credit is a settlement, so it carries the payment contract rather than the
+ * plain-create one: a retry after an unknown outcome must not spend the pool twice.
+ */
+describe('credit application idempotency', () => {
+  it('reuses the key when the outcome is unknown', async () => {
+    network.post.mockRejectedValueOnce(timeout());
+
+    await expect(paymentsApi.applyCredit('inv-1', 400)).rejects.toThrow();
+    await paymentsApi.applyCredit('inv-1', 400);
+
+    expect(network.post).toHaveBeenCalledTimes(2);
+    expect(keyOf(0)).toBe(keyOf(1));
+  });
+
+  it('holds the key on a 409, which is exactly the unresolved case', async () => {
+    network.post.mockRejectedValueOnce(refusal(409));
+
+    await expect(paymentsApi.applyCredit('inv-1', 400)).rejects.toThrow();
+    await paymentsApi.applyCredit('inv-1', 400);
+
+    expect(keyOf(0)).toBe(keyOf(1));
+  });
+
+  it('mints a new key once an application has succeeded', async () => {
+    await paymentsApi.applyCredit('inv-1', 400);
+    await paymentsApi.applyCredit('inv-1', 400);
+
+    expect(keyOf(0)).not.toBe(keyOf(1));
+  });
+
+  it('mints a new key after a definite refusal', async () => {
+    network.post.mockRejectedValueOnce(refusal(422));
+
+    await expect(paymentsApi.applyCredit('inv-1', 400)).rejects.toThrow();
+    await paymentsApi.applyCredit('inv-1', 400);
+
+    expect(keyOf(0)).not.toBe(keyOf(1));
+  });
+
+  it('does not share a key between different applications', async () => {
+    network.post.mockRejectedValue(timeout());
+
+    await expect(paymentsApi.applyCredit('inv-1', 400)).rejects.toThrow();
+    await expect(paymentsApi.applyCredit('inv-1', 250)).rejects.toThrow();
+    await expect(paymentsApi.applyCredit('inv-2', 400)).rejects.toThrow();
+
+    expect(new Set([keyOf(0), keyOf(1), keyOf(2)]).size).toBe(3);
+  });
+});
+
+/** A credit note mints credit, so a lost response must not raise a second one. */
+describe('credit note creation idempotency', () => {
+  const NOTE = {
+    customerId: 'cust-1',
+    items: [{ productId: 'prod-1', name: 'Rice', quantity: 1, price: 400, taxRate: 0 }],
+    taxRate: 0,
+    discountType: 'flat' as const,
+    discountValue: 0,
+    notes: '',
+    sourceInvoiceId: 'inv-1'
+  };
+
+  it('reuses the key when the outcome is unknown', async () => {
+    network.post.mockRejectedValueOnce(timeout());
+
+    await expect(documentsApi.create('credit_note', NOTE)).rejects.toThrow();
+    await documentsApi.create('credit_note', NOTE);
+
+    expect(keyOf(0)).toBe(keyOf(1));
+  });
+
+  it('mints a new key once the note has been raised', async () => {
+    await documentsApi.create('credit_note', NOTE);
+    await documentsApi.create('credit_note', NOTE);
+
+    expect(keyOf(0)).not.toBe(keyOf(1));
+  });
+
+  it('does not share a key between different notes', async () => {
+    network.post.mockRejectedValue(timeout());
+
+    await expect(documentsApi.create('credit_note', NOTE)).rejects.toThrow();
+    await expect(documentsApi.create('credit_note', { ...NOTE, sourceInvoiceId: 'inv-2' })).rejects.toThrow();
+    await expect(documentsApi.create('quotation', NOTE)).rejects.toThrow();
+
+    expect(new Set([keyOf(0), keyOf(1), keyOf(2)]).size).toBe(3);
   });
 });

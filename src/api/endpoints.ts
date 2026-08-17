@@ -525,10 +525,21 @@ export const documentsApi = {
     api.get<{ documents: Invoice[] }>(`/documents/${documentType}`, { params }).then((res) => res.data.documents),
   get: (documentType: SalesDocumentKind, id: string) =>
     api.get<{ document: Invoice }>(`/documents/${documentType}/${id}`).then((res) => res.data.document),
+  /**
+   * A credit note mints customer credit, so it gets the settlement retry contract rather than
+   * the plain-create one: a note whose response was lost must not be raised twice under a
+   * fresh key. Keyed by what the document IS — its type and its whole payload — so a retry of
+   * the same note reuses the key while a genuinely different one does not.
+   */
   create: (documentType: SalesDocumentKind, payload: DocumentCreatePayload) =>
-    api
-      .post<{ document: Invoice }>(`/documents/${documentType}`, payload, { headers: { 'Idempotency-Key': idempotencyKey(documentType) } })
-      .then((res) => res.data.document),
+    withPaymentIdempotency(
+      `document:${documentType}:${JSON.stringify(payload)}`,
+      documentType,
+      (key) =>
+        api
+          .post<{ document: Invoice }>(`/documents/${documentType}`, payload, { headers: { 'Idempotency-Key': key } })
+          .then((res) => res.data.document)
+    ),
   convert: (documentType: SalesDocumentKind, id: string) =>
     api
       .post<{ invoice: Invoice }>(`/documents/${documentType}/${id}/convert`, {}, { headers: { 'Idempotency-Key': idempotencyKey(`convert-${id}`) } })
@@ -565,7 +576,11 @@ const asPaymentResult = (record: PaymentRecord): RecordPaymentResponse => ({
 });
 
 /**
- * The idempotency key for one payment attempt, held so a retry carries the SAME key.
+ * The idempotency key for one money-changing attempt, held so a retry carries the SAME key.
+ *
+ * Used by every request that moves or mints money: receipts, dues collection, applying
+ * customer credit, and raising a credit note. They share one contract because they share one
+ * failure mode — a lost response under a fresh key becomes a second, unintended operation.
  *
  * `idempotencyKey` mints a fresh value per call, which is right for a create the user can
  * repeat on purpose but wrong for money: a receipt that reached the server and whose response
@@ -649,12 +664,22 @@ export const paymentsApi = {
    */
   customerCredits: (customerId: string) =>
     api.get<CustomerCredits>(`/payments/customers/${customerId}/credits`).then((res) => res.data),
+  /**
+   * Spending credit is a settlement, so it carries the same retry contract as a receipt: an
+   * attempt whose outcome is unknown is retried under the SAME key. A fresh key would let a
+   * lost response turn one application into two, silently halving the customer's pool.
+   */
   applyCredit: (invoiceId: string, amount: number) =>
-    api
-      .post<ApplyCreditResponse>(`/payments/invoices/${invoiceId}/apply-credit`, { amount }, {
-        headers: { 'Idempotency-Key': idempotencyKey(`apply-credit-${invoiceId}`) }
-      })
-      .then((res) => res.data),
+    withPaymentIdempotency(
+      `credit:${invoiceId}:${amount}`,
+      `apply-credit-${invoiceId}`,
+      (key) =>
+        api
+          .post<ApplyCreditResponse>(`/payments/invoices/${invoiceId}/apply-credit`, { amount }, {
+            headers: { 'Idempotency-Key': key }
+          })
+          .then((res) => res.data)
+    ),
   reverseCreditApplication: (allocationId: string, reason?: string) =>
     api
       .post<ApplyCreditResponse>(`/payments/allocations/${allocationId}/reverse`, { reason }, {
