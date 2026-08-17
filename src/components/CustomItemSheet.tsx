@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { Feather } from '@expo/vector-icons';
-import { Text, useTheme } from 'react-native-paper';
+import { HelperText, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { UseFormReturn } from 'react-hook-form';
+import { Controller, type UseFormReturn } from 'react-hook-form';
 import { FormTextInput } from '@/components/FormTextInput';
 import { UnitInput } from '@/components/UnitInput';
 import { MoneyInput, QuantityInput } from '@/features/invoices/components/FormInputs';
@@ -79,23 +79,47 @@ export function CustomItemSheet({ visible, form, onSubmit, onClose }: Props) {
             contentContainerStyle={styles.scrollContent}
           >
             <FormTextInput control={form.control} name="name" label="Name" autoCapitalize="words" />
-            <MoneyInput
-              cardBorder={cardBorder}
-              inputBackground={inputBackground}
-              label="Price"
-              value={form.watch('price')}
-              onChangeText={(value) => form.setValue('price', value)}
-              activeOutlineColor={theme.colors.primary}
-              style={styles.field}
+            {/* Controller-driven like FormTextInput: price defaults to empty, so without a
+                visible error a failed submit looked like the Add button doing nothing. */}
+            <Controller
+              control={form.control}
+              name="price"
+              render={({ field: { onChange, onBlur, value }, fieldState: { error } }) => (
+                <>
+                  <MoneyInput
+                    cardBorder={cardBorder}
+                    inputBackground={inputBackground}
+                    label="Price"
+                    value={value}
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    error={Boolean(error)}
+                    activeOutlineColor={theme.colors.primary}
+                    style={error?.message ? undefined : styles.field}
+                  />
+                  {error?.message ? <HelperText type="error" visible>{error.message}</HelperText> : null}
+                </>
+              )}
             />
-            <QuantityInput
-              cardBorder={cardBorder}
-              inputBackground={inputBackground}
-              label="Quantity"
-              value={form.watch('quantity')}
-              onChangeText={(value) => form.setValue('quantity', value)}
-              activeOutlineColor={theme.colors.primary}
-              style={styles.field}
+            <Controller
+              control={form.control}
+              name="quantity"
+              render={({ field: { onChange, onBlur, value }, fieldState: { error } }) => (
+                <>
+                  <QuantityInput
+                    cardBorder={cardBorder}
+                    inputBackground={inputBackground}
+                    label="Quantity"
+                    value={value}
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    error={Boolean(error)}
+                    activeOutlineColor={theme.colors.primary}
+                    style={error?.message ? undefined : styles.field}
+                  />
+                  {error?.message ? <HelperText type="error" visible>{error.message}</HelperText> : null}
+                </>
+              )}
             />
             <View style={styles.unitBlock}>
               <UnitInput

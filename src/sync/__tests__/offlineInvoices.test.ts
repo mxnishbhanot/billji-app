@@ -95,6 +95,21 @@ describe('issuing an invoice offline', () => {
     expect(page.invoices[0].customerSnapshot?.name).toBe('Ramesh Kumar');
   });
 
+  it('bills a walk-in sale offline with no customer at all', async () => {
+    await syncedProduct({ name: 'Cement bag', price: 380, stockQuantity: 40, taxRate: 18 }, 'srv-p1');
+
+    const { record } = await createInvoiceLocally(
+      { items: [{ productId: 'srv-p1', quantity: 1 }], discountType: 'flat', discountValue: 0 },
+      options()
+    );
+
+    expect(record.doc?.customer).toBeUndefined();
+    expect(record.doc?.customerId).toBeUndefined();
+    expect((record.doc?.customerSnapshot as { name?: string })?.name).toBe('Walk-in customer');
+    const page = await localInvoicePage(BIZ, {}, txn);
+    expect(page.invoices[0].customerSnapshot?.name).toBe('Walk-in customer');
+  });
+
   it('writes the document and its queued push together, or neither', async () => {
     const customerLocalId = await syncedCustomer('Ramesh Kumar', 'srv-c1');
 

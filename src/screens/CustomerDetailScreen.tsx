@@ -37,7 +37,7 @@ const PAYMENT_STATUS_META: Record<PaymentRecordStatus, { label: string; tone: st
   refunded: { label: 'Refunded', tone: 'refunded' }
 };
 
-export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
+export function CustomerDetailScreen({ navigation, route }: CustomerDetailScreenProps) {
   const { customer } = route.params;
   const theme = useTheme();
   const isDark = theme.dark;
@@ -62,6 +62,15 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
     enabled: canRecordPayment
   });
   const outstanding: CustomerOutstanding = outstandingQuery.data ?? { invoices: [], totalOutstanding: 0 };
+
+  // Dues and credit are separate balances now — a customer can owe money and hold credit at
+  // the same time, so both cards can show a figure.
+  const creditsQuery = useQuery({
+    queryKey: queryKeys.payments.customerCredits(customer._id),
+    queryFn: () => paymentsApi.customerCredits(customer._id),
+    enabled: canRecordPayment
+  });
+  const availableCredit = creditsQuery.data ? creditsQuery.data.availableCredit : customer.availableCredit ?? 0;
 
   const collectDues = useMutation({
     mutationFn: (payload: { amount: number; method: PaymentMethod; invoiceIds: string[]; allowCredit: boolean; reference?: string }) =>
@@ -159,7 +168,14 @@ export function CustomerDetailScreen({ route }: CustomerDetailScreenProps) {
 
       <View style={styles.statRow}>
         <StatCard label="Outstanding" value={formatCurrency(outstandingAmount)} hint="Amount due" tone="danger" icon="alert-circle-outline" />
-        <StatCard label="Credit" value="Coming soon" hint="Advance balance" tone="success" icon="wallet-outline" />
+        <StatCard
+          label="Credit"
+          value={formatCurrency(availableCredit)}
+          hint={availableCredit > 0 ? 'Tap to see sources' : 'Advance balance'}
+          tone="success"
+          icon="wallet-outline"
+          onPress={availableCredit > 0 ? () => navigation.navigate('CustomerCredits', { customerId: customer._id, customerName: customer.name }) : undefined}
+        />
       </View>
 
       {canCollect ? (

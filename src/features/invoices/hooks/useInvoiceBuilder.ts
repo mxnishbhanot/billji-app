@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { customersApi, documentsApi, invoicesApi, productsApi } from '@/api/endpoints';
+import { useAppToast } from '@/components/AppToast';
 import { PaywallError, apiErrorMessage, isPaywallError } from '@/api/client';
 import { useDocumentDraft } from '@/shared/drafts/useDocumentDraft';
 import { useSupplyType } from '@/shared/gst/useSupplyType';
@@ -15,8 +16,11 @@ import {
   addProductToItems,
   buildInvoiceDraftPayload,
   buildInvoicePayload,
+  duplicateAddToastMessage,
   hasInvoiceDraftContent,
+  invoiceItemsToBuilderItems,
   removeInvoiceItem,
+  setItemPrice,
   setItemQuantity,
   updateItemQuantity
 } from '../services/invoiceBuilderService';
@@ -52,6 +56,7 @@ export const useInvoiceBuilder = ({
 }) => {
   const queryClient = useQueryClient();
   const onboarding = useOnboardingOptional();
+  const { showToast } = useAppToast();
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerPicker, setCustomerPicker] = useState(false);
@@ -119,6 +124,22 @@ export const useInvoiceBuilder = ({
     setDiscountType(payload.discountType);
     setDiscountValue(payload.discountValue);
     setNotes(payload.notes);
+  }, []);
+
+  /**
+   * Seeds the builder from an existing invoice for "Duplicate & correct". This only fills the
+   * form — the source invoice is untouched and nothing is created until the user taps Generate,
+   * so there is exactly one create and one stock movement for the corrected bill.
+   */
+  const applyPrefillInvoice = useCallback((invoice: Invoice) => {
+    setSelectedCustomerId(invoice.customer || '');
+    setSelectedCustomer(invoice.customer ? { ...invoice.customerSnapshot, _id: invoice.customer } : null);
+    setItems(invoiceItemsToBuilderItems(invoice.items));
+    // Aggregate rate; per-line rates ride along on the items, matching the server's own duplicate.
+    setTaxRate(String(invoice.tax?.rate ?? 0));
+    setDiscountType(invoice.discount?.type ?? 'flat');
+    setDiscountValue(String(invoice.discount?.value ?? 0));
+    setNotes(invoice.notes || '');
   }, []);
 
   // A builder holding only the pre-filled default rate has no user content — don't autosave it.
@@ -191,7 +212,15 @@ export const useInvoiceBuilder = ({
     setCustomerPicker(false);
   };
 
-  const addProduct = useCallback((product: Product) => setItems((current) => addProductToItems(current, product)), []);
+  const addProduct = useCallback(
+    (product: Product) => {
+      // Same path for picker taps and barcode scans, so a repeat scan gets the same nudge.
+      const message = duplicateAddToastMessage(items, product);
+      setItems((current) => addProductToItems(current, product));
+      if (message) showToast(message, 'info');
+    },
+    [items, showToast]
+  );
 
   /**
    * Scan a label straight onto the bill. Looks the code up directly rather than pushing it
@@ -226,6 +255,7 @@ export const useInvoiceBuilder = ({
   );
   const updateQuantity = useCallback((index: number, delta: number) => setItems((current) => updateItemQuantity(current, index, delta)), []);
   const setQuantity = useCallback((index: number, quantity: number) => setItems((current) => setItemQuantity(current, index, quantity)), []);
+  const setPrice = useCallback((index: number, price: number) => setItems((current) => setItemPrice(current, index, price)), []);
   const removeItem = useCallback((index: number) => setItems((current) => removeInvoiceItem(current, index)), []);
   const addCustomItem = useCallback((item: InvoiceItem) => setItems((current) => [...current, item]), []);
 
@@ -238,11 +268,8 @@ export const useInvoiceBuilder = ({
     // Re-entry guard: a second tap before isPending propagates would POST twice → duplicate invoice.
     if (createInvoiceMutation.isPending) return;
 
-    if (!selectedCustomerId) {
-      showDialog({ title: 'Select or add a customer', message: `Choose a saved customer or quick add a new one before generating the ${documentNoun}.`, tone: 'warning' });
-      return;
-    }
-
+    // No customer check: a counter/cash sale is billed without one (server records it as a
+    // customerless "Walk-in customer" document — no Customer row, no balance, no ledger).
     if (!items.length) {
       showDialog({ title: 'Add at least one item', message: `Pick a product or add a custom item before generating the ${documentNoun}.`, tone: 'warning' });
       return;
@@ -274,6 +301,7 @@ export const useInvoiceBuilder = ({
   return {
     activeCustomer,
     addCustomer,
+    applyPrefillInvoice,
     addCustomItem,
     addProduct,
     addScannedProduct,
@@ -313,6 +341,7 @@ export const useInvoiceBuilder = ({
     setDiscountType,
     setDiscountValue,
     setNotes,
+    setPrice,
     setProductSearch,
     setQuantity,
     setStockWarning,

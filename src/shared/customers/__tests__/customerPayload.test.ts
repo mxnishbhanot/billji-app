@@ -1,5 +1,5 @@
 import { resolvePlaceOfSupplyCode, supplyTypeFor } from '@/shared/gst/gstStates';
-import { withBillingAddress } from '../customerPayload';
+import { hasWhatsAppPhone, withBillingAddress } from '../customerPayload';
 
 describe('withBillingAddress', () => {
   test('folds the flat form fields into billingAddress, keeping line1', () => {
@@ -26,5 +26,20 @@ describe('withBillingAddress', () => {
     };
     const code = resolvePlaceOfSupplyCode({ customerState: saved.billingAddress.state, supplierStateCode: '27' });
     expect(supplyTypeFor('27', code)).toBe('inter');
+  });
+});
+
+describe('hasWhatsAppPhone', () => {
+  test('true for a customer with a dialable number, however it is formatted', () => {
+    expect(hasWhatsAppPhone({ phone: '9876543210' })).toBe(true);
+    expect(hasWhatsAppPhone({ phone: '+91 98765-43210' })).toBe(true);
+  });
+
+  test('false for a customerless invoice snapshot or an unusable phone', () => {
+    expect(hasWhatsAppPhone(null)).toBe(false);
+    expect(hasWhatsAppPhone(undefined)).toBe(false);
+    expect(hasWhatsAppPhone({ name: 'Walk-in' })).toBe(false);
+    expect(hasWhatsAppPhone({ phone: '' })).toBe(false);
+    expect(hasWhatsAppPhone({ phone: '  --  ' })).toBe(false);
   });
 });

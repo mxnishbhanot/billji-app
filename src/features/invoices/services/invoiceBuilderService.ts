@@ -39,13 +39,49 @@ export const addProductToItems = (items: InvoiceItem[], product: Product) => {
   return [...items, productToInvoiceItem(product)];
 };
 
-export const updateItemQuantity = (items: InvoiceItem[], index: number, delta: number) =>
+/**
+ * Feedback line for re-adding a product that is already on the bill. The row it touches may
+ * be scrolled out of view and the row count does not change, so without this the user sees
+ * nothing happen. Null for a brand-new product (the new row is its own feedback) and for
+ * custom items (no productId to match on).
+ */
+export const duplicateAddToastMessage = (items: InvoiceItem[], product: Product) => {
+  const existing = items.find((item) => item.productId === product._id);
+  return existing ? `${existing.name} — qty ${existing.quantity + 1}` : null;
+};
+
+export const updateItemQuantity =(items: InvoiceItem[], index: number, delta: number) =>
   items.map((item, itemIndex) => (itemIndex === index ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item));
 
 export const setItemQuantity = (items: InvoiceItem[], index: number, quantity: number) =>
   items.map((item, itemIndex) => (itemIndex === index ? { ...item, quantity: Math.max(1, Math.floor(quantity)) } : item));
 
+// Per-line selling price override. Only this invoice line moves — the catalog product,
+// its cost snapshot and the line's own taxRate/hsn are all left alone, and the server
+// recomputes tax from the price it is sent.
+export const setItemPrice = (items: InvoiceItem[], index: number, price: number) =>
+  items.map((item, itemIndex) => (itemIndex === index ? { ...item, price: Math.max(0, price) } : item));
+
 export const removeInvoiceItem = (items: InvoiceItem[], index: number) => items.filter((_, itemIndex) => itemIndex !== index);
+
+/**
+ * Maps a saved invoice's lines back into builder rows for "Duplicate & correct".
+ * Server-computed money (taxableValue/taxAmount/cgst/…/total) is dropped — the builder
+ * recalculates it, and the server recomputes it again on create. `product` becomes
+ * `productId` so duplicate-add matching and row keys behave like a freshly picked item.
+ */
+export const invoiceItemsToBuilderItems = (items: InvoiceItem[]): InvoiceItem[] =>
+  items.map((item) => ({
+    productId: item.productId ?? (typeof item.product === 'string' ? item.product : undefined),
+    name: item.name,
+    price: item.price,
+    quantity: item.quantity,
+    sku: item.sku,
+    unit: item.unit,
+    hsn: item.hsn,
+    taxRate: item.taxRate,
+    ...(item.isCustom ? { isCustom: true, _uid: `custom-${(customItemSeq += 1)}` } : {})
+  }));
 
 // Monotonic client-only id so custom-item rows keep a stable React key (and stepper
 // state) across reorders/removals — custom items have no productId to key on.
@@ -77,7 +113,9 @@ export const buildInvoicePayload = ({
   notes: string;
   allowOversell?: boolean;
 }): InvoiceCreatePayload => ({
-  customerId: selectedCustomerId,
+  // Omitted, never blank: a walk-in/cash sale has no customer, and the server reads a
+  // missing customerId as exactly that (customer stays null, no Customer row is created).
+  ...(selectedCustomerId ? { customerId: selectedCustomerId } : {}),
   items: items.map((item) => ({
     productId: item.productId,
     name: item.name,

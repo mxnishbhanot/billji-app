@@ -9,6 +9,23 @@ const relativeFallbackDate = new Intl.DateTimeFormat('en-IN', { day: '2-digit', 
 
 export const formatCurrency = (value?: number | string | null) => inrCurrency.format(Number(value || 0));
 
+/**
+ * Indian short-scale money for tight spaces: ₹99,999 stays exact, ₹1,25,000 becomes
+ * ₹1.25L, ₹2,40,00,000 becomes ₹2.4Cr. Hand-rolled rather than Intl `notation: 'compact'`
+ * because Hermes ships without the ICU data that produces the L/Cr suffixes.
+ */
+export const formatCurrencyCompact = (value?: number | string | null) => {
+  const n = Number(value || 0);
+  const abs = Math.abs(n);
+  if (!Number.isFinite(n) || abs < 100000) return formatCurrency(n);
+  const [unit, suffix] = abs >= 10000000 ? [10000000, 'Cr'] : [100000, 'L'];
+  const scaled = n / unit;
+  const scaledAbs = Math.abs(scaled);
+  const fixed = scaled.toFixed(scaledAbs >= 100 ? 0 : scaledAbs >= 10 ? 1 : 2);
+  const trimmed = fixed.includes('.') ? fixed.replace(/0+$/, '').replace(/\.$/, '') : fixed;
+  return `₹${trimmed}${suffix}`;
+};
+
 export const formatDate = (value?: string | Date | null) =>
   value ? shortDate.format(new Date(value)) : '-';
 

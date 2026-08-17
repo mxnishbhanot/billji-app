@@ -33,6 +33,18 @@ const bill = async (customerId: string, productId: string, quantity = 1) =>
 const operations = () => listOperations({ businessId: BIZ, txn: device.txn });
 const operation = async (entityType: string) => (await listOperations({ businessId: BIZ, entityType, txn: device.txn }))[0];
 
+/**
+ * The device clock starts at this fixture date, and the payment projection only counts an
+ * accepted receipt for a week of wall-clock time (paymentProjection's CATCH_UP_WINDOW_MS).
+ * Pin the wall clock to the same instant so the suite does not start failing a week later.
+ */
+const STARTED_AT = '2026-08-02T10:00:00.000Z';
+let realNow: jest.SpyInstance;
+beforeAll(() => {
+  realNow = jest.spyOn(Date, 'now').mockReturnValue(Date.parse(STARTED_AT));
+});
+afterAll(() => realNow.mockRestore());
+
 beforeEach(async () => {
   server = createFakeServer();
   device = await createTestDevice({ server, businessId: BIZ });

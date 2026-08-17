@@ -9,13 +9,12 @@ import { CustomItemSheet } from '@/components/CustomItemSheet';
 import { alpha, appColors, fontStyles, radii, spacing, typeScale } from '@/theme/theme';
 import { Customer, CustomerFormValues, CustomItemFormValues, DiscountType, DraftDocument, InvoiceDraftPayload, InvoiceItem, Product, StockShortage } from '@/types';
 import { formatCurrency } from '@/utils/format';
+import { sanitizeDecimal } from '@/utils/number';
 import { customItemDefaults, customItemFromForm, initials } from '../services/invoiceBuilderService';
 import { MoneyInput } from './FormInputs';
 
 const VISIBLE_PRODUCT_ROWS = 5;
-const VISIBLE_INVOICE_ITEM_ROWS = 5;
 const PRODUCT_ROW_HEIGHT = 72;
-const INVOICE_ITEM_ROW_HEIGHT = 112;
 
 type ColorSet = ReturnType<typeof appColors>;
 type DraftStatus = 'idle' | 'saved' | 'syncing' | 'synced' | 'error';
@@ -89,6 +88,7 @@ export function DraftSyncIndicator({
 export function CustomerSelectorCard({
   customer,
   cardBorder,
+  customerOptional = false,
   colors,
   isDark,
   onAdd,
@@ -97,6 +97,8 @@ export function CustomerSelectorCard({
 }: {
   customer: Customer | null;
   cardBorder: string;
+  /** Invoices can be billed without a customer; orders still require one. */
+  customerOptional?: boolean;
   colors: ColorSet;
   isDark: boolean;
   onAdd: () => void;
@@ -133,6 +135,17 @@ export function CustomerSelectorCard({
           </View>
         </>
       ) : (
+        <>
+        {/* Customer is optional — say so, so the counter sale is not held up looking for one. */}
+        {customerOptional ? <View style={[styles.customerSelected, { backgroundColor: subSurface, borderColor: cardBorder }]}>
+          <View style={[styles.avatar, { backgroundColor: alpha(colors.primary, isDark ? 0.22 : 0.14) }]}>
+            <Feather name="user" size={16} color={colors.primary} />
+          </View>
+          <View style={styles.flexContent}>
+            <Text style={[styles.customerName, { color: theme.colors.onSurface }]}>Walk-in sale</Text>
+            <Text style={[styles.customerMeta, { color: theme.colors.onSurfaceVariant }]}>No customer needed — bill it as a cash sale</Text>
+          </View>
+        </View> : null}
         <View style={styles.customerActions}>
           <Pressable onPress={onChange} style={({ pressed }) => [styles.primaryPick, { backgroundColor: pressed ? colors.primaryStrong : theme.colors.primary }]}>
             <Feather name="users" size={15} color="#FFFFFF" />
@@ -143,6 +156,7 @@ export function CustomerSelectorCard({
             <Text style={[styles.secondaryPickLabel, { color: theme.colors.primary }]}>Quick add</Text>
           </Pressable>
         </View>
+        </>
       )}
     </View>
   );
@@ -304,12 +318,74 @@ function QuantityStepper({
   );
 }
 
+// Tap-to-edit selling price for one invoice line, mirroring the quantity stepper's
+// inline edit. The override lives on the line only — the catalog product is untouched.
+function PriceField({
+  cardBorder,
+  colors,
+  index,
+  onSetPrice,
+  price
+}: {
+  cardBorder: string;
+  colors: ColorSet;
+  index: number;
+  onSetPrice: (index: number, price: number) => void;
+  price: number;
+}) {
+  const theme = useTheme();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  const commit = () => {
+    setEditing(false);
+    const parsed = Number(draft);
+    // Blank or unparseable reverts to the current price rather than zeroing the line.
+    if (!draft.trim() || Number.isNaN(parsed)) return;
+    if (parsed !== price) onSetPrice(index, parsed);
+  };
+
+  if (editing) {
+    return (
+      <View style={[styles.priceEditor, { backgroundColor: colors.card, borderColor: cardBorder }]}>
+        <Text style={[styles.priceEditorPrefix, { color: theme.colors.onSurfaceVariant }]}>₹</Text>
+        <RNTextInput
+          autoFocus
+          keyboardType="decimal-pad"
+          maxLength={12}
+          selectTextOnFocus
+          value={draft}
+          onChangeText={(value) => setDraft(sanitizeDecimal(value))}
+          onBlur={commit}
+          onSubmitEditing={commit}
+          style={[styles.priceInput, { color: theme.colors.onSurface }]}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Edit price, currently ${formatCurrency(price)}`}
+      hitSlop={8}
+      onPress={() => {
+        setDraft(String(price));
+        setEditing(true);
+      }}
+    >
+      <Text style={[styles.priceValue, { color: theme.colors.primary }]}>{formatCurrency(price)}</Text>
+    </Pressable>
+  );
+}
+
 export function InvoiceItemsEditor({
   cardBorder,
   colors,
   isDark,
   items,
   onRemove,
+  onSetPrice,
   onSetQuantity,
   onUpdateQuantity,
   subSurface
@@ -319,6 +395,8 @@ export function InvoiceItemsEditor({
   isDark: boolean;
   items: InvoiceItem[];
   onRemove: (index: number) => void;
+  /** Omitted by the order builder — price editing is an invoice-only affordance for now. */
+  onSetPrice?: (index: number, price: number) => void;
   onSetQuantity: (index: number, quantity: number) => void;
   onUpdateQuantity: (index: number, delta: number) => void;
   subSurface: string;
@@ -335,14 +413,23 @@ export function InvoiceItemsEditor({
           </View>
         ) : null}
       </View>
+      {/* Every row renders regardless, so the list grows with the page scroll instead of
+          clipping into a second scroll surface — see the items-list note in the UX review. */}
       {items.length ? (
-        <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={items.length > VISIBLE_INVOICE_ITEM_ROWS} scrollEnabled={items.length > VISIBLE_INVOICE_ITEM_ROWS} style={styles.invoiceItemsList}>
+        <View>
           {items.map((item, index) => (
             <View key={item.productId ?? item._uid ?? `${item.name}-${index}`} style={[styles.invoiceItem, { backgroundColor: subSurface, borderColor: cardBorder }]}>
               <View style={styles.itemHeader}>
                 <View style={styles.flexContent}>
                   <Text style={[styles.itemName, { color: theme.colors.onSurface }]}>{item.name}</Text>
-                  <Text style={[styles.itemMeta, { color: theme.colors.onSurfaceVariant }]}>{item.quantity}{item.unit ? ` ${item.unit}` : ''} x {formatCurrency(item.price)}</Text>
+                  <View style={styles.itemMetaRow}>
+                    <Text style={[styles.itemMeta, { color: theme.colors.onSurfaceVariant }]}>{item.quantity}{item.unit ? ` ${item.unit}` : ''} x</Text>
+                    {onSetPrice ? (
+                      <PriceField cardBorder={cardBorder} colors={colors} index={index} onSetPrice={onSetPrice} price={item.price} />
+                    ) : (
+                      <Text style={[styles.itemMeta, { color: theme.colors.onSurfaceVariant }]}>{formatCurrency(item.price)}</Text>
+                    )}
+                  </View>
                 </View>
                 <Text style={[styles.itemTotal, { color: theme.colors.onSurface }]}>{formatCurrency(item.quantity * item.price)}</Text>
               </View>
@@ -354,7 +441,7 @@ export function InvoiceItemsEditor({
               </View>
             </View>
           ))}
-        </ScrollView>
+        </View>
       ) : <Text style={[styles.emptyItemsText, { color: theme.colors.onSurfaceVariant }]}>No items yet.</Text>}
     </View>
   );
@@ -434,7 +521,10 @@ export function TotalsExtrasCard({
   return (
     <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: cardBorder }]}>
       <Text style={[styles.sectionTitle, { color: theme.colors.onSurface, marginBottom: 12 }]}>Totals & extras</Text>
-      <MoneyInput cardBorder={cardBorder} inputBackground={inputBackground} label="Tax rate %" value={taxRate} onChangeText={onTaxRateChange} activeOutlineColor={theme.colors.primary} />
+      {/* Fallback only: gstMath uses `item.taxRate ?? this rate`, so a product carrying its
+          own GST rate ignores this field. Labelled so the number can't read as a global override. */}
+      <MoneyInput cardBorder={cardBorder} inputBackground={inputBackground} label="Default tax rate %" value={taxRate} onChangeText={onTaxRateChange} activeOutlineColor={theme.colors.primary} />
+      <Text style={[styles.fieldHint, { color: theme.colors.onSurfaceVariant }]}>Applies only to items without their own GST rate.</Text>
       <View style={styles.discountRow}>
         <MoneyInput cardBorder={cardBorder} inputBackground={inputBackground} label="Discount" value={discountValue} onChangeText={onDiscountValueChange} activeOutlineColor={theme.colors.primary} style={styles.discountInput} />
         <DiscountTypeToggle cardBorder={cardBorder} value={discountType} onChange={onDiscountTypeChange} subSurface={subSurface} />
@@ -638,13 +728,18 @@ const styles = StyleSheet.create({
   input: { fontSize: 14 },
   inputOutline: { borderRadius: radii.input },
   invoiceItem: { borderRadius: radii.md, borderWidth: 1, marginTop: 10, padding: spacing.cardPaddingCompact },
-  invoiceItemsList: { maxHeight: INVOICE_ITEM_ROW_HEIGHT * VISIBLE_INVOICE_ITEM_ROWS },
   itemActions: { alignItems: 'center', flexDirection: 'row', gap: 10, marginTop: 12 },
   itemHeader: { alignItems: 'center', flexDirection: 'row', gap: 12, justifyContent: 'space-between' },
-  itemMeta: { ...typeScale.caption, fontSize: 12, marginTop: 2 },
+  itemMeta: { ...typeScale.caption, fontSize: 12 },
+  itemMetaRow: { alignItems: 'center', flexDirection: 'row', gap: 4, marginTop: 2 },
   itemName: { ...fontStyles.semiBold, fontSize: 14 },
   itemTotal: { ...fontStyles.bold, fontSize: 14 },
   listHint: { ...typeScale.caption, fontSize: 12 },
+  fieldHint: { ...typeScale.caption, fontSize: 11.5, marginTop: 6 },
+  priceEditor: { alignItems: 'center', borderRadius: radii.pill, borderWidth: 1, flexDirection: 'row', paddingHorizontal: 8 },
+  priceEditorPrefix: { ...fontStyles.semiBold, fontSize: 12 },
+  priceInput: { ...fontStyles.semiBold, fontSize: 12, minWidth: 56, paddingHorizontal: 2, paddingVertical: 2, textAlign: 'left' },
+  priceValue: { ...fontStyles.semiBold, fontSize: 12, textDecorationLine: 'underline' },
   primaryPick: { alignItems: 'center', borderRadius: radii.input, flex: 1, flexDirection: 'row', gap: 8, justifyContent: 'center', paddingVertical: 11 },
   primaryPickLabel: { ...fontStyles.bold, color: '#FFFFFF', fontSize: 13 },
   productList: { marginTop: 10, maxHeight: PRODUCT_ROW_HEIGHT * VISIBLE_PRODUCT_ROWS },

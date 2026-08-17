@@ -55,7 +55,7 @@ export function ResetPasswordScreen({ navigation, route }: ResetPasswordScreenPr
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.shell}>
-          <View style={[styles.heroPanel, { borderColor: alpha('#C3C0FF', 0.3) }]}>
+          <View style={[styles.heroPanel, { borderColor: alpha('#FFDBCB', 0.3) }]}>
             <View style={styles.brandRow}>
               <View style={styles.logoWrap}>
                 <Image source={billjiLogo} resizeMode="contain" style={styles.logo} />
@@ -149,13 +149,13 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1, paddingBottom: 36, paddingHorizontal: spacing.screenPadding },
   shell: { flex: 1, gap: spacing.md, justifyContent: 'center', minHeight: 620, paddingVertical: spacing.md },
   heroPanel: {
-    backgroundColor: '#1C1A4A',
+    backgroundColor: '#9B4000',
     borderRadius: radii.xl,
     borderWidth: 1,
     minHeight: 150,
     overflow: 'hidden',
     padding: spacing.lg,
-    shadowColor: '#4338CA',
+    shadowColor: '#D95F18',
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.08,
     shadowRadius: 28

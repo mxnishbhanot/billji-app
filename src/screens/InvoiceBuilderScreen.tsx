@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { NavigationAction } from '@react-navigation/native';
+import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { Feather } from '@expo/vector-icons';
 import { Button, Text, useTheme } from 'react-native-paper';
@@ -15,6 +16,8 @@ import {
 } from '@/features/invoices/components/InvoiceBuilderParts';
 import { useInvoiceBuilder } from '@/features/invoices/hooks/useInvoiceBuilder';
 import { customerDefaults, customItemDefaults } from '@/features/invoices/services/invoiceBuilderService';
+import { invoicesApi } from '@/api/endpoints';
+import { queryKeys } from '@/shared/query/queryKeys';
 import { useAppDialog } from '@/components/AppDialog';
 import { useAppToast } from '@/components/AppToast';
 import { BarcodeScannerSheet } from '@/components/BarcodeScannerSheet';
@@ -23,18 +26,24 @@ import { Screen } from '@/components/Screen';
 import { UpgradeSheet } from '@/components/UpgradeSheet';
 import { LIMIT } from '@/constants/entitlements';
 import { useEntitlements } from '@/shared/hooks/useEntitlements';
+import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { InvoiceBuilderScreenProps } from '@/navigation/types';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
 import { CustomerFormValues, CustomItemFormValues, documentNumberOf } from '@/types';
 import { customItemSchema, customerSchema } from '@/validation/schemas';
 
-const TITLES: Record<string, string> = { quotation: 'New Quotation', delivery_challan: 'New Challan', credit_note: 'New Credit Note' };
-const NOUNS: Record<string, string> = { quotation: 'quotation', delivery_challan: 'challan', credit_note: 'credit note' };
+// Credit notes are deliberately absent: they are raised against a specific invoice with
+// per-line return quantities, which CreditNoteBuilderScreen owns. This builder could never
+// produce a valid one.
+const TITLES: Record<string, string> = { quotation: 'New Quotation', delivery_challan: 'New Challan' };
+const NOUNS: Record<string, string> = { quotation: 'quotation', delivery_challan: 'challan' };
 
 export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreenProps) {
   // Same builder for every sales document; the type only changes the title and the endpoint.
   const documentType = route.params?.documentType;
+  const prefillFromInvoiceId = route.params?.prefillFromInvoiceId;
   const noun = (documentType && NOUNS[documentType]) || 'invoice';
+  const prefillApplied = useRef(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const theme = useTheme();
   const isDark = theme.dark;
@@ -46,6 +55,10 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
   const allowLeave = useRef(false);
   const customerForm = useForm<CustomerFormValues>({ defaultValues: customerDefaults, resolver: zodResolver(customerSchema) });
   const customForm = useForm<CustomItemFormValues>({ defaultValues: customItemDefaults, resolver: zodResolver(customItemSchema) });
+  // Which of the two generate actions was tapped. A ref, not state: it must survive the
+  // oversell-confirm detour (create fails with a shortage, user confirms, the same create
+  // runs again) and it is only read at the moment the invoice exists.
+  const receivePaymentOnCreate = useRef(false);
   const builder = useInvoiceBuilder({
     // Quotations and challans live under /documents — the invoice detail screen cannot load
     // them, so land on the Documents list for that kind instead.
@@ -55,7 +68,12 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
         navigation.replace('Documents', { documentType });
         return;
       }
-      navigation.replace('InvoiceDetail', { id: document._id });
+      // The intent rides on the params of the ONE invoice that was just created — the sheet
+      // cannot attach itself to a different bill, and a plain Generate never sets it.
+      navigation.replace('InvoiceDetail', {
+        id: document._id,
+        ...(receivePaymentOnCreate.current ? { openRecordPayment: true } : {})
+      });
     },
     showDialog,
     documentType,
@@ -63,6 +81,9 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
   });
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.08);
   const subSurface = isDark ? colors.surface : alpha(colors.primary, 0.04);
+  const { can } = usePermissions();
+  // Tax invoices only, and only for a user who may record money.
+  const canReceivePayment = !documentType && can(PERMISSION.paymentsRecord);
   const entitlements = useEntitlements();
   const documentQuota = entitlements.usage(LIMIT.documentsPerMonth);
   const quotaTone = documentQuota && documentQuota.remaining === 0 ? colors.destructive : colors.warning;
@@ -82,20 +103,49 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
     return unsubscribe;
   }, [builder.createInvoiceMutation.isPending, builder.hasDraftContent, builder.isDraftDirty, navigation]);
 
+  // "Duplicate & correct": load the source invoice and seed the form once. The recovery
+  // prompt is dismissed alongside it — the user asked for this invoice specifically, so an
+  // unrelated saved draft must not overwrite it or compete for the same screen.
+  const prefillQuery = useQuery({
+    queryKey: queryKeys.invoices.detail(prefillFromInvoiceId ?? ''),
+    queryFn: () => invoicesApi.get(prefillFromInvoiceId as string),
+    enabled: Boolean(prefillFromInvoiceId)
+  });
+
+  useEffect(() => {
+    if (prefillApplied.current || !prefillFromInvoiceId || !prefillQuery.data) return;
+    prefillApplied.current = true;
+    builder.applyPrefillInvoice(prefillQuery.data);
+  }, [builder, prefillFromInvoiceId, prefillQuery.data]);
+
+  // Draft hydration and the invoice fetch race each other, so dismiss on whichever order they
+  // land in — otherwise a late recovery prompt could offer to overwrite the invoice being corrected.
+  useEffect(() => {
+    if (prefillFromInvoiceId && builder.recoveryDraft) builder.dismissRecoveryDraft();
+  }, [builder, prefillFromInvoiceId]);
+
+  // Both actions run the same create. The only difference is the intent carried to the
+  // detail screen, so validation, payload, stock, GST and numbering have a single path.
+  const generate = () => {
+    receivePaymentOnCreate.current = false;
+    void builder.createInvoice();
+  };
+  const generateAndReceive = () => {
+    receivePaymentOnCreate.current = true;
+    void builder.createInvoice();
+  };
+
   const loadMoreProducts = () => {
     if (builder.productsQuery.hasNextPage && !builder.productsQuery.isFetchingNextPage) void builder.productsQuery.fetchNextPage();
   };
   const loadMoreCustomers = () => {
     if (builder.customersQuery.hasNextPage && !builder.customersQuery.isFetchingNextPage) void builder.customersQuery.fetchNextPage();
   };
-  const closeCustomerModal = () => {
-    builder.setCustomerModal(false);
-    customerForm.reset(customerDefaults);
-  };
-  const closeCustomModal = () => {
-    builder.setCustomModal(false);
-    customForm.reset(customItemDefaults);
-  };
+  // Dismissing a sheet keeps what was typed — a stray backdrop tap above the keyboard used to
+  // wipe a half-entered customer. Both forms are reset on successful submit instead, so
+  // reopening during the same invoice resumes where the user left off.
+  const closeCustomerModal = () => builder.setCustomerModal(false);
+  const closeCustomModal = () => builder.setCustomModal(false);
   const openPreview = () => {
     if (!builder.activeCustomer) {
       showDialog({ title: 'Select or add a customer', message: `Choose a saved customer or quick add a new one before previewing the ${noun}.`, tone: 'warning' });
@@ -130,6 +180,7 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
       <CustomerSelectorCard
         customer={builder.activeCustomer}
         cardBorder={cardBorder}
+        customerOptional
         colors={colors}
         isDark={isDark}
         onAdd={() => builder.setCustomerModal(true)}
@@ -170,6 +221,7 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
         isDark={isDark}
         items={builder.items}
         onRemove={builder.removeItem}
+        onSetPrice={builder.setPrice}
         onSetQuantity={builder.setQuantity}
         onUpdateQuantity={builder.updateQuantity}
         subSurface={subSurface}
@@ -197,7 +249,7 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
           mode="contained"
           loading={builder.isGenerating}
           disabled={builder.isGenerating}
-          onPress={builder.createInvoice}
+          onPress={generate}
           style={styles.generateButton}
           contentStyle={styles.generateButtonContent}
           labelStyle={styles.generateButtonLabel}
@@ -205,6 +257,24 @@ export function InvoiceBuilderScreen({ navigation, route }: InvoiceBuilderScreen
           Generate {noun}
         </Button>
       </View>
+      {/* Opt-in shortcut for a counter sale: same invoice, then the same Record payment sheet
+          on the detail screen. Credit sales stay one tap on the primary action above.
+          Only for tax invoices — a quotation or challan is not payable. */}
+      {canReceivePayment ? (
+        <Button
+          mode="outlined"
+          testID="generate-and-receive"
+          icon={({ size, color }) => <Feather name="check-circle" size={size} color={color} />}
+          loading={builder.isGenerating}
+          disabled={builder.isGenerating}
+          onPress={generateAndReceive}
+          style={styles.receiveButton}
+          contentStyle={styles.generateButtonContent}
+          labelStyle={styles.generateButtonLabel}
+        >
+          Generate &amp; Receive
+        </Button>
+      ) : null}
       <InvoiceBuilderDialogs
         addCustomerLoading={builder.addCustomer.isPending}
         customerForm={customerForm}
@@ -281,7 +351,8 @@ const styles = StyleSheet.create({
   quotaHintText: { ...fontStyles.medium, flex: 1, fontSize: 12 },
   scanRow: { alignItems: 'center', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 10, paddingVertical: 12 },
   scanRowLabel: { ...fontStyles.semiBold, fontSize: 14 },
-  actionRow: { flexDirection: 'row', gap: 12, marginBottom: 18 },
+  actionRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  receiveButton: { borderRadius: radii.input, marginBottom: 18 },
   generateButton: { borderRadius: radii.input, flex: 1 },
   generateButtonContent: { paddingVertical: 6 },
   generateButtonLabel: { ...fontStyles.bold, fontSize: 14, letterSpacing: 0.2 },

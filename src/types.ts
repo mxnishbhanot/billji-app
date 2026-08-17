@@ -445,7 +445,7 @@ export type StockMovement = {
 };
 export type ProductHistorySummary = { quantitySold: number; revenue: number; orderCount: number };
 export type ProductStockHistory = Page<StockMovement, 'movements'> & { product?: Pick<Product, '_id' | 'name' | 'price' | 'stockQuantity' | 'sku' | 'category' | 'unit' | 'taxRate' | 'purchasePrice' | 'trackStock' | 'isActive'>; summary?: ProductHistorySummary };
-export type Customer = { _id: string; name: string; phone: string; countryCode?: string; email?: string; address?: string; billingAddress?: Record<string, string>; shippingAddress?: Record<string, string>; gstNumber?: string; taxIdentifiers?: Record<string, string>; contactPersons?: Record<string, string>[]; creditBalance?: number; outstandingDues?: number; isActive?: boolean; createdAt?: string; updatedAt?: string };
+export type Customer = { _id: string; name: string; phone: string; countryCode?: string; email?: string; address?: string; billingAddress?: Record<string, string>; shippingAddress?: Record<string, string>; gstNumber?: string; taxIdentifiers?: Record<string, string>; contactPersons?: Record<string, string>[]; availableCredit?: number; outstandingDues?: number; isActive?: boolean; createdAt?: string; updatedAt?: string };
 export type GstTaxSummaryRow = { hsn: string; rate: number; taxableValue: number; cgst: number; sgst: number; igst: number; taxAmount: number };
 
 export type ExpenseCategory =
@@ -580,7 +580,8 @@ export const documentNumberOf = (document: { invoiceNumber?: string; documentNum
   document.invoiceNumber || document.documentNumber || '';
 
 export type DocumentCreatePayload = {
-  customerId: string;
+  /** Absent on a walk-in sale — the document is created with no customer at all. */
+  customerId?: string;
   items: InvoiceCreateItem[];
   taxRate: number;
   discountType: DiscountType;
@@ -622,7 +623,8 @@ export type Gstr3bReport = {
 export type InvoiceItem = { _id?: string; _uid?: string; product?: string | null; productId?: string; name: string; sku?: string; unit?: string; quantity: number; price: number; purchasePrice?: number; taxRate?: number; hsn?: string; taxableValue?: number; taxAmount?: number; cgst?: number; sgst?: number; igst?: number; total?: number; isCustom?: boolean };
 export type InvoiceCreateItem = Pick<InvoiceItem, 'productId' | 'name' | 'sku' | 'unit' | 'quantity' | 'price' | 'taxRate' | 'hsn' | 'isCustom'>;
 export type InvoiceCreatePayload = {
-  customerId: string;
+  /** Absent on a walk-in / cash sale — the document is created with no customer at all. */
+  customerId?: string;
   items: InvoiceCreateItem[];
   taxRate: number;
   discountType: DiscountType;
@@ -669,6 +671,8 @@ export type InvoiceEligibility = {
   hasPayments: boolean;
   hasStockMovements: boolean;
   hasLedgerEntries: boolean;
+  /** Live credit notes raised against this invoice — they block both cancel and delete. */
+  hasCreditNotes: boolean;
   canCancel: boolean;
   canDelete: boolean;
 };
@@ -678,12 +682,25 @@ export type Invoice = {
   // present on invoices (a quotation deliberately has none).
   _id: string; invoiceNumber?: string; documentNumber?: string; documentType?: DocumentType;
   sourceInvoice?: string | null; sourceDocument?: string | null; validUntil?: string | null; reason?: string;
+  // Convertible documents (quotation, challan) only, and only from the detail endpoint: the
+  // invoice this document was converted into. The link itself lives on that invoice.
+  linkedInvoice?: { id: string; invoiceNumber: string; status?: InvoiceStatus } | null;
+  // Stock-moving documents (challan, credit note) only, and only from the detail endpoint:
+  // what this document actually did to stock, counted from the movements it wrote. Lines
+  // without a tracked product move nothing, so `products: 0` is a real answer.
+  stockEffect?: { products: number; quantity: number; reversed: boolean };
+  // Credit notes only, and only from the detail endpoint: what is left to spend, and where
+  // the rest went. `remaining` is derived server-side from total - appliedAmount.
+  remaining?: number; applications?: CreditNoteApplication[];
   date: string; dueDate?: string | null; customer?: string | null; customerSnapshot: Customer;
   items: InvoiceItem[]; subtotal: number; tax: { rate: number; amount: number }; discount: { type: DiscountType; value: number; amount: number };
   // GST fields. Absent on documents issued before the GST engine — a missing taxSummary
   // means "legacy single-rate", and the UI falls back to the old single tax row.
   placeOfSupply?: { code: string; state: string }; supplyType?: 'intra' | 'inter'; taxSummary?: GstTaxSummaryRow[];
-  total: number; paidAmount?: number; balanceDue?: number; status: InvoiceStatus; documentStatus?: string; paymentStatus?: InvoicePaymentStatus; fulfillmentStatus?: string; sourceOrder?: string | null; notes?: string; pdfUrl: string; shareToken?: string; shareExpiresAt?: string | null; shareRevokedAt?: string | null; emailedAt?: string | null; cancelledAt?: string | null; cancelledBy?: string | null; cancelReason?: string; refundResolvedAt?: string | null; eligibility?: InvoiceEligibility; createdAt?: string; updatedAt?: string;
+  // Settlement counters. `paidAmount` is money only; `creditApplied` is customer credit
+  // spent on this invoice. On an invoice, `creditedAmount` is how much of it credit notes
+  // have already claimed; on a credit note, `appliedAmount` is how much of it has been spent.
+  total: number; paidAmount?: number; creditApplied?: number; creditedAmount?: number; appliedAmount?: number; balanceDue?: number; status: InvoiceStatus; documentStatus?: string; paymentStatus?: InvoicePaymentStatus; fulfillmentStatus?: string; sourceOrder?: string | null; notes?: string; pdfUrl: string; shareToken?: string; shareExpiresAt?: string | null; shareRevokedAt?: string | null; emailedAt?: string | null; cancelledAt?: string | null; cancelledBy?: string | null; cancelReason?: string; refundResolvedAt?: string | null; eligibility?: InvoiceEligibility; createdAt?: string; updatedAt?: string;
 };
 
 export type OrderStatus = 'draft' | 'confirmed' | 'fulfilled' | 'cancelled';
@@ -737,9 +754,11 @@ export type Payment = {
   updatedAt?: string;
 };
 
-export type PaymentAllocation = {
+export type SettlementAllocation = {
   _id: string;
-  payment: string;
+  source: 'payment' | 'credit_note';
+  payment?: string | null;
+  creditNote?: string | null;
   salesDocument: string;
   invoice: string;
   customer?: string | null;
@@ -751,7 +770,7 @@ export type CustomerBalance = {
   _id: string;
   customer: string;
   outstandingDues: number;
-  creditBalance: number;
+  availableCredit: number;
   currency: string;
   lastCalculatedAt: string;
 };
@@ -768,7 +787,7 @@ export type RecordPaymentPayload = {
 export type RecordPaymentResponse = {
   success: boolean;
   payment: Payment;
-  allocation: PaymentAllocation | null;
+  allocation: SettlementAllocation | null;
   invoice: Invoice;
   customerBalance: CustomerBalance | null;
 };
@@ -787,6 +806,43 @@ export type CustomerOutstanding = {
   totalOutstanding: number;
 };
 
+/** One spendable credit: a credit note with room left, or a payment with cash parked. */
+export type CustomerCredit = {
+  source: 'credit_note' | 'payment';
+  id: string;
+  reference: string;
+  date: string;
+  total: number;
+  applied: number;
+  remaining: number;
+};
+
+export type CustomerCredits = {
+  success?: boolean;
+  credits: CustomerCredit[];
+  availableCredit: number;
+};
+
+/** Shared by apply-credit and its reversal — both return the invoice as it now stands. */
+export type ApplyCreditResponse = {
+  success?: boolean;
+  invoice: Invoice;
+  allocations?: SettlementAllocation[];
+  allocation?: SettlementAllocation | null;
+  appliedAmount?: number;
+  reversed?: boolean;
+  customerBalance?: unknown;
+};
+
+/** One spend of a credit note, as its detail endpoint reports it. */
+export type CreditNoteApplication = {
+  allocationId: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  amount: number;
+  allocatedAt: string;
+};
+
 export type CustomerPaymentPayload = {
   amount: number;
   invoiceIds: string[];
@@ -800,7 +856,7 @@ export type CustomerPaymentPayload = {
 export type CustomerPaymentResponse = {
   success: boolean;
   payment: Payment;
-  allocations: PaymentAllocation[];
+  allocations: SettlementAllocation[];
   invoices: Invoice[];
   customerBalance: CustomerBalance | null;
 };
@@ -908,10 +964,12 @@ export type StockShortage = {
 };
 
 export type ReportSummary = {
-  todaySales: number; weeklySales: number; monthlySales: number; totalInvoices: number; pendingInvoices: number; averageInvoiceValue: number;
+  todaySales: number; weeklySales: number; monthlySales: number; totalInvoices: number; pendingInvoices: number; totalCustomers: number; totalProducts: number; averageInvoiceValue: number;
   rangeSales: number; rangeLabel: string;
   invoiceCounts: Partial<Record<InvoiceStatus, number>>; topProducts: { name: string; quantity: number; sales: number }[];
   salesTrend: { date: string; sales: number; invoices: number }[]; recentInvoices: Invoice[];
+  // One dense daily series per metric card (today/month collected, invoice + pending counts).
+  metricTrends?: { today: number[]; month: number[]; invoices: number[]; pending: number[] };
   // Q1 — how much did I sell? (invoiced/gross)
   sales: {
     today: number; week: number; month: number; range: number; rangeLabel: string; invoiceCount: number;

@@ -56,7 +56,7 @@ export type Resolution = {
  */
 export const SERVER_OWNED: Partial<Record<EntityType, string[]>> = {
   products: ['stockQuantity', 'isLowStock'],
-  customers: ['creditBalance', 'outstandingDues'],
+  customers: ['availableCredit', 'outstandingDues'],
   suppliers: ['outstandingPayable'],
   // A bill's numbering, GST split and settlement are computed server-side from the items,
   // the place of supply and the payments against it. The device's provisional sum is for
@@ -83,13 +83,16 @@ export const SERVER_OWNED: Partial<Record<EntityType, string[]>> = {
     'fulfillmentStatus',
     'paidAmount',
     'balanceDue',
+    // The server's settlement reservation counter. A device pushing it would overwrite the
+    // guard that stops an invoice being settled past its total.
+    'settledAmount',
     'documentNumber',
     'invoiceNumber'
   ],
   // What a receipt settles is the server's arithmetic over every invoice, including ones this
   // device has never seen. `provisionalAllocations` is the device's own record of what it
   // showed the user when the cash was taken — local scratch for the projection, never a claim.
-  payments: ['allocatedAmount', 'unappliedAmount', 'refundStatus', 'provisionalAllocations']
+  payments: ['allocatedAmount', 'unappliedAmount', 'refundableAmount', 'refundStatus', 'provisionalAllocations']
 };
 
 /** Envelope fields that describe the record's sync identity, never its content. */

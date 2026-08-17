@@ -121,9 +121,11 @@ const InvoiceCard = memo(function InvoiceCard({
         </View>
         <View style={styles.cardTitleBlock}>
           <Text numberOfLines={1} style={[styles.invoiceTitle, { color: onSurface }]}>{item.customerSnapshot.name}</Text>
-          <Text numberOfLines={1} style={[styles.invoiceMeta, { color: onSurfaceVariant }]}>
-            <Text style={{ ...fontStyles.semiBold, color: onSurfaceVariant }}>{item.invoiceNumber}</Text>
-            {`  ·  ${formatDate(item.date)}`}
+          <Text numberOfLines={1} style={[styles.invoiceMeta, fontStyles.semiBold, { color: onSurfaceVariant }]}>
+            {item.invoiceNumber}
+          </Text>
+          <Text numberOfLines={1} style={[styles.invoiceDate, { color: onSurfaceVariant }]}>
+            {formatDate(item.date)}
           </Text>
         </View>
         <View style={styles.amountBlock}>
@@ -452,6 +454,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 16
   },
+  invoiceDate: { ...typeScale.caption, fontSize: 12, marginTop: 1 },
   invoiceMeta: { ...typeScale.caption, fontSize: 12, marginTop: 2 },
   invoiceTitle: { ...fontStyles.bold, fontSize: 15 },
   list: { flex: 1 },

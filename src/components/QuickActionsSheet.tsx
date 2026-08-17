@@ -4,18 +4,24 @@ import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Text, TextInput, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from '@tanstack/react-query';
-import { customersApi, invoicesApi, productsApi } from '@/api/endpoints';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { customersApi, documentsApi, invoicesApi, productsApi } from '@/api/endpoints';
 import { navigateToTarget } from '@/navigation/navigationRef';
 import { CatalogStackParamList, CustomersStackParamList, DashboardStackParamList, InvoiceStackParamList } from '@/navigation/types';
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { PERMISSION, usePermissions } from '@/shared/hooks/usePermissions';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { alpha, appColors, fontStyles, radii } from '@/theme/theme';
+import { documentNumberOf, SalesDocumentKind } from '@/types';
 import { formatCurrency } from '@/utils/format';
 
 const MIN_QUERY = 2;
 const PER_GROUP = 5;
+const DOCUMENT_GROUPS: { kind: SalesDocumentKind; icon: keyof typeof Feather.glyphMap; screen: keyof InvoiceStackParamList; fallback: string }[] = [
+  { kind: 'quotation', icon: 'file', screen: 'QuotationDetail', fallback: 'Quotation' },
+  { kind: 'delivery_challan', icon: 'truck', screen: 'ChallanDetail', fallback: 'Challan' },
+  { kind: 'credit_note', icon: 'corner-up-left', screen: 'CreditNoteDetail', fallback: 'Credit note' }
+];
 
 type Row = { key: string; icon: keyof typeof Feather.glyphMap; title: string; meta: string; go: () => void };
 // navigateToTarget takes loose strings (cross-tab deep links aren't expressible in the
@@ -30,7 +36,7 @@ type QuickTarget =
 /**
  * Search-anything + create-anything, reachable from every Screen header. The search
  * fans out to the existing per-entity list endpoints rather than adding a cross-entity
- * search API — three small parallel reads beat a new backend surface.
+ * search API — a handful of small parallel reads beat a new backend surface.
  */
 export function QuickActionsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const theme = useTheme();
@@ -76,6 +82,18 @@ export function QuickActionsSheet({ visible, onClose }: { visible: boolean; onCl
     queryFn: () => productsApi.list(params),
     enabled: enabled && can(PERMISSION.productsView)
   });
+  // Quotations, challans and credit notes ride the same documents endpoint — one read each,
+  // gated on the invoice permission the Documents screen itself uses.
+  const documents = useQueries({
+    queries: DOCUMENT_GROUPS.map((group) => ({
+      queryKey: [...queryKeys.documents.list(group.kind), { search: debounced, quick: true }],
+      queryFn: () => documentsApi.list(group.kind, { search: debounced }),
+      enabled: enabled && can(PERMISSION.invoicesView)
+    })),
+    // One stable value per render keeps the row memo from recomputing on every query tick.
+    combine: (results) => ({ data: results.map((result) => result.data), isFetching: results.some((result) => result.isFetching) })
+  });
+  const documentData = documents.data;
 
   // Clear the box on close so the next open starts on the create shortcuts.
   const close = () => {
@@ -110,19 +128,31 @@ export function QuickActionsSheet({ visible, onClose }: { visible: boolean; onCl
       meta: `${formatCurrency(product.price)} · ${product.stockQuantity} in stock`,
       go: () => goTo({ tab: 'CatalogTab', screen: 'Products', params: { highlight: product._id } })
     }));
-    return [...invoiceRows, ...customerRows, ...productRows];
+    const documentRows: Row[] = DOCUMENT_GROUPS.flatMap((group, index) =>
+      (documentData[index] ?? []).slice(0, PER_GROUP).map((document) => ({
+        key: `${group.kind}-${document._id}`,
+        icon: group.icon,
+        title: documentNumberOf(document) || group.fallback,
+        meta: `${document.customerSnapshot?.name || 'Walk-in'} · ${formatCurrency(document.total)}`,
+        go: () => goTo({ tab: 'InvoicesTab', screen: group.screen, params: { id: document._id } })
+      }))
+    );
+    return [...invoiceRows, ...customerRows, ...documentRows, ...productRows];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, invoices.data, customers.data, products.data]);
+  }, [enabled, invoices.data, customers.data, products.data, documentData]);
 
   const createActions: { key: string; icon: keyof typeof Feather.glyphMap; label: string; target: QuickTarget; allowed: boolean }[] = [
     { key: 'invoice', icon: 'file-plus', label: 'Invoice', target: { tab: 'InvoicesTab', screen: 'InvoiceCreate' }, allowed: can(PERMISSION.invoicesCreate) },
     { key: 'order', icon: 'clipboard', label: 'Order', target: { tab: 'InvoicesTab', screen: 'OrderCreate' }, allowed: can(PERMISSION.ordersCreate) },
+    // Credit notes have no builder — they are raised from an invoice — so no chip for them.
+    { key: 'quotation', icon: 'file', label: 'Quotation', target: { tab: 'InvoicesTab', screen: 'InvoiceCreate', params: { documentType: 'quotation' } }, allowed: can(PERMISSION.invoicesCreate) },
+    { key: 'challan', icon: 'truck', label: 'Challan', target: { tab: 'InvoicesTab', screen: 'InvoiceCreate', params: { documentType: 'delivery_challan' } }, allowed: can(PERMISSION.invoicesCreate) },
     { key: 'customer', icon: 'user-plus', label: 'Customer', target: { tab: 'CustomersTab', screen: 'Customers', params: { openCreate: true } }, allowed: can(PERMISSION.customersManage) },
     { key: 'product', icon: 'package', label: 'Product', target: { tab: 'CatalogTab', screen: 'Products', params: { openCreate: true } }, allowed: can(PERMISSION.productsManage) },
     { key: 'expense', icon: 'trending-down', label: 'Expense', target: { tab: 'DashboardTab', screen: 'Expenses', params: { openCreate: true } }, allowed: can(PERMISSION.expensesManage) }
   ];
 
-  const loading = enabled && (invoices.isFetching || customers.isFetching || products.isFetching);
+  const loading = enabled && (invoices.isFetching || customers.isFetching || products.isFetching || documents.isFetching);
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={close} statusBarTranslucent>
@@ -145,7 +175,7 @@ export function QuickActionsSheet({ visible, onClose }: { visible: boolean; onCl
           <TextInput
             mode="outlined"
             autoFocus
-            placeholder="Invoice number, customer, product"
+            placeholder="Document number, customer, product"
             value={search}
             onChangeText={setSearch}
             autoCorrect={false}
@@ -202,7 +232,7 @@ export function QuickActionsSheet({ visible, onClose }: { visible: boolean; onCl
                   </Pressable>
                 ))}
               </View>
-              <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>Type at least {MIN_QUERY} characters to search invoices, customers and products.</Text>
+              <Text style={[styles.hint, { color: theme.colors.onSurfaceVariant }]}>Type at least {MIN_QUERY} characters to search invoices, quotations, challans, credit notes, customers and products.</Text>
             </View>
           )}
         </Animated.View>

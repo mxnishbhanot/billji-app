@@ -196,7 +196,7 @@ const SPECS: Record<EntityType, Field[]> = {
     f('email', 'email', 'text'),
     f('gst_number', (doc) => pick(doc, 'gstNumber') ?? pick(doc, 'taxIdentifiers.gstNumber'), 'text'),
     f('outstanding_dues', 'outstandingDues', 'num', 0),
-    f('credit_balance', 'creditBalance', 'num', 0),
+    f('available_credit', 'availableCredit', 'num', 0),
     f('is_active', 'isActive', 'bool', 1)
   ],
   invoices: [

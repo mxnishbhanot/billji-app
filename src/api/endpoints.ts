@@ -49,6 +49,7 @@ import {
 } from '@/db';
 // The header constants only, imported from the engine module rather than the sync barrel:
 // the barrel pulls in deviceSeries, which imports this file.
+import { isAxiosError } from 'axios';
 import { SYNC_DEVICE_HEADER, SYNC_PROTOCOL_HEADER, SYNC_PROTOCOL_VERSION } from '../sync/pushEngine';
 import { withBillingAddress } from '@/shared/customers/customerPayload';
 import { api } from './client';
@@ -62,6 +63,8 @@ import {
   CouponQuote,
   Customer,
   CustomerFormValues,
+  ApplyCreditResponse,
+  CustomerCredits,
   CustomerOutstanding,
   CustomerPaymentPayload,
   CustomerPaymentResponse,
@@ -522,10 +525,21 @@ export const documentsApi = {
     api.get<{ documents: Invoice[] }>(`/documents/${documentType}`, { params }).then((res) => res.data.documents),
   get: (documentType: SalesDocumentKind, id: string) =>
     api.get<{ document: Invoice }>(`/documents/${documentType}/${id}`).then((res) => res.data.document),
+  /**
+   * A credit note mints customer credit, so it gets the settlement retry contract rather than
+   * the plain-create one: a note whose response was lost must not be raised twice under a
+   * fresh key. Keyed by what the document IS — its type and its whole payload — so a retry of
+   * the same note reuses the key while a genuinely different one does not.
+   */
   create: (documentType: SalesDocumentKind, payload: DocumentCreatePayload) =>
-    api
-      .post<{ document: Invoice }>(`/documents/${documentType}`, payload, { headers: { 'Idempotency-Key': idempotencyKey(documentType) } })
-      .then((res) => res.data.document),
+    withPaymentIdempotency(
+      `document:${documentType}:${JSON.stringify(payload)}`,
+      documentType,
+      (key) =>
+        api
+          .post<{ document: Invoice }>(`/documents/${documentType}`, payload, { headers: { 'Idempotency-Key': key } })
+          .then((res) => res.data.document)
+    ),
   convert: (documentType: SalesDocumentKind, id: string) =>
     api
       .post<{ invoice: Invoice }>(`/documents/${documentType}/${id}/convert`, {}, { headers: { 'Idempotency-Key': idempotencyKey(`convert-${id}`) } })
@@ -561,6 +575,52 @@ const asPaymentResult = (record: PaymentRecord): RecordPaymentResponse => ({
   customerBalance: null
 });
 
+/**
+ * The idempotency key for one money-changing attempt, held so a retry carries the SAME key.
+ *
+ * Used by every request that moves or mints money: receipts, dues collection, applying
+ * customer credit, and raising a credit note. They share one contract because they share one
+ * failure mode — a lost response under a fresh key becomes a second, unintended operation.
+ *
+ * `idempotencyKey` mints a fresh value per call, which is right for a create the user can
+ * repeat on purpose but wrong for money: a receipt that reached the server and whose response
+ * was lost to a timeout would be retried under a new key, and the server — having nothing to
+ * match it against — would record the payment a second time. The offline path never had this
+ * hole (its opId and clientId are stable), so this closes it on the online path only.
+ *
+ * Keyed by what the attempt IS (which bill, how much, how paid), so a retry of the same
+ * payment resolves to the same key while a genuinely separate payment does not. The entry is
+ * dropped as soon as the server gives a definite answer:
+ *
+ *   2xx            the payment landed; a later identical payment is a new attempt
+ *   4xx (not 409)  the server decided and will decide the same way; retrying is a new attempt
+ *   409 / 5xx /    the outcome is unknown or still in flight — hold the key, because this is
+ *   no response    exactly the case a fresh key would duplicate
+ *
+ * Entries therefore only survive an unresolved attempt, and a process restart clears them.
+ */
+const pendingPaymentKeys = new Map<string, string>();
+
+/** True when the server answered definitively, so this attempt's key can be released. */
+const isSettledPaymentAnswer = (error: unknown) => {
+  const status = isAxiosError(error) ? error.response?.status : undefined;
+  return status != null && status < 500 && status !== 409;
+};
+
+const withPaymentIdempotency = async <T>(signature: string, scope: string, send: (key: string) => Promise<T>): Promise<T> => {
+  const key = pendingPaymentKeys.get(signature) ?? idempotencyKey(scope);
+  pendingPaymentKeys.set(signature, key);
+
+  try {
+    const result = await send(key);
+    pendingPaymentKeys.delete(signature);
+    return result;
+  } catch (error) {
+    if (isSettledPaymentAnswer(error)) pendingPaymentKeys.delete(signature);
+    throw error;
+  }
+};
+
 export const paymentsApi = {
   list: (params?: { invoiceId?: string; customerId?: string }) =>
     localFirst(
@@ -575,11 +635,16 @@ export const paymentsApi = {
    */
   recordInvoicePayment: (invoiceId: string, payload: RecordPaymentPayload) => {
     const online = () =>
-      api
-        .post<RecordPaymentResponse>(`/payments/invoices/${invoiceId}/record`, payload, {
-          headers: { 'Idempotency-Key': idempotencyKey(`payment-${invoiceId}`) }
-        })
-        .then((res) => res.data);
+      withPaymentIdempotency(
+        `invoice:${invoiceId}:${payload.amount}:${payload.method}:${payload.reference ?? ''}`,
+        `payment-${invoiceId}`,
+        (key) =>
+          api
+            .post<RecordPaymentResponse>(`/payments/invoices/${invoiceId}/record`, payload, {
+              headers: { 'Idempotency-Key': key }
+            })
+            .then((res) => res.data)
+      );
 
     return localWrite(async (businessId) => {
       const { record } = await recordInvoicePaymentLocally(invoiceId, payload, { businessId });
@@ -592,6 +657,35 @@ export const paymentsApi = {
       (businessId) => localCustomerOutstanding(businessId, customerId),
       () => api.get<CustomerOutstanding>(`/payments/customers/${customerId}/outstanding`).then((res) => res.data)
     ),
+  /**
+   * The customer's credit pool, itemised. Online-only, like applying it: the pool is a
+   * shared resource two devices can both claim, so a stale local copy would be worse than
+   * no answer at all.
+   */
+  customerCredits: (customerId: string) =>
+    api.get<CustomerCredits>(`/payments/customers/${customerId}/credits`).then((res) => res.data),
+  /**
+   * Spending credit is a settlement, so it carries the same retry contract as a receipt: an
+   * attempt whose outcome is unknown is retried under the SAME key. A fresh key would let a
+   * lost response turn one application into two, silently halving the customer's pool.
+   */
+  applyCredit: (invoiceId: string, amount: number) =>
+    withPaymentIdempotency(
+      `credit:${invoiceId}:${amount}`,
+      `apply-credit-${invoiceId}`,
+      (key) =>
+        api
+          .post<ApplyCreditResponse>(`/payments/invoices/${invoiceId}/apply-credit`, { amount }, {
+            headers: { 'Idempotency-Key': key }
+          })
+          .then((res) => res.data)
+    ),
+  reverseCreditApplication: (allocationId: string, reason?: string) =>
+    api
+      .post<ApplyCreditResponse>(`/payments/allocations/${allocationId}/reverse`, { reason }, {
+        headers: { 'Idempotency-Key': idempotencyKey(`reverse-allocation-${allocationId}`) }
+      })
+      .then((res) => res.data),
   markRefundProcessed: (invoiceId: string) =>
     api
       .post<{ payments: Payment[] }>(`/payments/invoices/${invoiceId}/refund-processed`, {}, {
@@ -601,11 +695,16 @@ export const paymentsApi = {
   /** One payment settling several of a customer's bills — the dues-collection path. */
   recordCustomerPayment: (customerId: string, payload: CustomerPaymentPayload) => {
     const online = () =>
-      api
-        .post<CustomerPaymentResponse>(`/payments/customers/${customerId}/record`, payload, {
-          headers: { 'Idempotency-Key': idempotencyKey(`cust-payment-${customerId}`) }
-        })
-        .then((res) => res.data);
+      withPaymentIdempotency(
+        `customer:${customerId}:${payload.amount}:${payload.method}:${payload.reference ?? ''}:${(payload.invoiceIds ?? []).join(',')}`,
+        `cust-payment-${customerId}`,
+        (key) =>
+          api
+            .post<CustomerPaymentResponse>(`/payments/customers/${customerId}/record`, payload, {
+              headers: { 'Idempotency-Key': key }
+            })
+            .then((res) => res.data)
+      );
 
     return localWrite(async (businessId) => {
       const { record } = await recordCustomerPaymentLocally(customerId, payload, { businessId });

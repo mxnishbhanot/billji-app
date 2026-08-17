@@ -92,6 +92,13 @@ export function PaymentRemindersScreen() {
     setEditingTemplate(true);
   };
 
+  const skipped = query.data?.skippedWithoutPhone ?? 0;
+  const skippedNote = skipped ? (
+    <Text style={[styles.footnote, { color: theme.colors.onSurfaceVariant }]}>
+      {skipped} unpaid invoice{skipped === 1 ? '' : 's'} hidden — no phone number saved.
+    </Text>
+  ) : null;
+
   const cardBorder = isDark ? colors.border : alpha(colors.primaryStrong, 0.08);
   const headerAction = (
     <Pressable onPress={startEditingTemplate} hitSlop={8} accessibilityRole="button" accessibilityLabel="Edit reminder message" style={styles.headerBtn}>
@@ -180,11 +187,7 @@ export function PaymentRemindersScreen() {
             );
           })}
 
-          {query.data?.skippedWithoutPhone ? (
-            <Text style={[styles.footnote, { color: theme.colors.onSurfaceVariant }]}>
-              {query.data.skippedWithoutPhone} pending invoice{query.data.skippedWithoutPhone === 1 ? '' : 's'} hidden — no phone number saved.
-            </Text>
-          ) : null}
+          {skippedNote}
 
           <Button
             mode="contained"
@@ -199,10 +202,17 @@ export function PaymentRemindersScreen() {
           </Button>
         </>
       ) : (
-        <EmptyState
-          title="Nothing to chase"
-          message="No overdue invoices right now. Reminders appear here once an invoice passes its due date, or stays unpaid for a week without one."
-        />
+        <>
+          <EmptyState
+            title="Nothing to chase"
+            message={
+              query.data?.skippedWithoutPhone
+                ? 'Every unpaid invoice is missing a customer phone number, so there is nobody to message. Add phone numbers to those customers and they will show up here.'
+                : 'No unpaid invoices right now. Anything still owed shows up here so you can chase it on WhatsApp.'
+            }
+          />
+          {skippedNote}
+        </>
       )}
     </Screen>
   );
