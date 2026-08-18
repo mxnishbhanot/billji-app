@@ -7,7 +7,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend-production-9c99.up.railway.app/api",
+        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend.onrender.com/api",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "677650021302-lo53gjs3qntidq5o6hjajitaniaomtgj.apps.googleusercontent.com",
         "EXPO_PUBLIC_ANALYTICS_ENABLED": "false"
@@ -19,7 +19,7 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend-production-9c99.up.railway.app/api",
+        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend.onrender.com/api",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "677650021302-lo53gjs3qntidq5o6hjajitaniaomtgj.apps.googleusercontent.com",
         "EXPO_PUBLIC_ANALYTICS_ENABLED": "false"
@@ -30,7 +30,7 @@
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend-production-9c99.up.railway.app/api",
+        "EXPO_PUBLIC_API_BASE_URL": "https://billji-backend.onrender.com/api",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "677650021302-lo53gjs3qntidq5o6hjajitaniaomtgj.apps.googleusercontent.com",
         "EXPO_PUBLIC_ANALYTICS_ENABLED": "true"
