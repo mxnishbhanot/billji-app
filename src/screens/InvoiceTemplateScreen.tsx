@@ -18,7 +18,7 @@ import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 import { A4_RATIO, withFittedViewport } from '@/utils/invoicePreview';
 
 // Professional preset accents. Index 0 (indigo) matches the brand + backend default.
-const ACCENT_PRESETS = ['#4338CA', '#2563EB', '#0D9488', '#16A34A', '#475569', '#E11D48'] as const;
+const ACCENT_PRESETS = ['#D95F18', '#9B4000', '#0D9488', '#16A34A', '#475569', '#E11D48'] as const;
 
 // Mirrors DEFAULT_INVOICE_NOTES in backend invoiceHtml.js — what prints when the
 // business leaves custom notes blank. Shown as the field placeholder.
