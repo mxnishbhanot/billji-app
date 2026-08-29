@@ -4,10 +4,10 @@ import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
 import { invoicesApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
-import { A4_RATIO, PdfPreview } from '@/components/PdfPreview';
+import { PdfPreview } from '@/components/PdfPreview';
 import { Screen } from '@/components/Screen';
 import { InvoicePreviewScreenProps } from '@/navigation/types';
-import { radii } from '@/theme/theme';
+import { A4_RATIO, radii } from '@/theme/theme';
 
 export function InvoicePreviewScreen({ route }: InvoicePreviewScreenProps) {
   const theme = useTheme();

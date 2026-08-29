@@ -8,13 +8,13 @@ import { authApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
 import { useAppToast } from '@/components/AppToast';
-import { A4_RATIO, PdfPreview } from '@/components/PdfPreview';
+import { PdfPreview } from '@/components/PdfPreview';
 import { Screen } from '@/components/Screen';
 import { TourAnchor, ANCHOR } from '@/features/onboarding';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { InvoiceTemplate } from '@/types';
-import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
+import { A4_RATIO, alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 
 // Professional preset accents. Index 0 (indigo) matches the brand + backend default.
 const ACCENT_PRESETS = ['#4338CA', '#2563EB', '#0D9488', '#16A34A', '#475569', '#E11D48'] as const;

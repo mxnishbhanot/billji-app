@@ -39,6 +39,10 @@ export const spacing = {
   ...dsSpacing
 };
 
+// A4 at 96dpi. Preview frames are drawn at this ratio so a rendered page fills them
+// with no letterboxing.
+export const A4_RATIO = 794 / 1123;
+
 export const radii = {
   sm: dsRadius.sm,
   default: dsRadius.default,
