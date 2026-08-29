@@ -68,10 +68,16 @@ jobs:
 
       # Official Expo action: installs a pinned EAS CLI and authenticates using
       # EXPO_TOKEN. No interactive login, no token written to disk.
+      #
+      # `packager: npm` is not a preference — the action defaults to yarn, and installing the CLI
+      # with it is what broke this workflow ("The process '/usr/local/bin/yarn' failed with exit
+      # code 1"). This project installs with npm and ships a package-lock.json, so yarn had no
+      # business being on the path at all.
       - name: Setup EAS CLI
-        uses: expo/expo-github-action@v8
+        uses: expo/expo-github-action@v9
         with:
           eas-version: latest
+          packager: npm
           token: ${{ secrets.EXPO_TOKEN }}
 
       # Single cloud build. --wait blocks until it finishes so we know the real
