@@ -98,6 +98,7 @@ export type SettingsStackParamList = {
   RoleEditor: { roleId?: string };
   Subscription: undefined;
   Plans: undefined;
+  Referrals: undefined;
   AcceptInvite: undefined;
 };
 
@@ -176,3 +177,4 @@ export type RolesScreenProps = NativeStackScreenProps<SettingsStackParamList, 'R
 export type RoleEditorScreenProps = NativeStackScreenProps<SettingsStackParamList, 'RoleEditor'>;
 export type SubscriptionScreenProps = NativeStackScreenProps<SettingsStackParamList, 'Subscription'>;
 export type PlansScreenProps = NativeStackScreenProps<SettingsStackParamList, 'Plans'>;
+export type ReferralScreenProps = NativeStackScreenProps<SettingsStackParamList, 'Referrals'>;

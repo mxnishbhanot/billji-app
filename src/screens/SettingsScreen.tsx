@@ -11,6 +11,7 @@ import {
   Crown,
   Download,
   FileText,
+  Gift,
   History,
   KeyRound,
   LogOut,
@@ -324,6 +325,13 @@ export function SettingsScreen() {
             subtitle={billingSubtitle}
             tone={colors.violet}
             onPress={() => navigation.navigate('Subscription')}
+          />
+          <SettingsRow
+            icon={Gift}
+            title="Refer & earn"
+            subtitle="Give a month of Pro, get a month free"
+            tone={colors.accent}
+            onPress={() => navigation.navigate('Referrals')}
           />
         </SettingsGroup>
       ) : null}

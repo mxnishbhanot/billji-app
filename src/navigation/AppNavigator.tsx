@@ -57,6 +57,7 @@ const RolesScreen = lazy(() => import('@/screens/RolesScreen').then((m) => ({ de
 const RoleEditorScreen = lazy(() => import('@/screens/RoleEditorScreen').then((m) => ({ default: m.RoleEditorScreen })));
 const SubscriptionScreen = lazy(() => import('@/screens/SubscriptionScreen').then((m) => ({ default: m.SubscriptionScreen })));
 const PlansScreen = lazy(() => import('@/screens/PlansScreen').then((m) => ({ default: m.PlansScreen })));
+const ReferralScreen = lazy(() => import('@/screens/ReferralScreen').then((m) => ({ default: m.ReferralScreen })));
 
 // Plan gates, mirroring exactly what the backend guards (see middlewares/entitlement.js). Declared
 // at module scope so the wrapper identity is stable — a component created during render would
@@ -200,6 +201,7 @@ function SettingsNavigator() {
       <SettingsStack.Screen name="RoleEditor" component={GatedRoleEditorScreen} />
       <SettingsStack.Screen name="Subscription" component={SubscriptionScreen} />
       <SettingsStack.Screen name="Plans" component={PlansScreen} />
+      <SettingsStack.Screen name="Referrals" component={ReferralScreen} />
       <SettingsStack.Screen name="AcceptInvite" component={AcceptInviteScreen} />
     </SettingsStack.Navigator>
   );
