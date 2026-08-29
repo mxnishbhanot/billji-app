@@ -28,12 +28,13 @@ import { runInTransaction } from './sqliteTransaction';
 export const withTransaction = async <T>(
   task: (txn: SQLiteDatabase) => Promise<T>,
   txn?: SQLiteDatabase
-): Promise<T> =>
-  // Change events raised by the task are held until this transaction commits — see changeBus.
-  withBufferedChanges(async () => {
-    if (txn) return task(txn);
-    return runExclusive(task);
-  });
+): Promise<T> => {
+  // Joining a transaction already in progress. Buffering here is reentrant: with the parent's
+  // buffer open this only nests, and it is the one that holds the events when the transaction
+  // was opened by something other than this function.
+  if (txn) return withBufferedChanges(() => task(txn));
+  return runExclusive(task);
+};
 
 /**
  * The queue. One transaction at a time on the shared connection, in call order; a failed
@@ -44,10 +45,16 @@ let tail: Promise<unknown> = Promise.resolve();
 const runExclusive = async <T>(task: (txn: SQLiteDatabase) => Promise<T>): Promise<T> => {
   const db = await openDatabase();
 
-  const run = tail.then(
-    () => wrapDatabaseError('DB_QUERY_FAILED', 'Transaction failed', () => runInTransaction(db, task)),
-    () => wrapDatabaseError('DB_QUERY_FAILED', 'Transaction failed', () => runInTransaction(db, task))
-  );
+  // Buffering opens *inside* the queue slot and closes after COMMIT, so only one buffer is ever
+  // open. Opening it before the queue would share one buffer between unrelated transactions: the
+  // events of one that committed would wait on the other, and be discarded outright if the other
+  // rolled back — a created product that never told the product list it was stale.
+  const attempt = () =>
+    wrapDatabaseError('DB_QUERY_FAILED', 'Transaction failed', () =>
+      withBufferedChanges(() => runInTransaction(db, task))
+    );
+
+  const run = tail.then(attempt, attempt);
 
   tail = run.catch(() => undefined);
   return run;

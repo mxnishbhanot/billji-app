@@ -1,6 +1,5 @@
-import { createElement, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Platform, Pressable, StyleSheet, View } from 'react-native';
-import { WebView } from 'react-native-webview';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { SignaturePadSheet } from '@/components/SignaturePadSheet';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -9,13 +8,13 @@ import { authApi } from '@/api/endpoints';
 import { apiErrorMessage } from '@/api/client';
 import { useAppDialog } from '@/components/AppDialog';
 import { useAppToast } from '@/components/AppToast';
+import { PdfPreview } from '@/components/PdfPreview';
 import { Screen } from '@/components/Screen';
 import { TourAnchor, ANCHOR } from '@/features/onboarding';
 import { queryKeys } from '@/shared/query/queryKeys';
 import { useAuthStore } from '@/store/authStore';
 import { InvoiceTemplate } from '@/types';
-import { alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
-import { A4_RATIO, withFittedViewport } from '@/utils/invoicePreview';
+import { A4_RATIO, alpha, appColors, fontStyles, radii, typeScale } from '@/theme/theme';
 
 // Professional preset accents. Index 0 (indigo) matches the brand + backend default.
 const ACCENT_PRESETS = ['#D95F18', '#9B4000', '#0D9488', '#16A34A', '#475569', '#E11D48'] as const;
@@ -47,41 +46,6 @@ function SectionLabel({ title }: { title: string }) {
   return <Text style={[styles.sectionLabel, { color: theme.colors.onSurfaceVariant }]}>{title}</Text>;
 }
 
-// react-native-webview has no web implementation, so on Expo web we render the same
-// HTML in a plain DOM <iframe>; on device we use the native WebView. Both show the
-// identical template HTML the PDF is built from.
-function PreviewSurface({ html, frameWidth }: { html: string; frameWidth: number }) {
-  if (Platform.OS === 'web') {
-    // Desktop iframes ignore the mobile viewport meta, so scale the fixed 794px A4
-    // page down to the measured frame width. transform-origin top-left keeps it pinned.
-    const scale = frameWidth > 0 ? frameWidth / 794 : 1;
-    return createElement('iframe', {
-      srcDoc: html,
-      title: 'Invoice preview',
-      scrolling: 'no',
-      style: {
-        border: 'none',
-        backgroundColor: '#ffffff',
-        width: 794,
-        height: 1123,
-        transform: `scale(${scale})`,
-        transformOrigin: 'top left'
-      }
-    });
-  }
-  return (
-    <WebView
-      originWhitelist={['*']}
-      source={{ html: withFittedViewport(html) }}
-      style={styles.webview}
-      scrollEnabled
-      showsVerticalScrollIndicator={false}
-      javaScriptEnabled={false}
-      androidLayerType="software"
-    />
-  );
-}
-
 export function InvoiceTemplateScreen() {
   const user = useAuthStore((state) => state.user);
   const setUser = useAuthStore((state) => state.setUser);
@@ -104,17 +68,16 @@ export function InvoiceTemplateScreen() {
     setPrefix(user?.businessProfile?.invoicePrefix || 'INV');
   }
 
-  // Live preview: fetch the same HTML the PDF uses, debounced, latest-wins.
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
-  const [frameWidth, setFrameWidth] = useState(0);
+  // Live preview: fetch the real PDF, debounced, latest-wins.
+  const [previewPdf, setPreviewPdf] = useState<string | null>(null);
   const requestId = useRef(0);
   useEffect(() => {
     const id = ++requestId.current;
     const timer = setTimeout(() => {
       authApi
         .invoiceTemplatePreview(tpl)
-        .then((html) => {
-          if (id === requestId.current) setPreviewHtml(html);
+        .then((base64) => {
+          if (id === requestId.current) setPreviewPdf(base64);
         })
         .catch(() => {
           /* keep last good preview on transient errors */
@@ -173,16 +136,16 @@ export function InvoiceTemplateScreen() {
     <Screen title="Invoice Template" headerAction={headerAction} contentStyle={styles.screenContent}>
       <TourAnchor anchorId={ANCHOR.invoiceTemplate}>
         <SectionLabel title="PREVIEW" />
-        <View style={[styles.previewFrame, { borderColor: cardBorder }]} onLayout={(e) => setFrameWidth(e.nativeEvent.layout.width)}>
-          {previewHtml ? (
-            <PreviewSurface html={previewHtml} frameWidth={frameWidth} />
+        <View style={[styles.previewFrame, { borderColor: cardBorder }]}>
+          {previewPdf ? (
+            <PdfPreview base64={previewPdf} />
           ) : (
             <View style={styles.previewLoading}>
               <ActivityIndicator color={theme.colors.primary} />
             </View>
           )}
         </View>
-        <Text style={[styles.previewHint, { color: theme.colors.onSurfaceVariant }]}>Live preview · exactly matches the generated PDF</Text>
+        <Text style={[styles.previewHint, { color: theme.colors.onSurfaceVariant }]}>Live preview · the actual generated PDF</Text>
       </TourAnchor>
 
       <SectionLabel title="ACCENT COLOR" />
@@ -293,6 +256,5 @@ const styles = StyleSheet.create({
   toggleRow: { alignItems: 'center', flexDirection: 'row', gap: 12, minHeight: 60, paddingHorizontal: 14, paddingVertical: 8 },
   toggleSubtitle: { ...typeScale.caption, fontSize: 12, marginTop: 2 },
   toggleText: { flex: 1, minWidth: 0 },
-  toggleTitle: { ...fontStyles.bold, fontSize: 14 },
-  webview: { backgroundColor: '#ffffff', flex: 1 }
+  toggleTitle: { ...fontStyles.bold, fontSize: 14 }
 });
